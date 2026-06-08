@@ -1,0 +1,184 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Users & Profiles ────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profile         Profile?
+  conversations   Conversation[]
+  habits          Habit[]
+  habitLogs       HabitLog[]
+  workoutLogs     WorkoutLog[]
+  moodEntries     MoodEntry[]
+  recommendations Recommendation[]
+  scores          KinextionScore[]
+}
+
+model Profile {
+  id                 String  @id @default(cuid())
+  userId             String  @unique
+  displayName        String?
+  age                Int?
+  fitnessLevel       String? // beginner, intermediate, advanced
+  primaryGoals       Json?   // ["consistency", "strength", "mental_clarity"]
+  weeklyAvailability Int?    // days per week
+  equipment          Json?   // ["dumbbells", "gym_membership"]
+  healthConditions   Json?   // opt-in health info
+  preferences        Json?   // notification prefs, AI personality dial
+  onboardingComplete Boolean @default(false)
+  aiContext          Json?   // evolving AI understanding of the user
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── AI Conversations ────────────────────────────────────────────
+
+model Conversation {
+  id        String   @id @default(cuid())
+  userId    String
+  persona   String   // "altheo" | "kairo"
+  summary   String?  // compressed context for long conversations
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([userId, persona])
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  role           String   // "user" | "assistant" | "system"
+  content        String
+  metadata       Json?    // sentiment, detected goals, action items
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+// ─── Habits (Atomic Habits Framework) ────────────────────────────
+
+model Habit {
+  id         String   @id @default(cuid())
+  userId     String
+  name       String
+  category   String   // "physical" | "mental" | "emotional" | "spiritual"
+  cue        String?  // what triggers it
+  craving    String?  // why you want it
+  response   String?  // the actual habit action
+  reward     String?  // the payoff
+  frequency  String   // "daily" | "weekly" | "custom"
+  targetDays Json?    // [1,2,3,4,5] for specific days
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logs HabitLog[]
+
+  @@index([userId, isActive])
+}
+
+model HabitLog {
+  id        String   @id @default(cuid())
+  habitId   String
+  userId    String
+  date      DateTime @db.Date
+  completed Boolean
+  notes     String?
+  createdAt DateTime @default(now())
+
+  habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, date])
+  @@index([userId, date])
+}
+
+// ─── Workouts ────────────────────────────────────────────────────
+
+model WorkoutLog {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  type        String   // "strength" | "cardio" | "mobility" | "mixed"
+  duration    Int?     // minutes
+  exercises   Json     // [{name, sets, reps, weight, notes}]
+  difficulty  String?  // "too_easy" | "just_right" | "too_hard"
+  aiGenerated Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+// ─── Mood & Reflection ───────────────────────────────────────────
+
+model MoodEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  mood      Int      // 1-10
+  energy    Int?     // 1-10
+  stress    Int?     // 1-10
+  journal   String?  // free-text reflection
+  gratitude String?  // gratitude entry
+  tags      Json?    // ["anxious", "motivated", "tired"]
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+// ─── Daily Recommendations ───────────────────────────────────────
+
+model Recommendation {
+  id        String   @id @default(cuid())
+  userId    String
+  content   String   // the micro-recommendation text
+  category  String   // "physical" | "mental" | "emotional" | "spiritual"
+  context   String?  // why this was recommended
+  acted     Boolean  @default(false)
+  dismissed Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+// ─── Kinextion Score ─────────────────────────────────────────────
+
+model KinextionScore {
+  id             String   @id @default(cuid())
+  userId         String
+  date           DateTime @db.Date
+  overallScore   Int      // 0-100
+  physicalScore  Int?
+  mentalScore    Int?
+  emotionalScore Int?
+  spiritualScore Int?
+  breakdown      Json?    // detailed scoring components
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}

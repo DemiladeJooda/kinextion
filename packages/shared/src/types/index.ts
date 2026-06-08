@@ -1,0 +1,76 @@
+// ─── AI Personas ─────────────────────────────────────────────────
+
+export type Persona = "altheo" | "kairo";
+
+export interface ChatMessage {
+  role: "user" | "assistant" | "system";
+  content: string;
+  timestamp?: string;
+}
+
+// ─── Wellness Categories ─────────────────────────────────────────
+
+export type WellnessCategory = "physical" | "mental" | "emotional" | "spiritual";
+
+export type FitnessLevel = "beginner" | "intermediate" | "advanced";
+
+export type WorkoutType = "strength" | "cardio" | "mobility" | "mixed";
+
+export type WorkoutDifficulty = "too_easy" | "just_right" | "too_hard";
+
+export type HabitFrequency = "daily" | "weekly" | "custom";
+
+// ─── User Profile ────────────────────────────────────────────────
+
+export interface UserProfile {
+  displayName?: string;
+  age?: number;
+  fitnessLevel?: FitnessLevel;
+  primaryGoals?: string[];
+  weeklyAvailability?: number;
+  equipment?: string[];
+  healthConditions?: string[];
+  preferences?: UserPreferences;
+  onboardingComplete: boolean;
+}
+
+export interface UserPreferences {
+  notificationsEnabled?: boolean;
+  dailyCheckInTime?: string;
+  aiPersonalityDial?: "scripture" | "balanced" | "universal";
+  theme?: "aurora" | "light";
+}
+
+// ─── Kinextion Score ─────────────────────────────────────────────
+
+export interface ScoreBreakdown {
+  habitsCompleted: number;
+  habitsTotal: number;
+  workoutLogged: boolean;
+  moodCheckedIn: boolean;
+  reflectionDone: boolean;
+  streakDays: number;
+}
+
+// ─── Atomic Habits ───────────────────────────────────────────────
+
+export interface HabitLoop {
+  cue: string;
+  craving: string;
+  response: string;
+  reward: string;
+}
+
+// ─── API Responses ───────────────────────────────────────────────
+
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}
+
+export interface PaginatedResponse<T> extends ApiResponse<T[]> {
+  total: number;
+  page: number;
+  pageSize: number;
+}

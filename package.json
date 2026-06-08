@@ -1,0 +1,32 @@
+{
+  "name": "kinextion",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "test": "turbo test",
+    "lint": "turbo lint",
+    "clean": "turbo clean",
+    "db:generate": "pnpm --filter @kinextion/database generate",
+    "db:push": "pnpm --filter @kinextion/database push",
+    "db:migrate": "pnpm --filter @kinextion/database migrate"
+  },
+  "devDependencies": {
+    "turbo": "^2.4.0",
+    "typescript": "^5.7.0"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "esbuild",
+      "sharp",
+      "@clerk/shared"
+    ]
+  }
+}

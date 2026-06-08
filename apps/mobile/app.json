@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Kinextion",
+    "slug": "kinextion",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "kinextion",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#0A0A1A"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.kinextion.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0A0A1A"
+      },
+      "package": "com.kinextion.app"
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

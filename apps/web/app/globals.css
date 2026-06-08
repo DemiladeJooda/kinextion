@@ -1,0 +1,170 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --aurora-green: #00C47A;
+    --aurora-teal: #0ABAB5;
+    --aurora-purple: #7B2FBE;
+    --aurora-violet: #A855F7;
+    --aurora-blue: #3B82F6;
+    --nav-height: 56px;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    color-scheme: light;
+  }
+
+  body {
+    background-color: #FFFFFF;
+    color: #0F172A;
+    font-family: Inter, "SF Pro Text", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background-color: rgba(0, 196, 122, 0.20);
+    color: #0F172A;
+  }
+}
+
+@layer components {
+  .aurora-text {
+    color: #0F172A;
+    -webkit-text-fill-color: #0F172A;
+  }
+
+  /* Light glass cards — white with subtle aurora borders */
+  .glass-card {
+    background: #FFFFFF;
+    border: 1px solid rgba(0, 196, 122, 0.14);
+    border-radius: 12px;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+
+  .glass-card-vivid {
+    background: #FFFFFF;
+    border: 1px solid rgba(0, 196, 122, 0.18);
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.04);
+  }
+
+  /* Dark glass cards — the counterpart of .glass-card for the immersive
+     "space" pages (Solution, Story). Translucent white over the dark backdrop
+     so cards read as frosted glass floating in space rather than solid blocks. */
+  .glass-card-dark {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(2, 6, 23, 0.35);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* Slightly brighter dark glass for emphasis cards (headers, hero panels). */
+  .glass-card-dark-vivid {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(2, 6, 23, 0.45);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  .glow-border {
+    border: 1px solid rgba(0, 196, 122, 0.28);
+    box-shadow: 0 0 20px rgba(0, 196, 122, 0.08);
+  }
+
+  .glow-border-violet {
+    border: 1px solid rgba(168, 85, 247, 0.22);
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.06);
+  }
+
+  .glow-border-blue {
+    border: 1px solid rgba(59, 130, 246, 0.22);
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.06);
+  }
+
+  .section-container {
+    max-width: 80rem;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  @media (min-width: 640px) {
+    .section-container {
+      padding-left: 1.5rem;
+      padding-right: 1.5rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .section-container {
+      padding-left: 2rem;
+      padding-right: 2rem;
+    }
+  }
+
+  .tab-section {
+    padding-top: 4rem;
+    padding-bottom: 4rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  @media (min-width: 640px) {
+    .tab-section {
+      padding-top: 5rem;
+      padding-bottom: 5rem;
+    }
+  }
+
+  /* stat-number — used on inner (light) pages */
+  .stat-number {
+    font-size: clamp(4.5rem, 12vw, 7rem);
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 0.75rem;
+    color: #0F172A;
+    -webkit-text-fill-color: #0F172A;
+  }
+
+  .section-label {
+    color: var(--aurora-green);
+    -webkit-text-fill-color: var(--aurora-green);
+    font-weight: 600;
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+    display: block;
+  }
+}
+
+/* Planetary orbit animation — used by ShiftSection solar system */
+@keyframes kinextion-orbit {
+  from { transform: rotate(0deg) translateX(var(--orbit-r)) rotate(0deg); }
+  to   { transform: rotate(360deg) translateX(var(--orbit-r)) rotate(-360deg); }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
