@@ -141,14 +141,14 @@ export function HeroSection() {
           className="mt-3 text-sm sm:text-base max-w-sm"
           style={{ color: "rgba(255,255,255,0.62)" }}
         >
-          The AI-powered wellness app built around your life — not the average person's.
+          The AI-powered health and wellness app designed for your everyday.
         </motion.p>
 
       </div>
 
       {/* Bottom nav hint */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
-        <NextPageButton toTab="problem" label="See the problem we're solving" dark />
+        <NextPageButton toTab="problem" label="See what we couldn't ignore" dark />
       </div>
     </section>
   );

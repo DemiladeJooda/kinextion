@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useNavigate } from "@/components/navigation/TabLayout";
+import { useNavigate } from "@/components/navigation/navigation-context";
 
 interface NextPageButtonProps {
   readonly toTab: string;

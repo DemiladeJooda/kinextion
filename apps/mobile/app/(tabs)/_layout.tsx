@@ -1,36 +1,58 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { Platform, View } from "react-native";
+import { BlurView } from "expo-blur";
 
-const AURORA_GREEN = "#00D68F";
-const SLATE_500 = "#64748B";
-const MIDNIGHT = "#0F172A";
+import { color, space } from "../../theme";
 
+/**
+ * Tab bar.
+ *
+ * Translucent over the content on iOS so scrolled content shows through —
+ * one of the small touches that makes an app feel native rather than framed.
+ * Android falls back to a solid fill, where blur is expensive and inconsistent.
+ */
 export default function TabLayout() {
+  const useBlur = Platform.OS === "ios";
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: AURORA_GREEN,
-        tabBarInactiveTintColor: SLATE_500,
+        tabBarActiveTintColor: color.green,
+        tabBarInactiveTintColor: color.textFaint,
         tabBarStyle: {
-          backgroundColor: MIDNIGHT,
-          borderTopColor: "rgba(255,255,255,0.05)",
+          position: useBlur ? "absolute" : "relative",
+          backgroundColor: useBlur ? "transparent" : color.surface,
+          borderTopColor: color.border,
           borderTopWidth: 1,
-          paddingTop: 4,
-          height: 85,
+          paddingTop: space.sm,
+          height: Platform.OS === "ios" ? 88 : 68,
+          elevation: 0,
         },
+        tabBarBackground: useBlur
+          ? () => (
+              <BlurView
+                intensity={40}
+                tint="dark"
+                style={{ flex: 1, backgroundColor: "rgba(14,21,36,0.72)" }}
+              />
+            )
+          : undefined,
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: "600",
+          letterSpacing: 0.2,
         },
+        tabBarItemStyle: { paddingTop: 2 },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: "Today",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="sunny-outline" size={size} color={color} />
+          tabBarIcon: ({ color: c, focused }) => (
+            <TabIcon name={focused ? "sunny" : "sunny-outline"} c={c} focused={focused} />
           ),
         }}
       />
@@ -38,8 +60,12 @@ export default function TabLayout() {
         name="habits"
         options={{
           title: "Habits",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="checkbox-outline" size={size} color={color} />
+          tabBarIcon: ({ color: c, focused }) => (
+            <TabIcon
+              name={focused ? "checkbox" : "checkbox-outline"}
+              c={c}
+              focused={focused}
+            />
           ),
         }}
       />
@@ -47,8 +73,12 @@ export default function TabLayout() {
         name="chat"
         options={{
           title: "Guides",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="chatbubbles-outline" size={size} color={color} />
+          tabBarIcon: ({ color: c, focused }) => (
+            <TabIcon
+              name={focused ? "chatbubbles" : "chatbubbles-outline"}
+              c={c}
+              focused={focused}
+            />
           ),
         }}
       />
@@ -56,11 +86,36 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
+          tabBarIcon: ({ color: c, focused }) => (
+            <TabIcon name={focused ? "person" : "person-outline"} c={c} focused={focused} />
           ),
         }}
       />
     </Tabs>
+  );
+}
+
+/** Icon with an active-state dot underneath — a quieter cue than a pill. */
+function TabIcon({
+  name,
+  c,
+  focused,
+}: {
+  name: keyof typeof Ionicons.glyphMap;
+  c: string;
+  focused: boolean;
+}) {
+  return (
+    <View style={{ alignItems: "center", gap: 3 }}>
+      <Ionicons name={name} size={22} color={c} />
+      <View
+        style={{
+          width: 4,
+          height: 4,
+          borderRadius: 2,
+          backgroundColor: focused ? c : "transparent",
+        }}
+      />
+    </View>
   );
 }

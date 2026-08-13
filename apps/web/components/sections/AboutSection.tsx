@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useNavigate } from "@/components/navigation/TabLayout";
+import { useNavigate } from "@/components/navigation/navigation-context";
 
 const convictionStats = [
   { value: "80%",  label: "quit within 90 days",      color: "#EF4444" },
@@ -70,7 +70,7 @@ export function AboutSection() {
             className="font-bold mb-6 text-balance"
             style={{ fontSize: "clamp(2.2rem, 5.5vw, 4rem)", color: "#0F172A", lineHeight: 1.15 }}
           >
-            We got tired of{" "}
+            We grew tired of{" "}
             <span style={{ color: "#64748B" }}>starting over.</span>
           </h2>
           <p
@@ -78,8 +78,7 @@ export function AboutSection() {
             style={{ color: "#475569" }}
           >
             Not from lack of motivation. Not from lack of trying. From the absence of a
-            system that could handle the full, complicated, beautiful chaos of being a real
-            person with a real life.
+            system that could handle the full, complicated, beautiful chaos of being human.
           </p>
           <p className="text-base max-w-xl mx-auto text-balance" style={{ color: "#64748B" }}>
             Kinextion exists because we lived the problem — and refused to accept that
@@ -169,7 +168,7 @@ export function AboutSection() {
                   WebkitTextFillColor: "transparent",
                 }}
               >
-                an engineering problem.
+                a systematic problem.
               </span>
             </p>
             <div
@@ -195,7 +194,7 @@ export function AboutSection() {
             <p className="section-label mb-3" style={{ color: "#A855F7" }}>Our Principles</p>
             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
               <h3
-                className="font-bold text-balance"
+                className="font-semibold text-balance"
                 style={{ fontSize: "clamp(1.6rem, 3.5vw, 2.8rem)", color: "#0F172A" }}
               >
                 Seven things we will{" "}
@@ -331,7 +330,7 @@ export function AboutSection() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: 0.4 }}
-              className="font-bold mb-4 text-balance relative z-10"
+              className="font-semibold mb-4 text-balance relative z-10"
               style={{ fontSize: "clamp(1.75rem, 4vw, 3rem)", color: "#0F172A" }}
             >
               Your future self{" "}
@@ -367,7 +366,7 @@ export function AboutSection() {
               transition={{ delay: 0.6 }}
               className="relative z-10 max-w-md mx-auto"
             >
-              <AnimatePresence mode="wait">
+              <AnimatePresence>
                 {waitlistDone ? (
                   <motion.div
                     key="done"

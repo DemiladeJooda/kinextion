@@ -2,31 +2,38 @@
 
 import { motion } from "framer-motion";
 
-// Team data: co-founders with brand accent colors, bio copy, and pull-quote.
-// Accent colors (member.color) are intentionally kept as-is — they pop on the dark background.
-const team = [
+// ─── Core values ─────────────────────────────────────────────────────────────
+const coreValues = [
   {
-    name:     "Demi",
-    role:     "Co-Founder & CTO",
-    initials: "D",
-    color:    "#00C47A",
-    bio:      "The architect behind Kinextion's technical foundation. Demi's work spans AI systems, behavioral data modeling, and full-stack engineering — building the intelligence layer that makes Althea and Kairo genuinely adaptive.",
-    quote:    "The hard problem isn't building the app — it's building the intelligence. That's what we get right.",
+    n: "01", label: "Progress over perfection", color: "#00C47A",
+    body: "We celebrate the 1% improvement. We track the streak that almost broke but didn't. The system never shames a slip — it absorbs it, learns from it, and adapts. The only way out is through.",
   },
   {
-    name:     "Cecil",
-    role:     "Co-Founder & CEO",
-    initials: "C",
-    color:    "#A855F7",
-    bio:      "Fitness-obsessed builder who spent years watching motivated, talented people fail at consistency — not from lack of effort, but from lack of system. Cecil brings lived experience, product vision, and relentless user empathy to every Kinextion decision.",
-    quote:    "I built this because I needed it — and I refused to believe the system couldn't be better.",
+    n: "02", label: "Compounding consistency", color: "#0ABAB5",
+    body: "The product is the accumulation of small, daily actions. One session doesn't change you. Three hundred sessions change who you are. We build for the long arc — not the impressive start.",
+  },
+  {
+    n: "03", label: "Context is everything", color: "#3B82F6",
+    body: "Generic advice is noise. A recommendation only means something when it fits the reality of someone's actual day — their calendar, their sleep, their pressure, their history. We build for that specificity.",
+  },
+  {
+    n: "04", label: "Radical personalization", color: "#A855F7",
+    body: "No two users should feel like they're using the same app. The system learns, adapts, and evolves with the individual. One-size-fits-all wellness is why wellness fails.",
+  },
+  {
+    n: "05", label: "Accountability with grace", color: "#F59E0B",
+    body: "Hold people to their commitments — but with empathy. Life happens. A missed day is data, not a verdict. The system bends without breaking. You are not your worst week.",
+  },
+  {
+    n: "06", label: "Wholeness over fragmentation", color: "#34D399",
+    body: "A workout plan that ignores sleep. A meditation app that ignores nutrition. A journal that ignores your heart rate. The human body doesn't fragment — neither should the system built for it.",
+  },
+  {
+    n: "07", label: "Human dignity in AI", color: "#EC4899",
+    body: "Althea and Kairo are trusted companions, not surveillance tools. Every data point exists to serve you — not to judge you. Guidance without judgment. Intelligence without arrogance.",
   },
 ];
 
-// StorySection renders the "Our Story" tab content:
-// a hero title, a video placeholder, a team grid, and a footer note.
-// All colors are dark-theme-safe — white/near-white text on a transparent-glass surface
-// that sits above the global deep-space starfield background.
 export function StorySection() {
   return (
     <section className="tab-section">
@@ -42,33 +49,34 @@ export function StorySection() {
           <p className="section-label" style={{ color: "#A855F7" }}>Our Story</p>
           {/* Dark-theme heading: #FFFFFF instead of the original near-black #0F172A */}
           <h2
-            className="font-bold mb-4 text-balance"
+            className="font-semibold mb-4 text-balance"
             style={{ fontSize: "clamp(2rem, 5vw, 3.5rem)", color: "#FFFFFF" }}
           >
             From our journey to yours.
           </h2>
+          <p className="text-base max-w-lg mx-auto" style={{ color: "rgba(255,255,255,0.50)" }}>
+            We got tired of starting over — and refused to accept that consistency had to be this fragile.
+          </p>
         </motion.div>
 
-        {/* ── Video placeholder — dark translucent panel with aurora-tinted gradient ── */}
+        {/* ── Video placeholder ── */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
-          className="max-w-2xl mx-auto mb-24"
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-60px" }}
+          transition={{ duration: 0.5 }}
+          className="max-w-2xl mx-auto mb-28"
         >
           <div
             className="relative rounded-2xl overflow-hidden group cursor-pointer"
             style={{
               aspectRatio: "16 / 9",
-              // Dark panel: replaces the old light rgba(248,250,252,1) endpoint with a near-transparent white
               background:  "linear-gradient(135deg, rgba(0,196,122,0.12) 0%, rgba(10,186,181,0.08) 40%, rgba(255,255,255,0.03) 80%)",
-              // White-based border so it reads against the dark starfield
               border:      "1px solid rgba(255,255,255,0.12)",
               boxShadow:   "0 4px 24px rgba(0,0,0,0.06)",
             }}
           >
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              {/* Play button — accent green ring, unchanged from original */}
               <motion.div
                 whileHover={{ scale: 1.08 }}
                 className="w-16 h-16 rounded-full flex items-center justify-center mb-4 transition-all duration-200"
@@ -80,103 +88,78 @@ export function StorySection() {
               >
                 <span className="text-2xl ml-1" style={{ color: "#00C47A" }}>▶</span>
               </motion.div>
-              {/* Video title and meta — white text on dark panel */}
               <p className="font-semibold text-base" style={{ color: "#FFFFFF" }}>Why We Started Kinextion</p>
               <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.55)" }}>Demi & Cecil · 4 minutes</p>
             </div>
-
-            {/* Progress bar — white-tinted track so it's visible on dark */}
             <div className="absolute bottom-4 left-4 right-4 flex items-center gap-3">
               <div className="flex-1 h-1 rounded-full" style={{ background: "rgba(255,255,255,0.15)" }}>
                 <div className="w-0 h-full rounded-full" style={{ background: "#00C47A" }} />
               </div>
-              {/* Timestamp — muted white */}
               <span className="text-xs" style={{ color: "rgba(255,255,255,0.42)" }}>0:00 / 4:12</span>
             </div>
           </div>
-
-          {/* Caption beneath video — muted white */}
           <p className="text-center text-xs mt-3" style={{ color: "rgba(255,255,255,0.42)" }}>
             Full video coming soon — follow our journey
           </p>
         </motion.div>
 
-        {/* ── Team grid — dark glass cards, white text, accent color highlights ── */}
-        {/* Divider uses white-based rgba so it's visible against the dark background */}
-        <div className="border-t pt-16 mb-20" style={{ borderColor: "rgba(255,255,255,0.10)" }}>
+        {/* ── Core Values ── */}
+        <div className="border-t pt-16 mb-16" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-80px" }}
-            transition={{ duration: 0.55 }}
-            className="text-center mb-12"
+            className="mb-14"
           >
-            <p className="section-label" style={{ color: "#0ABAB5" }}>The Team</p>
-            {/* Section heading — white on dark */}
-            <h2
-              className="font-bold mb-4 text-balance"
-              style={{ fontSize: "clamp(1.75rem, 4vw, 3rem)", color: "#FFFFFF" }}
-            >
-              The people behind Kinextion.
-            </h2>
-            {/* Subheading — 70% white for comfortable reading contrast */}
-            <p className="text-lg max-w-2xl mx-auto text-balance" style={{ color: "rgba(255,255,255,0.70)" }}>
-              Two founders. One shared obsession. Endless conviction that consistency
-              doesn&apos;t have to be this hard.
-            </p>
+            <p className="section-label mb-3" style={{ color: "#A855F7" }}>Our Principles</p>
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+              <h3
+                className="font-semibold text-balance"
+                style={{ fontSize: "clamp(1.6rem, 3.5vw, 2.8rem)", color: "#FFFFFF" }}
+              >
+                Seven things we will{" "}
+                <span style={{ color: "rgba(255,255,255,0.28)" }}>never compromise on.</span>
+              </h3>
+              <p className="text-sm shrink-0" style={{ color: "rgba(255,255,255,0.32)" }}>
+                The foundation of every decision we make.
+              </p>
+            </div>
           </motion.div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {team.map((member, i) => (
-              // Each card uses glass-card-dark-vivid — frosted dark glass with slight brightness
+          <div className="space-y-0">
+            {coreValues.map((v, i) => (
               <motion.div
-                key={member.name}
-                initial={{ opacity: 0, y: 24 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-60px" }}
-                transition={{ delay: i * 0.15, duration: 0.55 }}
-                whileHover={{ y: -3 }}
-                className="glass-card-dark-vivid p-8 flex flex-col transition-all duration-300"
-                style={{ border: `1px solid ${member.color}18` }}
+                key={v.n}
+                initial={{ opacity: 0, x: -16 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true, margin: "-40px" }}
+                transition={{ delay: i * 0.06, duration: 0.45 }}
+                whileHover={{ x: 4 }}
+                className="flex gap-6 py-7 transition-all duration-300 cursor-default"
+                style={{ borderBottom: i < coreValues.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none" }}
               >
-                <div className="flex items-center gap-5 mb-6">
-                  {/* Avatar tile — member accent color for background/border/initial, unchanged */}
-                  <div
-                    className="w-20 h-20 rounded-2xl flex items-center justify-center text-3xl font-extrabold shrink-0"
-                    style={{
-                      background: `${member.color}10`,
-                      border:     `2px solid ${member.color}30`,
-                      color:      member.color,
-                    }}
-                  >
-                    {member.initials}
-                  </div>
-                  <div>
-                    {/* Name — white on dark */}
-                    <h3 className="text-2xl font-bold" style={{ color: "#FFFFFF" }}>{member.name}</h3>
-                    <p className="text-sm font-medium mt-0.5" style={{ color: member.color }}>{member.role}</p>
-                  </div>
+                <div className="w-12 shrink-0 pt-1">
+                  <span className="font-extrabold text-lg leading-none" style={{ color: "rgba(255,255,255,0.14)", fontVariantNumeric: "tabular-nums" }}>
+                    {v.n}
+                  </span>
                 </div>
-
-                {/* Bio — 70% white for readable body copy */}
-                <p className="text-sm leading-relaxed mb-6" style={{ color: "rgba(255,255,255,0.70)" }}>{member.bio}</p>
-
-                {/* Pull-quote — left border in member accent color, quote text at 55% white.
-                    Focus box and skill chips intentionally removed: the bare quote keeps the
-                    card feeling like a piece of the founders rather than a résumé. */}
-                <blockquote className="mt-auto border-l-2 pl-4" style={{ borderColor: member.color }}>
-                  <p className="text-xs italic leading-relaxed" style={{ color: "rgba(255,255,255,0.55)" }}>
-                    &ldquo;{member.quote}&rdquo;
+                <div className="w-0.5 shrink-0 rounded-full" style={{ background: `${v.color}55`, minHeight: 20 }} />
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-bold mb-2" style={{ fontSize: "clamp(1rem, 2vw, 1.15rem)", color: v.color }}>
+                    {v.label}
+                  </h4>
+                  <p className="text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.58)" }}>
+                    {v.body}
                   </p>
-                </blockquote>
+                </div>
               </motion.div>
             ))}
           </div>
         </div>
 
-        {/* ── Footer note — muted white on dark, white-based divider ── */}
-        <div className="pt-8 border-t text-center" style={{ borderColor: "rgba(255,255,255,0.10)" }}>
-          <p className="text-xs" style={{ color: "rgba(255,255,255,0.42)" }}>
+        {/* ── Footer ── */}
+        <div className="pt-8 border-t text-center" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
+          <p className="text-xs" style={{ color: "rgba(255,255,255,0.30)" }}>
             Kinextion &copy; {new Date().getFullYear()} — Systems are our creation. Action leading to intentional impact.
           </p>
         </div>

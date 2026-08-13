@@ -199,7 +199,7 @@ export function PeopleBuiltFor() {
           Does any of this feel familiar?
         </p>
         <h3
-          className="font-bold mb-4 text-balance"
+          className="font-semibold mb-4 text-balance"
           style={{ fontSize: "clamp(1.6rem, 3.5vw, 2.8rem)", color: "#0F172A" }}
         >
           The people this is built for.
@@ -322,7 +322,7 @@ export function PeopleBuiltFor() {
           <div className="absolute inset-x-1.5 top-1 bottom-0 rounded-2xl opacity-20 pointer-events-none" style={{ background: currentPersona.color, border: `1px solid ${currentPersona.color}30`, borderRadius: 13 }} />
 
           <div className="overflow-hidden relative z-10">
-            <AnimatePresence mode="wait" custom={carouselDir}>
+            <AnimatePresence custom={carouselDir}>
               <motion.div
                 key={carouselIdx}
                 custom={carouselDir}

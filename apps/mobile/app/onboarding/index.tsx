@@ -1,148 +1,201 @@
-import { View, Text, Pressable, ScrollView } from "react-native";
+import { useState } from "react";
+import { ScrollView, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import * as Haptics from "expo-haptics";
+import Animated, { FadeIn, FadeInRight, Layout } from "react-native-reanimated";
+import { GOAL_OPTIONS, EQUIPMENT_OPTIONS } from "@kinextion/shared";
 
-const STEPS = [
+import { AuroraBackdrop, Button, Chip, Label, Txt } from "../../components/ui";
+import { color, radius, space, tint, type } from "../../theme";
+
+/**
+ * Onboarding.
+ *
+ * Four short steps, one question per screen. Deliberately does not ask for
+ * anything sensitive up front — health conditions, medications, and history
+ * are volunteered later in conversation, where the context makes it obvious
+ * why the system is asking.
+ */
+type Step =
+  | { key: "name"; kind: "text"; question: string; hint: string; placeholder: string }
+  | { key: "goal"; kind: "single"; question: string; hint: string; options: readonly string[] }
+  | { key: "days"; kind: "single"; question: string; hint: string; options: readonly string[] }
+  | { key: "equipment"; kind: "multi"; question: string; hint: string; options: readonly string[] };
+
+const STEPS: Step[] = [
   {
-    question: "Hey! What should we call you?",
-    type: "text" as const,
     key: "name",
+    kind: "text",
+    question: "What should we call you?",
+    hint: "Your guides will use it — sparingly.",
+    placeholder: "First name",
   },
   {
-    question: "What's your main goal right now?",
-    type: "select" as const,
     key: "goal",
-    options: [
-      "Build consistency",
-      "Get stronger",
-      "Lose weight",
-      "Improve mental clarity",
-      "Reduce stress",
-      "Better sleep",
-      "Build confidence",
-    ],
+    kind: "single",
+    question: "What matters most right now?",
+    hint: "You can change this whenever it changes.",
+    options: GOAL_OPTIONS,
   },
   {
-    question: "How many days a week can you show up?",
-    type: "select" as const,
     key: "days",
-    options: ["2 days", "3 days", "4 days", "5 days", "6+ days"],
+    kind: "single",
+    question: "Realistically, how many days a week?",
+    hint: "Answer for your actual life, not your best week.",
+    options: ["1–2 days", "3–4 days", "5–6 days", "Every day"],
   },
   {
-    question: "What's your current fitness level?",
-    type: "select" as const,
-    key: "level",
-    options: [
-      "Just starting out",
-      "Getting back into it",
-      "Intermediate — I know my way around",
-      "Advanced — ready for challenges",
-    ],
+    key: "equipment",
+    kind: "multi",
+    question: "What do you have access to?",
+    hint: "Pick everything that applies.",
+    options: EQUIPMENT_OPTIONS,
   },
 ];
 
 export default function OnboardingScreen() {
   const router = useRouter();
-  const [step, setStep] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const currentStep = STEPS[step];
+  const [index, setIndex] = useState(0);
+  const [name, setName] = useState("");
+  const [single, setSingle] = useState<Record<string, string>>({});
+  const [multi, setMulti] = useState<string[]>([]);
 
-  function selectAnswer(value: string) {
-    setAnswers((prev) => ({ ...prev, [currentStep.key]: value }));
-    if (step < STEPS.length - 1) {
-      setTimeout(() => setStep(step + 1), 300);
-    } else {
-      // Onboarding complete
+  const step = STEPS[index];
+  const isLast = index === STEPS.length - 1;
+
+  const canAdvance =
+    step.kind === "text"
+      ? name.trim().length > 0
+      : step.kind === "single"
+        ? !!single[step.key]
+        : multi.length > 0;
+
+  const next = () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (isLast) {
+      // TODO: persist the profile once the users API is wired.
       router.replace("/(tabs)" as never);
+    } else {
+      setIndex((i) => i + 1);
     }
-  }
+  };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#0A0A1A" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: color.bg }}>
+      <AuroraBackdrop accent={color.green} />
+
+      {/* Progress */}
+      <View style={{ flexDirection: "row", gap: 5, padding: space.xl }}>
+        {STEPS.map((s, i) => (
+          <Animated.View
+            key={s.key}
+            layout={Layout.springify().damping(18)}
+            style={{
+              flex: 1,
+              height: 3,
+              borderRadius: 2,
+              backgroundColor: i <= index ? color.green : "rgba(255,255,255,0.08)",
+            }}
+          />
+        ))}
+      </View>
+
       <ScrollView
-        contentContainerStyle={{
-          flex: 1,
-          justifyContent: "center",
-          padding: 24,
-        }}
+        contentContainerStyle={{ padding: space.xl, paddingTop: space.md, flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        {/* Progress dots */}
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "center",
-            gap: 8,
-            marginBottom: 48,
-          }}
-        >
-          {STEPS.map((_, i) => (
-            <View
-              key={i}
-              style={{
-                width: i === step ? 24 : 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor:
-                  i <= step ? "#00D68F" : "rgba(255,255,255,0.1)",
-              }}
+        <Animated.View key={step.key} entering={FadeInRight.duration(320)}>
+          <Label c={color.green}>
+            Step {index + 1} of {STEPS.length}
+          </Label>
+
+          <Txt variant="title" style={{ marginTop: space.md }}>
+            {step.question}
+          </Txt>
+          <Txt variant="small" c={color.textMuted} style={{ marginTop: space.sm }}>
+            {step.hint}
+          </Txt>
+
+          <View style={{ marginTop: space.xxl }}>
+            {step.kind === "text" ? (
+              <TextInput
+                value={name}
+                onChangeText={setName}
+                placeholder={step.placeholder}
+                placeholderTextColor={color.textFaint}
+                autoFocus
+                maxLength={40}
+                returnKeyType="next"
+                onSubmitEditing={() => canAdvance && next()}
+                style={[
+                  type.heading,
+                  {
+                    backgroundColor: color.surface,
+                    borderWidth: 1,
+                    borderColor: color.border,
+                    borderRadius: radius.lg,
+                    paddingHorizontal: space.xl,
+                    paddingVertical: space.lg,
+                    color: color.text,
+                  },
+                ]}
+              />
+            ) : (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
+                {step.options.map((opt) => {
+                  const selected =
+                    step.kind === "single" ? single[step.key] === opt : multi.includes(opt);
+                  return (
+                    <Chip
+                      key={opt}
+                      label={opt}
+                      accent={color.green}
+                      selected={selected}
+                      onPress={() => {
+                        if (step.kind === "single") {
+                          setSingle((p) => ({ ...p, [step.key]: opt }));
+                        } else {
+                          setMulti((p) =>
+                            p.includes(opt) ? p.filter((x) => x !== opt) : [...p, opt]
+                          );
+                        }
+                      }}
+                    />
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        </Animated.View>
+
+        <View style={{ flex: 1 }} />
+
+        <Animated.View entering={FadeIn.delay(150)} style={{ gap: space.md, marginTop: space.xxl }}>
+          <Button
+            label={isLast ? `Let's go${name.trim() ? `, ${name.trim()}` : ""}` : "Continue"}
+            onPress={next}
+            disabled={!canAdvance}
+            accent={color.green}
+          />
+          {index > 0 ? (
+            <Button
+              label="Back"
+              variant="ghost"
+              accent={color.textMuted}
+              onPress={() => setIndex((i) => i - 1)}
             />
-          ))}
-        </View>
+          ) : null}
+        </Animated.View>
 
-        {/* AI avatar */}
-        <View
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: 14,
-            backgroundColor: "rgba(0,214,143,0.15)",
-            alignItems: "center",
-            justifyContent: "center",
-            marginBottom: 16,
-          }}
+        <Txt
+          variant="small"
+          c={color.textFaint}
+          style={{ textAlign: "center", marginTop: space.lg }}
         >
-          <Text style={{ color: "#00D68F", fontSize: 20, fontWeight: "800" }}>
-            K
-          </Text>
-        </View>
-
-        {/* Question */}
-        <Text
-          style={{
-            color: "#F8FAFC",
-            fontSize: 24,
-            fontWeight: "700",
-            marginBottom: 32,
-            lineHeight: 32,
-          }}
-        >
-          {currentStep.question}
-        </Text>
-
-        {/* Options */}
-        {currentStep.type === "select" &&
-          currentStep.options?.map((option) => (
-            <Pressable
-              key={option}
-              onPress={() => selectAnswer(option)}
-              style={({ pressed }) => ({
-                backgroundColor: pressed
-                  ? "rgba(0,214,143,0.15)"
-                  : "rgba(255,255,255,0.05)",
-                borderRadius: 12,
-                padding: 16,
-                marginBottom: 8,
-                borderWidth: 1,
-                borderColor:
-                  answers[currentStep.key] === option
-                    ? "rgba(0,214,143,0.4)"
-                    : "rgba(255,255,255,0.08)",
-              })}
-            >
-              <Text style={{ color: "#E2E8F0", fontSize: 16 }}>{option}</Text>
-            </Pressable>
-          ))}
+          No health questions yet. Share what you want, when it matters.
+        </Txt>
       </ScrollView>
     </SafeAreaView>
   );

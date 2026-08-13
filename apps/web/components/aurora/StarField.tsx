@@ -5,10 +5,23 @@ import { motion } from "framer-motion";
 
 // Deterministic pseudo-random generator. The same input `n` always returns the
 // same value in [0,1), so the star layout is identical on the server and the
-// client — this prevents React hydration mismatches for the randomized field.
-function seeded(n: number): number {
+// client.
+//
+// Determinism alone wasn't enough: framer-motion serialises numeric styles to
+// different precision on the server than in the browser, so `7.762715947319521%`
+// came back as `7.76272%` in the SSR markup and React logged a hydration
+// mismatch for all 130 stars on every dark page. Rounding here means both sides
+// stringify the same value, and no eye can tell the difference at 4dp.
+function seeded(n: number, dp = 4): number {
   const x = Math.sin(n * 127.1 + 9.1) * 43758.5453;
-  return x - Math.floor(x);
+  const f = 10 ** dp;
+  return Math.round((x - Math.floor(x)) * f) / f;
+}
+
+/** Round a derived value to the same precision, for the same reason. */
+function fixed(n: number, dp = 4): number {
+  const f = 10 ** dp;
+  return Math.round(n * f) / f;
 }
 
 // Picks a star tint: mostly white, with occasional aurora accents
@@ -29,12 +42,12 @@ export function StarField({ count = 80 }: { readonly count?: number }) {
   const stars = useMemo(
     () =>
       Array.from({ length: count }, (_, i) => ({
-        x: seeded(i * 7 + 1) * 100, // horizontal position (% of viewport)
-        y: seeded(i * 7 + 2) * 100, // vertical position (% of viewport)
-        size: 0.8 + seeded(i * 7 + 3) * 2.4, // dot diameter in px
-        opacity: 0.2 + seeded(i * 7 + 4) * 0.72, // peak brightness
-        duration: 2.2 + seeded(i * 7 + 5) * 4.5, // twinkle cycle length (s)
-        delay: seeded(i * 7 + 6) * 4, // staggered start so they don't pulse in sync
+        x: fixed(seeded(i * 7 + 1) * 100), // horizontal position (% of viewport)
+        y: fixed(seeded(i * 7 + 2) * 100), // vertical position (% of viewport)
+        size: fixed(0.8 + seeded(i * 7 + 3) * 2.4), // dot diameter in px
+        opacity: fixed(0.2 + seeded(i * 7 + 4) * 0.72), // peak brightness
+        duration: fixed(2.2 + seeded(i * 7 + 5) * 4.5, 2), // twinkle cycle length (s)
+        delay: fixed(seeded(i * 7 + 6) * 4, 2), // staggered start so they don't pulse in sync
         color: starColor(i),
       })),
     [count]

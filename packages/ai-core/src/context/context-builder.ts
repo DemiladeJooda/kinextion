@@ -1,5 +1,5 @@
 import type { Persona, UserProfile, ChatMessage } from "@kinextion/shared";
-import { getSystemPrompt } from "../personas/index.js";
+import { buildSystemPrompt } from "../personas/index";
 
 /**
  * 4-Tier Context System:
@@ -45,7 +45,10 @@ function assembleSystemPrompt(
   persona: Persona,
   ctx: UserContext
 ): string {
-  const parts: string[] = [getSystemPrompt(persona)];
+  // Tiers 2–4 are assembled into one context block, then handed to
+  // buildSystemPrompt so this path picks up the shared safety rules and the
+  // app format rules rather than re-deriving them.
+  const parts: string[] = [];
 
   // Tier 2: User Profile
   if (ctx.profile) {
@@ -65,7 +68,12 @@ function assembleSystemPrompt(
     parts.push(behavioralContext);
   }
 
-  return parts.join("\n\n");
+  return buildSystemPrompt({
+    guide: persona,
+    surface: "app",
+    userName: ctx.profile?.displayName ?? null,
+    context: parts.length ? parts.join("\n\n") : null,
+  });
 }
 
 function formatProfileContext(profile: UserProfile): string {

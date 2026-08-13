@@ -213,7 +213,7 @@ export function GuideChatDemo({ guide: activeGuide }: { readonly guide: Guide })
                 {guide.emoji}
               </motion.div>
             </div>
-            <AnimatePresence mode="wait">
+            <AnimatePresence>
               {showProcessing ? (
                 <motion.p key="proc" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                   className="text-[10px] font-medium text-center" style={{ color: guide.color }}>
@@ -260,7 +260,7 @@ export function GuideChatDemo({ guide: activeGuide }: { readonly guide: Guide })
             </div>
 
             {/* Message list — plays back with a typing indicator between turns */}
-            <AnimatePresence mode="wait">
+            <AnimatePresence>
               <motion.div key={activeGuide} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}
                 className="p-4 space-y-3 overflow-y-auto" style={{ maxHeight: 380, minHeight: 200 }}>
                 {convo.slice(0, visibleMessages).map((msg, i) => (

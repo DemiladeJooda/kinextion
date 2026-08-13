@@ -24,11 +24,62 @@
     color: #0F172A;
     font-family: Inter, "SF Pro Text", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Inter ships contextual alternates and proper fractions behind these; on
+       by default they cost nothing and quietly fix things like "1%" and "→". */
+    font-feature-settings: "cv11", "ss01";
+    font-variant-ligatures: contextual;
+  }
+
+  /* Display type is set optically: the larger it gets, the tighter it wants to
+     be. Setting this once on the elements means individual sections stop
+     hand-tuning `tracking-*` and drifting apart from each other. */
+  h1, h2 {
+    letter-spacing: -0.03em;
+  }
+
+  h3, h4 {
+    letter-spacing: -0.02em;
+  }
+
+  /* Figures should never shimmy as they animate or count. */
+  .tabular-nums,
+  .stat-number {
+    font-variant-numeric: tabular-nums;
   }
 
   ::selection {
     background-color: rgba(0, 196, 122, 0.20);
     color: #0F172A;
+  }
+
+  /* The site had no visible focus treatment at all, which makes it unusable by
+     keyboard. Scoped to :focus-visible so it appears for keyboard and
+     assistive-tech users without ringing every mouse click. */
+  :focus-visible {
+    outline: 2px solid var(--aurora-teal);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+}
+
+/* Respect the OS-level motion preference.
+   This site leans hard on continuous animation — orbiting signals, twinkling
+   stars, pulsing glows. For anyone with vestibular sensitivity that isn't
+   atmosphere, it's a reason to close the tab. Transitions and one-shot
+   entrances stay (they're short and non-vestibular); anything that loops
+   forever or travels across the screen stops. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
@@ -129,8 +180,11 @@
   /* stat-number — used on inner (light) pages */
   .stat-number {
     font-size: clamp(4.5rem, 12vw, 7rem);
-    font-weight: 800;
-    line-height: 1;
+    font-weight: 700;
+    /* At 7rem, default spacing reads as gaps between the digits rather than a
+       number. Optical tracking is what separates a set figure from a big one. */
+    letter-spacing: -0.045em;
+    line-height: 0.95;
     margin-bottom: 0.75rem;
     color: #0F172A;
     -webkit-text-fill-color: #0F172A;
@@ -140,18 +194,22 @@
     color: var(--aurora-green);
     -webkit-text-fill-color: var(--aurora-green);
     font-weight: 600;
-    font-size: 0.7rem;
-    letter-spacing: 0.2em;
+    font-size: 0.6875rem;
+    letter-spacing: 0.18em;
     text-transform: uppercase;
     margin-bottom: 1rem;
     display: block;
   }
 }
 
-/* Planetary orbit animation — used by ShiftSection solar system */
+/* Planetary orbit animations — CW (odd rings) and CCW (even rings) */
 @keyframes kinextion-orbit {
   from { transform: rotate(0deg) translateX(var(--orbit-r)) rotate(0deg); }
   to   { transform: rotate(360deg) translateX(var(--orbit-r)) rotate(-360deg); }
+}
+@keyframes kinextion-orbit-ccw {
+  from { transform: rotate(0deg) translateX(var(--orbit-r)) rotate(0deg); }
+  to   { transform: rotate(-360deg) translateX(var(--orbit-r)) rotate(360deg); }
 }
 
 @layer utilities {

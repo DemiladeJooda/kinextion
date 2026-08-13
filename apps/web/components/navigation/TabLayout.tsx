@@ -1,23 +1,25 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { useState, useCallback } from "react";
+import { motion } from "framer-motion";
 import { TabNav } from "./TabNav";
 
-// ─── Navigation context ────────────────────────────────────────────────────────
-export const NavigateContext = createContext<(tab: string) => void>(() => {});
-export function useNavigate() {
-  return useContext(NavigateContext);
-}
+// The context lives in its own module so sections can consume it without
+// importing this file back — see navigation-context.tsx for why that matters.
+import { NavigateContext } from "./navigation-context";
 
-// ─── Tab definitions (7 tabs) ─────────────────────────────────────────────────
+// Re-exported for existing call sites; new code should import from
+// "@/components/navigation/navigation-context" directly.
+export { NavigateContext, useNavigate } from "./navigation-context";
+
+// ─── Tab definitions (8 tabs) ─────────────────────────────────────────────────
 export const TABS = [
   { id: "home",         label: "Home"         },
   { id: "problem",      label: "The Problem"  },
   { id: "shift",        label: "The Solution" },
   { id: "how-it-works", label: "How It Works" },
+  { id: "community",    label: "Community"    },
   { id: "research",     label: "Research"     },
-  { id: "about",        label: "About Us"     },
   { id: "story",        label: "Our Story"    },
 ];
 
@@ -26,8 +28,8 @@ import { HeroSection }       from "@/components/sections/HeroSection";
 import { ProblemSection }    from "@/components/sections/ProblemSection";
 import { ShiftSection }      from "@/components/sections/ShiftSection";
 import { HowItWorksSection } from "@/components/sections/HowItWorksSection";
+import { CommunitySection }  from "@/components/sections/CommunitySection";
 import { ResearchSection }   from "@/components/sections/ResearchSection";
-import { AboutSection }      from "@/components/sections/AboutSection";
 import { StorySection }      from "@/components/sections/StorySection";
 import { ShootingStars }     from "@/components/aurora/ShootingStars";
 import { SpaceBackground }   from "@/components/aurora/SpaceBackground";
@@ -39,11 +41,6 @@ const SPACE_TABS = new Set(["home", "shift", "story"]);
 // ─── Page transition ───────────────────────────────────────────────────────────
 // Gentle, longer cross-dissolve so switching between a dark "space" page and a
 // light page eases through the midtones instead of slamming black↔white.
-const pageVariants = {
-  enter:  { opacity: 0, y: 10 },
-  center: { opacity: 1, y: 0  },
-  exit:   { opacity: 0, y: -6 },
-};
 const pageTransition = {
   duration: 0.34,
   ease: [0.4, 0, 0.2, 1] as const,
@@ -68,8 +65,8 @@ export function TabLayout() {
       case "problem":      return <ProblemSection />;
       case "shift":        return <ShiftSection />;
       case "how-it-works": return <HowItWorksSection />;
+      case "community":    return <CommunitySection />;
       case "research":     return <ResearchSection />;
-      case "about":        return <AboutSection />;
       case "story":        return <StorySection />;
       default:             return <HeroSection />;
     }
@@ -136,18 +133,25 @@ export function TabLayout() {
       <ShootingStars active={!isSpace} />
 
       <div style={{ paddingTop: "var(--nav-height, 56px)", position: "relative", zIndex: 1 }}>
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeTab}
-            variants={pageVariants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            transition={pageTransition}
-          >
-            {renderSection()}
-          </motion.div>
-        </AnimatePresence>
+        {/* Cross-fade between tabs.
+
+            Deliberately NOT `AnimatePresence mode="wait"`: with variant-based
+            exits, the outgoing page's exit animation could fail to report
+            completion, and because "wait" holds the incoming child until that
+            happens, the app got stuck showing whichever section was mounted
+            first — every tab click updated state and changed nothing on screen.
+
+            Keying the motion.div on activeTab gives the same cross-fade (the
+            new section mounts and fades in) with no dependency on an exit
+            lifecycle that can stall. */}
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={pageTransition}
+        >
+          {renderSection()}
+        </motion.div>
       </div>
     </NavigateContext.Provider>
   );

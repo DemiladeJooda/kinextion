@@ -128,12 +128,11 @@ export function ProblemSection() {
             className="font-bold w-full mb-5 text-balance"
             style={{ fontSize: "clamp(2.2rem, 5.5vw, 4rem)", color: "#0F172A" }}
           >
-            The health and wellness industry is fragmented,{" "}
-            <span style={{ color: "#64748B" }}>and it&apos;s failing us.</span>
+            Health and wellness is fragmented,{" "}
+            <span style={{ color: "#64748B" }}>but it doesn&apos;t have to be.</span>
           </h2>
           <p className="text-lg max-w-2xl mx-auto text-balance" style={{ color: "#475569" }}>
-            Most solutions only solve part of the problem — addressing one piece of the equation
-            while overall growth and consistency lags behind.
+            Most tools work to optimize parts of your health — but that&apos;s only addressing one part of the human puzzle.
           </p>
         </motion.div>
 
@@ -166,17 +165,13 @@ export function ProblemSection() {
           <div className="pt-4">
             <div className="stat-number">80%</div>
             <h3 className="text-2xl font-bold mb-4" style={{ color: "#0F172A" }}>
-              of people drop their wellness journey within the first 3 months
+              The number of people who abandon or fall short of their health goals within the first 3 months
             </h3>
             <p className="leading-relaxed mb-4" style={{ color: "#475569" }}>
-              People start — they download the app, block off time in their calendar, put in their
-              schedule. The motivation is there. The effort is real.
+              People start with commitment — they download the app, plan their time, and try to stay consistent. There&apos;s real motivation behind every step.
             </p>
             <p className="leading-relaxed mb-6" style={{ color: "#475569" }}>
-              Unfortunately, rigid programs built for the average person aren&apos;t equipped with
-              the capacity to handle your bad week, your schedule changes, or the other important
-              parts of your life. People don&apos;t quit because they gave up — they quit because
-              expectations exceeded capacity.
+              However, most programs are built for consistency on paper, but don&apos;t address the reality of everyday life; where schedules shift, energy changes, and priorities evolve. The result isn&apos;t lack of commitment, but a mismatch between expectations and real capacity.
             </p>
           </div>
 
@@ -263,11 +258,11 @@ export function ProblemSection() {
           <div>
             <div className="stat-number">5+</div>
             <h3 className="text-2xl font-bold mb-4" style={{ color: "#0F172A" }}>
-              apps the average person manages for their health
+              The number of apps the average person manages for their health
             </h3>
             <p className="leading-relaxed mb-3" style={{ color: "#475569" }}>
               One for workouts. One for meditation. One for nutrition. One for sleep.
-              How can they stay in the same house and not speak the same language?
+              They all live in the same house, just don&apos;t speak the same language, yet!
             </p>
             <p className="leading-relaxed" style={{ color: "#475569" }}>
               None of them talk to each other. None of them know <em className="not-italic font-semibold" style={{ color: "#0F172A" }}>you</em>.
@@ -323,17 +318,14 @@ export function ProblemSection() {
           <div>
             <div className="stat-number">4×</div>
             <h3 className="text-2xl font-bold mb-4" style={{ color: "#0F172A" }}>
-              per year the average person restarts their wellness journey
+              Number of times per year the average person restarts their wellness journey.
             </h3>
             <p className="leading-relaxed mb-4" style={{ color: "#475569" }}>
-              January 1st. Post-vacation. After a health scare. After seeing an old photo.
-              The motivation spikes — and the cycle begins again. A new program. New gear.
-              New conviction that this time is different.
+              New Year&apos;s Resolution. Post-vacation. After a breakup. Reminiscing on what once was.
+              Motivation builds, and a new chapter begins. A new program. New gear. New conviction that this time around will be different.
             </p>
             <p className="leading-relaxed" style={{ color: "#475569" }}>
-              But every restart begins at Week 1. No memory of what worked before.
-              No system that absorbs the lessons. Just another clean slate that slowly
-              gets messy again.
+              However, each restart begins at Week 1. No memory of what worked before, and no system to build on it. Just a fresh start waiting for something to connect it all together.
             </p>
           </div>
 
@@ -418,7 +410,7 @@ export function ProblemSection() {
         <div className="section-container">
           <div className="border-t pt-20" style={{ borderColor: "rgba(0,0,0,0.07)" }} />
           <div className="mt-12">
-            <NextPageButton toTab="shift" label="See how Kinextion solves this" />
+            <NextPageButton toTab="shift" label="See how Kinextion closes the gap" />
           </div>
         </div>
       </div>
