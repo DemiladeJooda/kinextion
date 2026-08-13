@@ -73,7 +73,7 @@ export function TabLayout() {
   }
 
   return (
-    <NavigateContext.Provider value={navigate}>
+    <NavigateContext value={navigate}>
       <TabNav
         tabs={TABS}
         activeTab={activeTab}
@@ -153,6 +153,6 @@ export function TabLayout() {
           {renderSection()}
         </motion.div>
       </div>
-    </NavigateContext.Provider>
+    </NavigateContext>
   );
 }

@@ -12,6 +12,8 @@
     "db:migrate": "pnpm --filter @kinextion/database migrate"
   },
   "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
     "turbo": "^2.4.0",
     "typescript": "^5.7.0"
   },
@@ -27,6 +29,10 @@
       "esbuild",
       "sharp",
       "@clerk/shared"
-    ]
+    ],
+    "overrides": {
+      "@types/react": "^19.2.18",
+      "@types/react-dom": "^19.2.4"
+    }
   }
 }
