@@ -142,14 +142,18 @@ export default function EnvironmentScreen() {
       <Stack.Screen
         options={{
           title: "Environment Design",
-          headerStyle: { backgroundColor: color.surface },
+          headerStyle: { backgroundColor: color.bg },
+          headerShadowVisible: false,
           headerTintColor: color.teal,
           headerTitleStyle: { color: color.text, fontWeight: "700" },
         }}
       />
       <SafeAreaView style={{ flex: 1, backgroundColor: color.bg }} edges={["bottom"]}>
         <ScrollView
-          contentContainerStyle={{ padding: space.xl, paddingBottom: space.xxxl }}
+          contentContainerStyle={{
+            padding: space.xl,
+            paddingBottom: space.xxxl,
+          }}
           showsVerticalScrollIndicator={false}
         >
           {/* Camera when scanning, room-tone preview otherwise. */}
@@ -167,9 +171,23 @@ export default function EnvironmentScreen() {
           >
             {cameraOpen && permission?.granted ? (
               <CameraView ref={cameraRef} style={{ flex: 1, width: "100%" }} facing="back">
-                <View style={{ flex: 1, padding: space.md, justifyContent: "space-between" }}>
-                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                    <Badge label={scanning ? "● Reading the room" : "Ready"} accent={active.accent} />
+                <View
+                  style={{
+                    flex: 1,
+                    padding: space.md,
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <Badge
+                      label={scanning ? "● Reading the room" : "Ready"}
+                      accent={active.accent}
+                    />
                     <Badge label={active.label} accent={active.accent} />
                   </View>
                   <Txt
@@ -185,7 +203,12 @@ export default function EnvironmentScreen() {
               <>
                 <Animated.View
                   style={[
-                    { position: "absolute", width: 320, height: 320, borderRadius: 160 },
+                    {
+                      position: "absolute",
+                      width: 320,
+                      height: 320,
+                      borderRadius: 160,
+                    },
                     washStyle,
                   ]}
                 >
@@ -195,7 +218,11 @@ export default function EnvironmentScreen() {
                   />
                 </Animated.View>
 
-                <Animated.View key={active.id} entering={FadeIn.duration(420)} style={{ alignItems: "center" }}>
+                <Animated.View
+                  key={active.id}
+                  entering={FadeIn.duration(420)}
+                  style={{ alignItems: "center" }}
+                >
                   <Ionicons name={active.icon} size={34} color={active.accent} />
                   <Txt variant="title" c={active.accent} style={{ marginTop: space.sm }}>
                     {active.label}
@@ -239,8 +266,8 @@ export default function EnvironmentScreen() {
           {!permission?.granted ? (
             <Card style={{ marginTop: space.lg }}>
               <Txt variant="body" c={color.textMuted}>
-                Camera access lets Kinextion read your actual room instead of
-                guessing at a generic one.
+                Camera access lets Kinextion read your actual room instead of guessing at a generic
+                one.
               </Txt>
               <Button
                 label="Allow camera"
@@ -251,7 +278,13 @@ export default function EnvironmentScreen() {
               />
             </Card>
           ) : cameraOpen ? (
-            <View style={{ flexDirection: "row", gap: space.sm, marginTop: space.lg }}>
+            <View
+              style={{
+                flexDirection: "row",
+                gap: space.sm,
+                marginTop: space.lg,
+              }}
+            >
               <Button
                 label={scanning ? "Reading…" : "Scan this room"}
                 icon="scan-outline"
@@ -309,8 +342,7 @@ export default function EnvironmentScreen() {
                     Audio: {active.music} · {active.musicSub}
                   </Txt>
                   <Txt variant="small" c={color.textMuted} style={{ marginTop: space.md }}>
-                    Scan the room to find out how far it is from these — and what
-                    to change first.
+                    Scan the room to find out how far it is from these — and what to change first.
                   </Txt>
                 </View>
               </View>
@@ -336,7 +368,8 @@ function RoomReading({
     return (
       <Card style={{ marginTop: space.lg }} accent={color.amber}>
         <Txt variant="small" c={color.textMuted}>
-          {reading.framing ?? "Couldn't read the room from that shot — try more of the space in frame."}
+          {reading.framing ??
+            "Couldn't read the room from that shot — try more of the space in frame."}
         </Txt>
       </Card>
     );
@@ -411,19 +444,19 @@ function RoomReading({
             <View style={{ flexDirection: "row", gap: space.md }}>
               <Ionicons name="checkmark-circle" size={17} color={color.green} />
               <Txt variant="small" c={color.textMuted} style={{ flex: 1 }}>
-                Nothing worth changing. This room already suits {modeLabel.toLowerCase()} —
-                start.
+                Nothing worth changing. This room already suits {modeLabel.toLowerCase()} — start.
               </Txt>
             </View>
           </Card>
         ) : (
-          reading.changes.map((c, i) => <ChangeRow key={c.action} change={c} index={i} accent={accent} />)
+          reading.changes.map((c, i) => (
+            <ChangeRow key={c.action} change={c} index={i} accent={accent} />
+          ))
         )}
       </View>
 
       <Txt variant="small" c={color.textFaint} style={{ marginTop: space.lg, fontSize: 11 }}>
-        Read from one photo, which is dropped immediately — nothing from your
-        camera is stored.
+        Read from one photo, which is dropped immediately — nothing from your camera is stored.
       </Txt>
     </Animated.View>
   );
@@ -440,7 +473,11 @@ function ChangeRow({
 }) {
   const [done, setDone] = useState(false);
   const impactColor =
-    change.impact === "high" ? color.green : change.impact === "medium" ? color.amber : color.textFaint;
+    change.impact === "high"
+      ? color.green
+      : change.impact === "medium"
+        ? color.amber
+        : color.textFaint;
 
   return (
     <Pressable
@@ -480,10 +517,7 @@ function ChangeRow({
         </View>
 
         <View style={{ flex: 1 }}>
-          <Txt
-            variant="bodyStrong"
-            style={{ textDecorationLine: done ? "line-through" : "none" }}
-          >
+          <Txt variant="bodyStrong" style={{ textDecorationLine: done ? "line-through" : "none" }}>
             {change.action}
           </Txt>
           <Txt variant="small" c={color.textMuted} style={{ marginTop: 3, fontSize: 12 }}>
@@ -491,7 +525,9 @@ function ChangeRow({
           </Txt>
           <View style={{ flexDirection: "row", gap: space.sm, marginTop: space.md }}>
             <Badge label={`${change.impact} impact`} accent={impactColor} />
-            {change.seconds ? <Badge label={`${change.seconds}s`} accent={color.textFaint} /> : null}
+            {change.seconds ? (
+              <Badge label={`${change.seconds}s`} accent={color.textFaint} />
+            ) : null}
           </View>
         </View>
       </View>

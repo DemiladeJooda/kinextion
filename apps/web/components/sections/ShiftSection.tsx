@@ -13,6 +13,7 @@ import {
   type CategoryId,
   type TierId,
 } from "@/lib/signal-taxonomy";
+import { track } from "@/lib/analytics";
 
 // ─── The attention model ──────────────────────────────────────────────────────
 // Two encodings, deliberately independent, because they answer two different
@@ -874,6 +875,15 @@ function AIChatModal({
     async (text: string, isGreeting = false) => {
       if (!text.trim() || isStreaming) return;
 
+      // Does the demo help? Greetings are excluded — an auto-sent opener is
+      // not a person choosing to try it.
+      if (!isGreeting) {
+        track("chat_demo_message", "shift", {
+          guide: activeGuide,
+          turn: msgsRef.current.filter((m) => m.role === "user").length + 1,
+        });
+      }
+
       const uId = `u-${Date.now()}`;
       const aId = `a-${Date.now()}`;
 
@@ -915,6 +925,7 @@ function AIChatModal({
             .json()
             .then((b: { error?: string }) => b?.error)
             .catch(() => null);
+          track("chat_demo_error", "shift", { status: res.status });
           settle(detail || "Something went wrong on my end — try again?");
           return;
         }

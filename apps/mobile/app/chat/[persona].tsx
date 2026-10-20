@@ -10,13 +10,14 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack, useLocalSearchParams } from "expo-router";
+import { useAuth } from "../../lib/auth";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeIn, FadeInDown, Layout } from "react-native-reanimated";
 import { GUIDES, getGreeting, resolveGuideId, DEFAULT_GUIDE } from "@kinextion/ai-core";
 
 import { ChatError, streamChat, type ChatTurn } from "../../lib/api";
-import { Chip, Txt, TypingDots } from "../../components/ui";
+import { AuroraBackdrop, Chip, Txt, TypingDots } from "../../components/ui";
 import { color, radius, space, tint, type } from "../../theme";
 
 interface Message {
@@ -42,7 +43,11 @@ const OPENERS: Record<string, string[]> = {
 };
 
 export default function ChatScreen() {
-  const { persona } = useLocalSearchParams<{ persona: string }>();
+  const { getToken } = useAuth();
+  const { persona, topicId } = useLocalSearchParams<{
+    persona: string;
+    topicId?: string;
+  }>();
   const guideId = resolveGuideId(persona) ?? DEFAULT_GUIDE;
   const guide = GUIDES[guideId];
 
@@ -51,6 +56,9 @@ export default function ChatScreen() {
   ]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  // Server-assigned once the first message lands; threading it back is what
+  // lets the guide keep its memory of this conversation across turns.
+  const conversationIdRef = useRef<string | null>(null);
 
   const listRef = useRef<FlatList<Message>>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -70,7 +78,11 @@ export default function ChatScreen() {
 
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-      const userMsg: Message = { id: `u-${Date.now()}`, role: "user", content: trimmed };
+      const userMsg: Message = {
+        id: `u-${Date.now()}`,
+        role: "user",
+        content: trimmed,
+      };
       const replyId = `a-${Date.now()}`;
 
       // Build the API payload from what's on screen, minus the local greeting
@@ -80,11 +92,7 @@ export default function ChatScreen() {
         .filter((m) => m.id !== "greeting" && !m.error && m.content.trim())
         .map((m) => ({ role: m.role, content: m.content }));
 
-      setMessages((prev) => [
-        ...prev,
-        userMsg,
-        { id: replyId, role: "assistant", content: "" },
-      ]);
+      setMessages((prev) => [...prev, userMsg, { id: replyId, role: "assistant", content: "" }]);
       setInput("");
       setSending(true);
       scrollToEnd();
@@ -93,26 +101,31 @@ export default function ChatScreen() {
       abortRef.current = controller;
 
       const settle = (content: string, error = false) =>
-        setMessages((prev) =>
-          prev.map((m) => (m.id === replyId ? { ...m, content, error } : m))
-        );
+        setMessages((prev) => prev.map((m) => (m.id === replyId ? { ...m, content, error } : m)));
 
       try {
-        await streamChat({
+        const result = await streamChat({
           guide: guideId,
           messages: [...history, { role: "user", content: trimmed }],
           signal: controller.signal,
+          token: await getToken(),
+          conversationId: conversationIdRef.current,
+          topicId,
           onDelta: (full) => {
             setMessages((prev) =>
               prev.map((m) => (m.id === replyId ? { ...m, content: full } : m))
             );
           },
         });
+        conversationIdRef.current = result.conversationId;
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } catch (err) {
-        if (controller.signal.aborted) return;
-        const message =
-          err instanceof ChatError ? err.message : "Something went wrong. Try again.";
+        if (controller.signal.aborted) {
+          // Stopped by the user: keep whatever streamed, drop an empty bubble.
+          setMessages((prev) => prev.filter((m) => m.id !== replyId || m.content.trim()));
+          return;
+        }
+        const message = err instanceof ChatError ? err.message : "Something went wrong. Try again.";
         settle(message, true);
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       } finally {
@@ -121,7 +134,7 @@ export default function ChatScreen() {
         scrollToEnd();
       }
     },
-    [guideId, messages, scrollToEnd, sending]
+    [guideId, messages, scrollToEnd, sending, getToken]
   );
 
   /** Drop the failed exchange and replay the user's last message. */
@@ -142,13 +155,30 @@ export default function ChatScreen() {
     <>
       <Stack.Screen
         options={{
-          title: guide.name,
-          headerStyle: { backgroundColor: color.surface },
+          headerStyle: { backgroundColor: color.bg },
           headerTintColor: guide.color,
-          headerTitleStyle: { color: color.text, fontWeight: "700" },
+          headerTitle: () => (
+            <View style={{ alignItems: "center" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <View
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: 4,
+                    backgroundColor: guide.color,
+                  }}
+                />
+                <Txt variant="bodyStrong">{guide.name}</Txt>
+              </View>
+              <Txt variant="small" c={color.textFaint} style={{ fontSize: 11, lineHeight: 14 }}>
+                {sending ? "typing…" : guide.role}
+              </Txt>
+            </View>
+          ),
         }}
       />
       <SafeAreaView edges={["bottom"]} style={{ flex: 1, backgroundColor: color.bg }}>
+        <AuroraBackdrop accent={guide.color} />
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -158,7 +188,10 @@ export default function ChatScreen() {
             ref={listRef}
             data={messages}
             keyExtractor={(m) => m.id}
-            contentContainerStyle={{ padding: space.lg, paddingBottom: space.sm }}
+            contentContainerStyle={{
+              padding: space.lg,
+              paddingBottom: space.sm,
+            }}
             onContentSizeChange={scrollToEnd}
             keyboardDismissMode="interactive"
             renderItem={({ item, index }) => (
@@ -237,7 +270,14 @@ function Bubble({
       }}
     >
       {!isUser ? (
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 5 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            marginBottom: 5,
+          }}
+        >
           <View
             style={{
               width: 18,
@@ -262,7 +302,11 @@ function Bubble({
         style={{
           backgroundColor: isUser ? tint(guideColor, 0.14) : color.surface,
           borderWidth: 1,
-          borderColor: isUser ? tint(guideColor, 0.26) : message.error ? tint(color.red, 0.3) : color.border,
+          borderColor: isUser
+            ? tint(guideColor, 0.26)
+            : message.error
+              ? tint(color.red, 0.3)
+              : color.border,
           borderRadius: radius.lg,
           borderTopRightRadius: isUser ? 5 : radius.lg,
           borderTopLeftRadius: isUser ? radius.lg : 5,
@@ -321,6 +365,7 @@ function Composer({
   placeholder: string;
 }) {
   const canSend = value.trim().length > 0 && !sending;
+  const [focused, setFocused] = useState(false);
 
   return (
     <View
@@ -331,7 +376,7 @@ function Composer({
         padding: space.md,
         borderTopWidth: 1,
         borderTopColor: color.border,
-        backgroundColor: color.surface,
+        backgroundColor: "rgba(14,21,36,0.92)",
       }}
     >
       <TextInput
@@ -342,14 +387,17 @@ function Composer({
         multiline
         maxLength={2000}
         editable={!sending}
+        selectionColor={accent}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         style={[
           type.body,
           {
             flex: 1,
             backgroundColor: color.bg,
-            borderRadius: radius.lg,
+            borderRadius: 22,
             borderWidth: 1,
-            borderColor: color.border,
+            borderColor: focused ? tint(accent, 0.5) : color.border,
             paddingHorizontal: space.lg,
             paddingTop: 11,
             paddingBottom: 11,

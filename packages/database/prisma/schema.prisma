@@ -16,20 +16,48 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  profile         Profile?
-  conversations   Conversation[]
-  habits          Habit[]
-  habitLogs       HabitLog[]
-  workoutLogs     WorkoutLog[]
-  moodEntries     MoodEntry[]
-  recommendations Recommendation[]
-  scores          KinextionScore[]
+  profile          Profile?
+  conversations    Conversation[]
+  habits           Habit[]
+  habitLogs        HabitLog[]
+  workoutLogs      WorkoutLog[]
+  moodEntries      MoodEntry[]
+  recommendations  Recommendation[]
+  scores           KinextionScore[]
+  integrations     Integration[]
+  wearableMetrics  WearableMetric[]
+  therapistShare   TherapistShare?
+  therapistReports TherapistReport[]
+  memoryFacts      MemoryFact[]
+  metricRollups    MetricRollup[]
+
+  // Community
+  communitiesCreated   Community[]           @relation("CommunityCreatedBy")
+  communityMemberships CommunityMembership[]
+  communityInvitesSent CommunityInvite[]     @relation("InviteSentBy")
+  communityInvitesUsed CommunityInvite[]     @relation("InviteUsedBy")
+  joinRequests         JoinRequest[]
+  admissionSeats       AdmissionSeat[]
+  activeChoices        ActiveChoice[]
+  topicSuggestions     TopicSuggestion[]
+  ballotVotes          BallotVote[]
+  circleSeats          CircleSeat[]
+  mediaAssets          MediaAsset[]
+  roomResponses        RoomResponse[]
+  roomReactions        RoomReaction[]
+  roomComments         RoomComment[]
+  roomCommentLikes     RoomCommentLike[]
+  integrityStrikes     IntegrityStrike[]
+  contentReports       ContentReport[]
+  chestProposals       ChestProposal[]
 }
 
 model Profile {
   id                 String  @id @default(cuid())
   userId             String  @unique
   displayName        String?
+  /** Ready Player Me avatar id — a stylized, face-matched avatar, not a body scan. */
+  avatarId           String?
   age                Int?
   fitnessLevel       String? // beginner, intermediate, advanced
   primaryGoals       Json?   // ["consistency", "strength", "mental_clarity"]
@@ -70,6 +98,61 @@ model Message {
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt])
+}
+
+// ─── Memory (the attention budget, applied to storage) ───────────
+// Storage mirrors the product's own signal taxonomy: a finite budget,
+// spent on what actually matters. A day of conversation collapses into a
+// handful of durable one-line facts rather than a stored transcript.
+
+model MemoryFact {
+  id       String @id @default(cuid())
+  userId   String
+  /** "core" survives forever; "pattern" is kept as shape and can expire. */
+  tier     String
+  category String // "constraint" | "identity" | "goal" | "preference" | "context"
+  /** Normalised dedup key, e.g. "constraint:left_knee" — reinforcement
+   *  bumps the existing row instead of writing a near-duplicate. */
+  key      String
+  /** The fact itself. One line, written to be read back into a prompt. */
+  content  String
+
+  confidence Float    @default(0.6)
+  source     String   @default("chat") // "chat" | "onboarding" | "derived"
+  /** Times this fact has been re-observed — drives the retention score. */
+  hits       Int      @default(1)
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  /** null = never expires (core tier). */
+  expiresAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId, tier])
+}
+
+/** Downsampled history. Raw rows age out; the shape survives here. */
+model MetricRollup {
+  id          String   @id @default(cuid())
+  userId      String
+  scope       String // "habit" | "mood" | "score" | "wearable"
+  metricKey   String // "completion_rate" | "mood" | "overall" | "sleep_score" | …
+  granularity String // "week" | "month"
+  periodStart DateTime @db.Date
+  periodEnd   DateTime @db.Date
+
+  count     Int
+  sum       Float
+  min       Float
+  max       Float
+  avg       Float
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, scope, metricKey, granularity, periodStart])
+  @@index([userId, scope])
 }
 
 // ─── Habits (Atomic Habits Framework) ────────────────────────────
@@ -164,6 +247,160 @@ model Recommendation {
   @@index([userId, createdAt])
 }
 
+// ─── Integrations (wearables & third-party services) ─────────────
+// Kinextion connects to other apps, not just people — this is where those
+// connections live: what's linked, and the daily metrics pulled from each.
+
+model Integration {
+  id             String    @id @default(cuid())
+  userId         String
+  provider       String    // "strava" | "whoop" | "oura" | "apple_health" | "google_fit"
+  status         String    @default("connected") // "connected" | "error" | "disconnected"
+  externalUserId String? // the account id on the provider's side
+  accessToken    String? // encrypted at the app layer before storage — see lib/crypto.ts
+  refreshToken   String?
+  tokenExpiresAt DateTime?
+  scopes         Json?
+  lastSyncedAt   DateTime?
+  lastError      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  metrics WearableMetric[]
+
+  @@unique([userId, provider])
+  @@index([userId])
+}
+
+model WearableMetric {
+  id            String   @id @default(cuid())
+  userId        String
+  integrationId String
+  provider      String
+  metricType    String // "steps" | "sleep_duration" | "sleep_score" | "hrv" | "resting_heart_rate" | "active_calories" | "workout"
+  date          DateTime @db.Date
+  value         Float
+  unit          String?
+  raw           Json? // untouched provider payload, kept for future re-derivation
+  createdAt     DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  integration Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider, metricType, date])
+  @@index([userId, date])
+}
+
+// ─── Therapist Starter Pack ────────────────────────────────────────
+// We don't provide therapists — this is context handed to the licensed
+// therapist a user already has, so they don't start from zero. Off by
+// default; every category is opt-in and revocable.
+
+model TherapistShare {
+  id         String    @id @default(cuid())
+  userId     String    @unique
+  active     Boolean   @default(true)
+  /** { habits, moodTrends, journalExcerpts, patterns, score } — all bool, all opt-in */
+  categories Json
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  revokedAt  DateTime?
+
+  user    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reports TherapistReport[]
+}
+
+model TherapistReport {
+  id          String   @id @default(cuid())
+  userId      String
+  shareId     String
+  periodStart DateTime @db.Date
+  periodEnd   DateTime @db.Date
+  /** Structured, human-readable summary generated at report time — a
+   * snapshot, so revoking consent later doesn't rewrite reports already shared. */
+  summary     Json
+  createdAt   DateTime @default(now())
+
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  share TherapistShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+// ─── Nearby groups (real-world discovery) ────────────────────────
+// Deliberately separate from the Community/Cycle models above: those are
+// Kinextion's own in-app weekly rooms. A NearbyGroup is a real, external
+// organisation (a run club, a studio) that exists whether or not Kinextion
+// does — sourced and verified by hand, never generated. See
+// apps/api/src/lib/nearby-groups-seed.ts for where each row's facts came from.
+
+model NearbyGroup {
+  id          String   @id @default(cuid())
+  name        String
+  /** "running" | "yoga" | "hiit" | "cycling" | "strength" | "other" */
+  category    String
+  description String
+  address     String
+  city        String
+  lat         Float
+  lng         Float
+  website     String?
+  phone       String?
+  /** Free text — "Mondays, 6:30pm" or "Drop in any class time." */
+  schedule    String?
+  isFree      Boolean  @default(false)
+  /** The page this was verified against, so a stale fact can be re-checked. */
+  sourceUrl   String
+  verifiedAt  DateTime
+  createdAt   DateTime @default(now())
+
+  @@unique([name, city])
+  @@index([city, category])
+}
+
+// ─── Marketing site ──────────────────────────────────────────────
+// The only two models not owned by a signed-in user. Both are deliberately
+// thin: an email we were given on purpose, and anonymous counts of what
+// happens on the site. Neither joins to User, and neither is reachable from
+// a user's data — a waitlist signup is not an account.
+
+model WaitlistEntry {
+  id    String @id @default(cuid())
+  email String @unique
+  /** Which tab the signup came from — the answer to "what converts". */
+  source    String?
+  /** The anonymous session that produced it, so a signup can be tied back to
+   *  the visit without tying it to a person. */
+  sessionId String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+/**
+ * Site analytics.
+ *
+ * First-party and deliberately minimal: no IP address, no user id, no
+ * fingerprint, no third-party script. `sessionId` is a random value the
+ * browser generates per tab session and forgets when the tab closes, which
+ * makes a funnel measurable without making a visitor identifiable.
+ */
+model AnalyticsEvent {
+  id        String @id @default(cuid())
+  sessionId String
+  /** "tab_view" | "tab_dwell" | "scroll_depth" | "chat_demo_message" | … */
+  name      String
+  /** Which tab it happened on, where that makes sense. */
+  tab       String?
+  /** Small, non-identifying extras — a dwell time, a scroll percentage. */
+  props     Json?
+  createdAt DateTime @default(now())
+
+  @@index([name, createdAt])
+  @@index([sessionId])
+}
+
 // ─── Kinextion Score ─────────────────────────────────────────────
 
 model KinextionScore {
@@ -181,4 +418,539 @@ model KinextionScore {
 
   @@unique([userId, date])
   @@index([userId, date])
+}
+
+// ─── Community ───────────────────────────────────────────────────
+// A community is a group of people who recognise each other; a room is one
+// community's conversation for one week. The rules that make it distinctive
+// are enforced in apps/api/src/modules/community — and wherever a rule can be
+// a constraint instead of a check, it's a constraint here.
+//
+// Every model below that names a user cascades on account deletion. Deleting
+// an account removes that person's votes, seats and responses; it never
+// removes a CycleResult, which holds no one.
+
+model Community {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  name        String
+  description String?
+  /** "forming" until FOUNDING_QUORUM founders accept | "active" | "archived" */
+  status      String    @default("forming")
+  createdById String?
+  createdAt   DateTime  @default(now())
+  activatedAt DateTime?
+  archivedAt  DateTime?
+
+  createdBy     User?                 @relation("CommunityCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  memberships   CommunityMembership[]
+  invites       CommunityInvite[]
+  joinRequests  JoinRequest[]
+  cycles        Cycle[]
+  activeChoices ActiveChoice[]
+  ballots       Ballot[]
+  results        CycleResult[]
+  chestEntries   ChestEntry[]
+  chestProposals ChestProposal[]
+  goals          CommunityGoal[]
+
+  @@index([status, createdAt])
+}
+
+/**
+ * A shared goal the whole community works toward — weeks completed together,
+ * not an individual metric — with a fixed reward, not a vote on a project.
+ * Separate from the chest ledger above: that's "what do we fund," this is
+ * "what do we unlock together." Fulfillment (actually granting the class or
+ * membership month) happens by hand — nothing here issues a real discount
+ * or payment.
+ */
+model CommunityGoal {
+  id          String    @id @default(cuid())
+  communityId String
+  title       String
+  targetWeeks Int
+  rewardLabel String
+  achievedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@index([communityId, createdAt])
+}
+
+model CommunityMembership {
+  id          String    @id @default(cuid())
+  communityId String
+  userId      String
+  /** "steward" | "member". Stewards have no power over admission at or below 150 members. */
+  role        String    @default("member")
+  joinedAt    DateTime  @default(now())
+  /** Soft leave — rejoining goes back through admission and clears this. */
+  leftAt      DateTime?
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([communityId, userId])
+  @@index([userId, leftAt])
+  @@index([communityId, leftAt])
+}
+
+/** Founding invites. Only a forming community issues them — once active, the
+ *  only way in is admission, so an invite can never bypass recognition. */
+model CommunityInvite {
+  id          String    @id @default(cuid())
+  communityId String
+  /** sha256 of the token. The token itself is shown once and never stored. */
+  tokenHash   String    @unique
+  invitedById String
+  expiresAt   DateTime
+  usedAt      DateTime?
+  usedById    String?
+  createdAt   DateTime  @default(now())
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  invitedBy User      @relation("InviteSentBy", fields: [invitedById], references: [id], onDelete: Cascade)
+  usedBy    User?     @relation("InviteUsedBy", fields: [usedById], references: [id], onDelete: SetNull)
+
+  @@index([communityId, usedAt])
+}
+
+/** One row per person per community, reset on re-application — so the unique
+ *  index stops concurrent requests creating two, and a denial's history isn't
+ *  kept past the cooldown that needs it. */
+model JoinRequest {
+  id             String    @id @default(cuid())
+  communityId    String
+  userId         String
+  note           String?
+  /** "pending" | "admitted" | "denied" */
+  status         String    @default("pending")
+  /** The rule, snapshotted at request time — roster changes mid-vote don't move the goalposts. */
+  panelMode      String
+  panelSize      Int
+  minBelongs     Int
+  maxObjections  Int
+  round          Int       @default(1)
+  deadlineAt     DateTime
+  decidedAt      DateTime?
+  /** "panel" | "steward" | "timeout" */
+  decidedBy      String?
+  /** Steward fast-track only: the external proof, never a judgement. */
+  fastTrackProof String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  community Community       @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  seats     AdmissionSeat[]
+
+  @@unique([communityId, userId])
+  @@index([status, deadlineAt])
+}
+
+/** A panel seat and its verdict. `userId` is stored so one person gets one
+ *  vote and abuse can be reviewed. It never leaves the server — no route
+ *  returns it in any shape; tests/community-routes.test.ts scans for it. */
+model AdmissionSeat {
+  id            String    @id @default(cuid())
+  joinRequestId String
+  userId        String
+  round         Int
+  /** "belongs" | "objects" — null until cast. Cannot be changed once cast. */
+  verdict       String?
+  votedAt       DateTime?
+  /** Silent seats replaced in a redraw, or held by someone who left. */
+  expiredAt     DateTime?
+
+  joinRequest JoinRequest @relation(fields: [joinRequestId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([joinRequestId, userId])
+  @@index([userId, verdict, expiredAt])
+}
+
+// ─── The week ────────────────────────────────────────────────────
+
+/** One community's cycle for one ISO week. The stage is derived from these
+ *  boundaries and `now` (packages/shared stageFor), never stored — a job that
+ *  runs late can't leave a room showing the wrong stage. Boundaries are the
+ *  same for every community today; they're stored so a per-community schedule
+ *  would be data rather than a migration. */
+model Cycle {
+  id               String    @id @default(cuid())
+  communityId      String
+  /** The room's ISO week in COMMUNITY_TIME_ZONE, e.g. "2026-W38". */
+  weekKey          String
+  gatheringOpensAt DateTime
+  votingOpensAt    DateTime
+  opensAt          DateTime
+  closesAt         DateTime
+  /** Set once Kairo's options are on the ballot. */
+  synthesizedAt    DateTime?
+  /** Set once results are snapshotted, public responses published, the rest purged. */
+  settledAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  community   Community         @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  suggestions TopicSuggestion[]
+  ballots     Ballot[]
+  topic       Topic?
+  circles     Circle[]
+  circleSeats CircleSeat[]
+  result      CycleResult?
+
+  @@unique([communityId, weekKey])
+  @@index([weekKey])
+}
+
+/** Where someone sits this week. `communityId` null means sitting out — no penalty, ever. */
+model ActiveChoice {
+  id          String    @id @default(cuid())
+  userId      String
+  weekKey     String
+  communityId String?
+  chosenAt    DateTime  @default(now())
+  /** Set on first submission; the choice can't change after that. */
+  lockedAt    DateTime?
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  community Community? @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekKey])
+  @@index([communityId, weekKey])
+}
+
+// ─── Topics & ballots ────────────────────────────────────────────
+
+/** Private. Authorship is never returned by any read route. */
+model TopicSuggestion {
+  id        String   @id @default(cuid())
+  cycleId   String
+  userId    String
+  text      String
+  createdAt DateTime @default(now())
+
+  cycle Cycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([cycleId])
+}
+
+/** Suggest → synthesize → vote → decide, generic over what's being decided:
+ *  a week's topic, closing a community, or a chest project. One machine, so
+ *  the three can't drift apart. */
+model Ballot {
+  id              String   @id @default(cuid())
+  communityId     String
+  cycleId         String?
+  /** "topic" | "closure" | "chest_project" */
+  kind            String
+  /** "open" | "decided" | "cancelled" */
+  status          String   @default("open")
+  opensAt         DateTime
+  closesAt        DateTime
+  decidedOptionId String?
+  createdAt       DateTime @default(now())
+
+  community Community      @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  cycle     Cycle?         @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  options   BallotOption[]
+  votes     BallotVote[]
+
+  @@index([communityId, kind, status])
+}
+
+model BallotOption {
+  id        String  @id @default(cuid())
+  ballotId  String
+  text      String
+  rationale String?
+  /** A TOPIC_THEMES value, for topic ballots — keeps a room's rhythm varied. */
+  theme     String?
+  ordinal   Int
+
+  ballot Ballot       @relation(fields: [ballotId], references: [id], onDelete: Cascade)
+  votes  BallotVote[]
+
+  @@unique([ballotId, ordinal])
+}
+
+model BallotVote {
+  id        String   @id @default(cuid())
+  ballotId  String
+  optionId  String
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ballot Ballot       @relation(fields: [ballotId], references: [id], onDelete: Cascade)
+  option BallotOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([ballotId, userId])
+}
+
+model Topic {
+  id        String   @id @default(cuid())
+  cycleId   String   @unique
+  text      String
+  /** Normalised, so the same question three years apart can be compared. */
+  topicKey  String
+  theme     String?
+  createdAt DateTime @default(now())
+
+  cycle     Cycle          @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  responses RoomResponse[]
+
+  @@index([topicKey])
+}
+
+// ─── Circles ─────────────────────────────────────────────────────
+// Past CIRCLE_MAX speakers a room splits into circles of 8–12. You listen
+// inside your circle; results always aggregate across all of them.
+
+model Circle {
+  id        String   @id @default(cuid())
+  cycleId   String
+  ordinal   Int
+  createdAt DateTime @default(now())
+
+  cycle     Cycle          @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  seats     CircleSeat[]
+  responses RoomResponse[]
+
+  @@unique([cycleId, ordinal])
+}
+
+model CircleSeat {
+  id       String @id @default(cuid())
+  circleId String
+  /** Denormalised so "one circle per person per cycle" is an index, not a check. */
+  cycleId  String
+  userId   String
+
+  circle Circle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  cycle  Cycle  @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([cycleId, userId])
+  @@index([circleId])
+}
+
+// ─── Responses ───────────────────────────────────────────────────
+
+/** A stored audio or video file. The API never proxies bytes: clients upload
+ *  straight to object storage with a presigned URL. Deleting this row does not
+ *  delete the object — the retention job does both, and asserts it. */
+model MediaAsset {
+  id          String    @id @default(cuid())
+  ownerId     String
+  /** "video" | "audio" */
+  kind        String
+  storageKey  String    @unique
+  /** Reserved for a managed video service; unused while media is storage-only. */
+  playbackId  String?
+  mimeType    String
+  durationSec Int?
+  bytes       Int?
+  /** Catches a re-upload of an old response. */
+  contentHash String?
+  /** Share of the recording above the silence threshold, from the recorder's metering. */
+  signalRatio Float?
+  /** When it was submitted as a response. A re-upload of a used recording is caught by hash. */
+  usedAt      DateTime?
+  /** "pending" | "ready" | "rejected" | "purged" */
+  status      String    @default("pending")
+  purgeAfter  DateTime?
+  purgedAt    DateTime?
+  createdAt   DateTime  @default(now())
+
+  owner    User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  response RoomResponse?
+
+  @@index([status, purgeAfter])
+  @@index([ownerId, contentHash])
+}
+
+/** One response per person per topic, forever. Withdrawing sets `status`; the
+ *  row stays, so the unique index makes a replacement impossible. */
+model RoomResponse {
+  id          String    @id @default(cuid())
+  topicId     String
+  circleId    String?
+  userId      String
+  mediaId     String?   @unique
+  /** "community" | "public_after_close" */
+  visibility  String
+  /** "submitted" | "withdrawn" | "rejected" */
+  status      String    @default("submitted")
+  durationSec Int
+  createdAt   DateTime  @default(now())
+  withdrawnAt DateTime?
+  publishedAt DateTime?
+  expiresAt   DateTime?
+
+  topic     Topic          @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  circle    Circle?        @relation(fields: [circleId], references: [id], onDelete: SetNull)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  media     MediaAsset?    @relation(fields: [mediaId], references: [id], onDelete: SetNull)
+  reactions RoomReaction[]
+  comments  RoomComment[]
+
+  @@unique([topicId, userId])
+  @@index([circleId, status])
+  @@index([status, expiresAt])
+}
+
+/** Totals don't exist until close: no route aggregates these while a room is open. */
+model RoomReaction {
+  id         String   @id @default(cuid())
+  responseId String
+  userId     String
+  /** "agree" | "mixed" | "disagree" */
+  verdict    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  response RoomResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([responseId, userId])
+}
+
+model RoomComment {
+  id         String    @id @default(cuid())
+  responseId String
+  userId     String
+  /** One reply level only. */
+  parentId   String?
+  body       String
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
+
+  response RoomResponse      @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent   RoomComment?      @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  RoomComment[]     @relation("CommentReplies")
+  likes    RoomCommentLike[]
+
+  @@index([responseId, createdAt])
+}
+
+model RoomCommentLike {
+  id        String   @id @default(cuid())
+  commentId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  comment RoomComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId])
+}
+
+/** A member's report of a response or comment. Reviewed by a person, never actioned by a model alone. */
+model ContentReport {
+  id         String    @id @default(cuid())
+  /** No relation: the response or comment may be deleted at settlement, and the report must survive it. */
+  responseId String?
+  commentId  String?
+  reporterId String
+  /** "not_genuine" | "harassment" | "hate" | "sexual" | "self_harm" | "ai_generated" | "other" */
+  reason     String
+  note       String?
+  /** "open" | "actioned" | "dismissed" */
+  status     String    @default("open")
+  createdAt  DateTime  @default(now())
+  reviewedAt DateTime?
+
+  reporter User @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+}
+
+// ─── What outlives the week ──────────────────────────────────────
+
+/** The only permanent record of a room. Aggregated across every circle, so the
+ *  figure is always the whole community's. Holds no individual. */
+model CycleResult {
+  id               String   @id @default(cuid())
+  communityId      String
+  cycleId          String?  @unique
+  weekKey          String
+  topicKey         String
+  topicText        String
+  closedAt         DateTime
+  /** Whole percentages that sum to 100. */
+  agreePct         Int
+  mixedPct         Int
+  disagreePct      Int
+  reactionCount    Int
+  participantCount Int
+  responseCount    Int
+  commentCount     Int
+  createdAt        DateTime @default(now())
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  cycle     Cycle?    @relation(fields: [cycleId], references: [id], onDelete: SetNull)
+
+  @@index([communityId, topicKey])
+  @@index([communityId, closedAt])
+}
+
+// ─── Integrity & chest ───────────────────────────────────────────
+
+/** A model may file a strike; only a reviewed strike can restrict an account. */
+model IntegrityStrike {
+  id           String    @id @default(cuid())
+  userId       String
+  reason       String
+  /** "low" | "medium" | "high" */
+  severity     String
+  responseId   String?
+  reviewedAt   DateTime?
+  reviewedById String?
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+/** A project a member proposes for the chest. Anonymous to the community, like a topic suggestion. */
+model ChestProposal {
+  id          String   @id @default(cuid())
+  communityId String
+  userId      String
+  title       String
+  description String?
+  /** "proposed" | "on_ballot" | "chosen" | "not_chosen" | "withdrawn" */
+  status      String   @default("proposed")
+  ballotId    String?
+  /** The option this proposal became on its ballot. */
+  optionId    String?
+  createdAt   DateTime @default(now())
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([communityId, status])
+}
+
+/** A ledger in integer cents. Nothing pays out yet. */
+model ChestEntry {
+  id          String   @id @default(cuid())
+  communityId String
+  cents       Int
+  /** "revenue_share" | "sponsorship" | "allocation" | "adjustment" */
+  kind        String
+  memo        String?
+  createdAt   DateTime @default(now())
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@index([communityId, createdAt])
 }

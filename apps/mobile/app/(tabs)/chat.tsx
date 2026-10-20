@@ -6,6 +6,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { GUIDES, type GuideId } from "@kinextion/ai-core";
 
 import {
+  TAB_BAR_CLEARANCE,
   AuroraBackdrop,
   Badge,
   Card,
@@ -25,13 +26,20 @@ const GUIDE_DETAIL: Record<
     icon: "flash",
     blurb:
       "Reads your numbers and builds the plan around your actual week — then changes it when the week changes.",
-    goodFor: ["Training & recovery", "Nutrition that's realistic", "Resizing a habit that keeps slipping"],
+    goodFor: [
+      "Training & recovery",
+      "Nutrition that's realistic",
+      "Resizing a habit that keeps slipping",
+    ],
   },
   kairo: {
     icon: "water",
-    blurb:
-      "Notices what you don't say. Meets you where you are, without rushing you anywhere.",
-    goodFor: ["Stress and overwhelm", "Why consistency keeps breaking", "Thinking out loud, safely"],
+    blurb: "Notices what you don't say. Meets you where you are, without rushing you anywhere.",
+    goodFor: [
+      "Stress and overwhelm",
+      "Why consistency keeps breaking",
+      "Thinking out loud, safely",
+    ],
   },
 };
 
@@ -42,13 +50,13 @@ export default function GuidesScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: color.bg }} edges={["top"]}>
       <AuroraBackdrop accent={color.purple} />
       <ScrollView
-        contentContainerStyle={{ padding: space.xl, paddingBottom: space.xxxl }}
+        contentContainerStyle={{
+          padding: space.xl,
+          paddingBottom: TAB_BAR_CLEARANCE,
+        }}
         showsVerticalScrollIndicator={false}
       >
-        <ScreenHeader
-          title="Your guides"
-          subtitle="Two voices. One system that remembers you."
-        />
+        <ScreenHeader title="Your guides" subtitle="Two voices. One system that remembers you." />
 
         <View style={{ gap: space.lg }}>
           {(Object.keys(GUIDE_DETAIL) as GuideId[]).map((id, i) => {
@@ -57,7 +65,13 @@ export default function GuidesScreen() {
             return (
               <Animated.View key={id} entering={FadeInDown.duration(450).delay(i * 90)}>
                 <PressCard accent={g.color} onPress={() => router.push(`/chat/${id}` as never)}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: space.md,
+                    }}
+                  >
                     <View
                       style={{
                         width: 52,
@@ -89,7 +103,11 @@ export default function GuidesScreen() {
                     {d.goodFor.map((item) => (
                       <View
                         key={item}
-                        style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: space.sm,
+                        }}
                       >
                         <View
                           style={{
@@ -113,13 +131,19 @@ export default function GuidesScreen() {
 
         <SectionTitle>Good to know</SectionTitle>
         <Card>
-          <View style={{ flexDirection: "row", gap: space.md, marginBottom: space.lg }}>
+          <View
+            style={{
+              flexDirection: "row",
+              gap: space.md,
+              marginBottom: space.lg,
+            }}
+          >
             <Ionicons name="lock-closed-outline" size={17} color={color.teal} />
             <View style={{ flex: 1 }}>
               <Txt variant="bodyStrong">Your conversations are yours</Txt>
               <Txt variant="small" c={color.textMuted} style={{ marginTop: 2 }}>
-                Both guides see the context you choose to share in Profile.
-                Nothing is posted to your pod.
+                Both guides see the context you choose to share in Profile. Nothing is posted to
+                your pod.
               </Txt>
             </View>
           </View>
@@ -128,8 +152,8 @@ export default function GuidesScreen() {
             <View style={{ flex: 1 }}>
               <Txt variant="bodyStrong">Not a substitute for care</Txt>
               <Txt variant="small" c={color.textMuted} style={{ marginTop: 2 }}>
-                Neither guide is a doctor or a therapist. If something is
-                serious, they will say so and point you to real support.
+                Neither guide is a doctor or a therapist. If something is serious, they will say so
+                and point you to real support.
               </Txt>
             </View>
           </View>

@@ -139,6 +139,40 @@ const FEATURES = [
     ],
   },
   {
+    id: "integrations",
+    icon: "🔗",
+    name: "Integrations",
+    tagline: "Kinextion connects your other apps too.",
+    color: "#F59E0B",
+    glow: "rgba(245,158,11,0.22)",
+    badge: "In Development",
+    desc: "Kinextion isn't only about connecting you to people — it connects to the apps already tracking you. Link Strava, Whoop, or Oura and Kinextion catches the workout you forgot to log, then reads your sleep and recovery alongside your habits and mood to surface real, computed patterns instead of another dashboard.",
+    bullets: [
+      "Strava, Whoop, and Oura — more on the way",
+      "Catches workouts and activity you forgot to log",
+      "Reads sleep, HRV, and recovery in context, not isolation",
+      "Patterns are computed from your real data, never invented",
+      "Disconnect any source anytime — your data, your call",
+    ],
+  },
+  {
+    id: "therapist",
+    icon: "🗒️",
+    name: "Therapist Starter Pack",
+    tagline: "Give your therapist a head start.",
+    color: "#A855F7",
+    glow: "rgba(168,85,247,0.22)",
+    badge: "In Development",
+    desc: "We don't provide therapists — we help the one you already have get to know you faster. Choose what to share — habits, mood trends, patterns, even journal excerpts — and Kinextion builds a summary you send yourself. Nothing is shared by default, and every category can be turned off just as easily as it was turned on.",
+    bullets: [
+      "Every category is opt-in — nothing is shared by default",
+      "You generate and send the report, not us",
+      "Journal excerpts stay off unless you turn them on",
+      "Revoke sharing anytime — past reports aren't rewritten",
+      "We never contact your therapist on your behalf",
+    ],
+  },
+  {
     id: "more",
     icon: "🚀",
     name: "More Coming Soon",
@@ -146,9 +180,9 @@ const FEATURES = [
     color: "#3B82F6",
     glow: "rgba(59,130,246,0.18)",
     badge: "In Development",
-    desc: "Kinextion is building a full ecosystem — from wearable deep integration to pod-based accountability challenges. The roadmap goes far. These are the seeds.",
+    desc: "Kinextion is building a full ecosystem — from Apple Health to pod-based accountability challenges. The roadmap goes far. These are the seeds.",
     bullets: [
-      "Wearable deep integration (Apple Watch, Oura)",
+      "Apple Health and Google Fit",
       "Pod accountability challenges",
       "AI-generated workout programming",
       "Voice-first daily briefs with Althea",
@@ -1213,6 +1247,75 @@ export function HowItWorksSection() {
                       )}
 
                       {/* ── More Coming Soon ── */}
+                      {/* ── Connected sources feeding one center (integrations) ── */}
+                      {feature.id === "integrations" && (
+                        <div className="absolute inset-0 flex items-center justify-center px-6">
+                          {[
+                            { label: "Strava", icon: "🏃", angle: -100, color: "#F59E0B" },
+                            { label: "Whoop", icon: "💪", angle: 20, color: "#EF4444" },
+                            { label: "Oura", icon: "💍", angle: 140, color: "#A855F7" },
+                          ].map((src) => {
+                            const rad = (src.angle * Math.PI) / 180;
+                            const x = Math.cos(rad) * 92;
+                            const y = Math.sin(rad) * 92;
+                            return (
+                              <motion.div key={src.label}
+                                className="absolute flex flex-col items-center gap-1"
+                                style={{ left: "50%", top: "50%", transform: `translate(${x - 24}px, ${y - 24}px)` }}
+                                animate={{ opacity: [0.6, 1, 0.6] }}
+                                transition={{ duration: 2.4, repeat: Infinity, delay: Math.abs(src.angle) / 200 }}>
+                                <div className="w-11 h-11 rounded-xl flex items-center justify-center text-lg"
+                                  style={{ background: `${src.color}14`, border: `1.5px solid ${src.color}38` }}>
+                                  {src.icon}
+                                </div>
+                                <span className="text-[9px] font-medium" style={{ color: src.color }}>{src.label}</span>
+                              </motion.div>
+                            );
+                          })}
+                          <motion.div className="relative z-10 w-16 h-16 rounded-2xl flex items-center justify-center text-2xl"
+                            style={{ background: "rgba(245,158,11,0.10)", border: "2px solid rgba(245,158,11,0.28)", boxShadow: "0 0 32px rgba(245,158,11,0.20)" }}
+                            animate={{ scale: [1, 1.06, 1] }} transition={{ duration: 2.2, repeat: Infinity }}>
+                            🔗
+                          </motion.div>
+                        </div>
+                      )}
+
+                      {/* ── Opt-in categories converging into a report (therapist) ── */}
+                      {feature.id === "therapist" && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 px-6">
+                          <div className="flex flex-wrap justify-center gap-2 max-w-[240px]">
+                            {[
+                              { label: "Habits", on: true },
+                              { label: "Mood trends", on: true },
+                              { label: "Patterns", on: true },
+                              { label: "Journal", on: false },
+                            ].map((cat) => (
+                              <motion.div key={cat.label}
+                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-medium"
+                                animate={{ opacity: [0.7, 1, 0.7] }}
+                                transition={{ duration: 2.2, repeat: Infinity, delay: cat.label.length / 20 }}
+                                style={cat.on
+                                  ? { background: "rgba(168,85,247,0.12)", border: "1px solid rgba(168,85,247,0.32)", color: "#A855F7" }
+                                  : { background: "rgba(0,0,0,0.04)", border: "1px solid rgba(0,0,0,0.10)", color: "#94A3B8" }
+                                }>
+                                <span>{cat.on ? "✓" : "—"}</span>
+                                {cat.label}
+                              </motion.div>
+                            ))}
+                          </div>
+                          <motion.div animate={{ y: [0, 3, 0] }} transition={{ duration: 1.8, repeat: Infinity }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#A855F7" strokeWidth="2">
+                              <path d="M12 5v14M12 19l-6-6M12 19l6-6" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          </motion.div>
+                          <div className="relative z-10 w-16 h-16 rounded-2xl flex items-center justify-center text-2xl"
+                            style={{ background: "rgba(168,85,247,0.10)", border: "2px solid rgba(168,85,247,0.28)", boxShadow: "0 0 32px rgba(168,85,247,0.20)" }}>
+                            🗒️
+                          </div>
+                          <p className="text-[9px] text-center" style={{ color: "rgba(0,0,0,0.40)" }}>You choose. You send. Always.</p>
+                        </div>
+                      )}
+
                       {feature.id === "more" && (
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6">
                           {[1, 2, 3].map((r) => (

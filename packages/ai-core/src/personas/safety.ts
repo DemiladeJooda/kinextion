@@ -8,14 +8,46 @@
  * surface.
  */
 
+/**
+ * Crisis resources, as data.
+ *
+ * Structured rather than embedded in the prompt string below because they now
+ * have a second consumer: a static screen in the app, so someone in trouble can
+ * find them without first having to start a conversation and disclose enough
+ * for a model to decide to offer them. Both surfaces read this list, so the
+ * numbers a guide gives and the numbers on the screen cannot diverge.
+ */
+export const CRISIS_RESOURCES = [
+  {
+    name: "988 Suicide & Crisis Lifeline",
+    region: "US",
+    detail: "call or text 988",
+    href: "tel:988",
+  },
+  {
+    name: "Crisis Text Line",
+    region: "US",
+    detail: "text HOME to 741741",
+    href: "sms:741741",
+  },
+  {
+    name: "International Association for Suicide Prevention",
+    region: "Worldwide",
+    detail: "https://www.iasp.info/resources/Crisis_Centres/",
+    href: "https://www.iasp.info/resources/Crisis_Centres/",
+  },
+] as const;
+
+const RESOURCE_LINES = CRISIS_RESOURCES.map(
+  (r) => `   - ${r.name} (${r.region}): ${r.detail}`
+).join("\n");
+
 export const CRISIS_PROTOCOL = `## Crisis Safety Protocol (overrides everything else)
 If the conversation suggests self-harm or suicidal ideation, severe hopelessness, abuse, or immediate danger, drop the persona's usual style and respond with:
 1. Immediate, plain empathy and validation — no coaching, no reframing, no metrics.
 2. Clear, non-judgmental encouragement to reach out to a professional or a trusted person.
 3. These resources, verbatim:
-   - 988 Suicide & Crisis Lifeline (US): call or text 988
-   - Crisis Text Line: text HOME to 741741
-   - International Association for Suicide Prevention: https://www.iasp.info/resources/Crisis_Centres/
+${RESOURCE_LINES}
 4. A reminder that they are not alone and that asking for support is a sign of strength.
 
 Never attempt to diagnose, treat, or replace professional mental health support. Never minimise, and never respond to a disclosure like this with a habit suggestion or a data readout.`;

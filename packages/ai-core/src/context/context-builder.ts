@@ -17,7 +17,37 @@ export interface UserContext {
   kinextionScore?: number;
   workoutHistory?: { type: string; name: string; daysAgo: number }[];
   conversationSummary?: string;
+  /** Real, computed correlations between wearable data, mood, and habits —
+   * never fabricated, and only ever populated when there was enough data to
+   * say something honest. See apps/api/src/lib/patterns.ts. */
+  patterns?: string[];
+  /** Durable one-line facts distilled from past conversations — what the
+   * guide still knows once the transcripts themselves are gone. */
+  memoryFacts?: string[];
+  /**
+   * Where this person sits in their community this week.
+   *
+   * Participation only — which community, whether they've spoken, when the
+   * room closes. Never what they or anyone else said in a room: a guide that
+   * quoted a response back at someone would turn reflection into
+   * surveillance. `thinkingAbout` carries the week's public question, which
+   * every member of that community already sees.
+   */
+  community?: {
+    lines: string[];
+    thinkingAbout?: { communityName: string; topicText: string };
+  };
 }
+
+/**
+ * The line Kairo does not cross when helping someone prepare.
+ *
+ * Helping a person understand a question, argue with them, or find their own
+ * words is the whole point. Writing their answer is not: the app's promise is
+ * that what a community hears is human.
+ */
+export const COMMUNITY_VOICE_RULE =
+  "Help them understand the question, think it through, and find their own words — as much as they want. Never draft, script, rehearse or write their response for them. What they say to their community has to be theirs; if they ask you to write it, help them say it themselves instead.";
 
 export interface BuiltContext {
   systemPrompt: string;
@@ -55,7 +85,16 @@ function assembleSystemPrompt(
     parts.push(formatProfileContext(ctx.profile));
   }
 
-  // Tier 3: Conversation summary (if available)
+  // Tier 3: Durable memory — what survives after transcripts are compacted.
+  // Sits above the conversation summary because constraints outrank recency:
+  // an injury stays true regardless of what was discussed last week.
+  if (ctx.memoryFacts?.length) {
+    parts.push(
+      `\n## What You Know About Them\n${ctx.memoryFacts.map((f) => `- ${f}`).join("\n")}`
+    );
+  }
+
+  // Tier 4: Conversation summary (if available)
   if (ctx.conversationSummary) {
     parts.push(
       `\n## Previous Conversation Summary\n${ctx.conversationSummary}`
@@ -66,6 +105,19 @@ function assembleSystemPrompt(
   const behavioralContext = formatBehavioralContext(ctx);
   if (behavioralContext) {
     parts.push(behavioralContext);
+  }
+
+  // Their community — participation, and the week's question if they're
+  // working on it. Last, because it's the newest half of the app and should
+  // colour the conversation rather than lead it.
+  if (ctx.community?.lines.length) {
+    parts.push(`\n## Their Community\n${ctx.community.lines.map((l) => `- ${l}`).join("\n")}`);
+  }
+  if (ctx.community?.thinkingAbout) {
+    const { communityName, topicText } = ctx.community.thinkingAbout;
+    parts.push(
+      `\n## This Week's Question\n${communityName} is discussing: "${topicText}"\n\n${COMMUNITY_VOICE_RULE}`
+    );
   }
 
   return buildSystemPrompt({
@@ -94,6 +146,21 @@ function formatProfileContext(profile: UserProfile): string {
   if (profile.preferences?.aiPersonalityDial) {
     lines.push(`- Spiritual preference: ${profile.preferences.aiPersonalityDial}`);
   }
+  if (profile.preferences?.coachingIntensity) {
+    const guidance: Record<string, string> = {
+      gentle: "go easy — small asks, generous encouragement, never imply they're behind",
+      balanced: "challenge them when they're ready, ease off when they're not",
+      intense: "push harder — expect more, and say so",
+    };
+    lines.push(
+      `- Coaching intensity: ${profile.preferences.coachingIntensity} (${guidance[profile.preferences.coachingIntensity]})`
+    );
+  }
+  const lifestyle: string[] = [];
+  if (profile.preferences?.doesTherapy) lifestyle.push("sees a therapist");
+  if (profile.preferences?.doesJournal) lifestyle.push("already journals");
+  if (profile.preferences?.currentlyWorkingOut) lifestyle.push("already works out");
+  if (lifestyle.length) lines.push(`- Already in motion: ${lifestyle.join(", ")}`);
 
   return lines.join("\n");
 }
@@ -134,6 +201,10 @@ function formatBehavioralContext(ctx: UserContext): string | null {
       (w) => `${w.name} (${w.type}, ${w.daysAgo === 0 ? "today" : `${w.daysAgo}d ago`})`
     );
     lines.push(`- Recent workouts: ${descriptions.join(", ")}`);
+  }
+
+  if (ctx.patterns?.length) {
+    lines.push(`- Patterns Kinextion has noticed: ${ctx.patterns.join("; ")}`);
   }
 
   if (lines.length === 0) return null;

@@ -1,153 +1,119 @@
 /**
  * Micro Recommendations — one precise, context-aware action per day.
  *
- * This is a real Claude call, not a rotating list of tips: the day's actual
- * state (habits done, streaks, mood, time of day) is sent to Althea and she
- * returns a single two-minute action. Because it runs against the same
- * `/api/chat` route as the guides, it inherits the safety rules and the app
- * format rules for free.
+ * This card used to stream a fresh action from the chat route on every mount
+ * and throw it away: "I did it" set a local boolean, "Something else"
+ * regenerated, and neither ever left the phone. The suggestion was real, but
+ * the system had no way of finding out whether it was any good.
+ *
+ * Now the recommendation is generated and stored server-side, both buttons
+ * write a real outcome against its id, and that history is read back into the
+ * next generation. Two consequences the user can see:
+ *
+ *   - the card survives a reload with its state intact, because it's a row
+ *     rather than a render;
+ *   - "Learned from you" shows what the feedback has actually taught it, in
+ *     the same words the generator is given.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
+import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeIn } from "react-native-reanimated";
 
-import { ChatError, streamChat } from "../lib/api";
-import { useAppState } from "../lib/store";
+import { useApi } from "../hooks/useApi";
+import type { RemoteRecommendation } from "../services";
 import { Badge, Card, Txt, TypingDots } from "./ui";
-import { color, radius, space, tint } from "../theme";
+import { categoryColor, color, radius, space, tint, type Category } from "../theme";
 
-interface DaySnapshot {
-  done: number;
-  total: number;
-  longestStreak: number;
-  slipping: string[];
-  moodLogged: boolean;
-  hour: number;
-}
-
-/** Compact snapshot of the day, written for the model rather than for a human. */
-function buildContextLine(args: DaySnapshot): string {
-  const { done, total, longestStreak, slipping, moodLogged, hour } = args;
-
-  return [
-    `It's ${partOfDay(hour)}.`,
-    `Habits today: ${done} of ${total} done.`,
-    longestStreak > 0 ? `Longest active streak: ${longestStreak} days.` : "No active streak.",
-    slipping.length ? `Not yet done: ${slipping.join(", ")}.` : "Everything is done.",
-    moodLogged ? "Mood checked in." : "No mood check-in yet.",
-  ].join(" ");
-}
-
-function partOfDay(hour: number): string {
-  return hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
-}
-
-/**
- * The exact signals this recommendation was built from.
- *
- * Shown under the action, because "why this one" is only credible if you can
- * see what it was reading. Every chip here comes from real local state — if a
- * signal isn't connected, it doesn't get a chip.
- */
-function readingChips(s: DaySnapshot): string[] {
-  const chips = [partOfDay(s.hour), `${s.done}/${s.total} habits`];
-  if (s.longestStreak > 0) chips.push(`${s.longestStreak}-day streak`);
-  if (s.moodLogged) chips.push("mood logged");
-  if (s.slipping.length) chips.push(`${s.slipping.length} left`);
-  return chips;
-}
-
-/**
- * Two labelled lines rather than a paragraph.
- *
- * The action and the reason do different jobs — one is something you do in the
- * next two minutes, the other is why it's that and not something else — so
- * they're parsed apart and rendered at different weights.
- */
-const PROMPT_SUFFIX =
-  "Give me exactly one micro-action for right now — something that takes two minutes or less and fits what's actually left in my day.\n" +
-  "Reply in exactly two lines, in this format, and nothing else:\n" +
-  "ACTION: the thing to do, under 15 words, starting with a verb\n" +
-  "WHY: one sentence on why this one, referring to the specifics above\n" +
-  "No preamble, no list, no bold text, no greeting.";
-
-/** Split the labelled reply. Works on partial text so it can parse mid-stream. */
-function parseReply(text: string): { action: string; why: string } {
-  const actionMatch = /ACTION:\s*([\s\S]*?)(?:\n\s*WHY:|$)/i.exec(text);
-  const whyMatch = /WHY:\s*([\s\S]*)$/i.exec(text);
-  const action = actionMatch?.[1]?.trim() ?? "";
-  const why = whyMatch?.[1]?.trim() ?? "";
-  // Before the first label arrives, show the raw stream rather than nothing.
-  if (!action && !why) return { action: text.trim(), why: "" };
-  return { action, why };
-}
+type Phase = "loading" | "ready" | "error";
 
 export function MicroRecommendation() {
-  const { habits, moodLogged } = useAppState();
-  const [text, setText] = useState("");
-  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+  const api = useApi();
+  const router = useRouter();
+
+  const [recommendation, setRecommendation] = useState<RemoteRecommendation | null>(null);
+  const [basis, setBasis] = useState<string[]>([]);
+  const [learned, setLearned] = useState<string[]>([]);
+  const [phase, setPhase] = useState<Phase>("loading");
   const [errorMsg, setErrorMsg] = useState("");
-  const [done, setDone] = useState(false);
-  const [chips, setChips] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
 
-  const abortRef = useRef<AbortController | null>(null);
-  // Snapshot the habit state at fetch time so toggling a habit mid-request
-  // doesn't retrigger and cancel an in-flight recommendation.
-  const habitsRef = useRef(habits);
-  habitsRef.current = habits;
-  const moodRef = useRef(moodLogged);
-  moodRef.current = moodLogged;
+  // Guards against a late response from a request the user has moved past —
+  // tapping "something else" twice quickly shouldn't leave the older reply on
+  // screen.
+  const requestId = useRef(0);
 
-  const fetchRecommendation = useCallback(async () => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
+  const load = useCallback(
+    async (options: { refresh?: boolean } = {}) => {
+      const id = ++requestId.current;
+      setPhase(options.refresh ? "ready" : "loading");
+      setBusy(true);
 
-    setState("loading");
-    setText("");
-    setDone(false);
-
-    const current = habitsRef.current;
-    const snapshot = {
-      done: current.filter((h) => h.done).length,
-      total: current.length,
-      longestStreak: current.reduce((m, h) => Math.max(m, h.streak), 0),
-      slipping: current.filter((h) => !h.done).map((h) => h.name),
-      moodLogged: moodRef.current,
-      hour: new Date().getHours(),
-    };
-    const context = buildContextLine(snapshot);
-    setChips(readingChips(snapshot));
-
-    try {
-      await streamChat({
-        guide: "altheo",
-        messages: [{ role: "user", content: `${context}\n\n${PROMPT_SUFFIX}` }],
-        signal: controller.signal,
-        onDelta: (full) => setText(full),
-      });
-      setState("ready");
-    } catch (err) {
-      if (controller.signal.aborted) return;
-      setErrorMsg(
-        err instanceof ChatError ? err.message : "Couldn't load today's action."
-      );
-      setState("error");
-    }
-  }, []);
+      try {
+        const result = await api.requestRecommendation(options);
+        if (id !== requestId.current) return;
+        setRecommendation(result.recommendation);
+        setBasis(result.basis);
+        setLearned(result.learned);
+        setPhase("ready");
+      } catch (err) {
+        if (id !== requestId.current) return;
+        setErrorMsg(err instanceof Error ? err.message : "Couldn't load today's action.");
+        setPhase("error");
+      } finally {
+        if (id === requestId.current) setBusy(false);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
   useEffect(() => {
-    void fetchRecommendation();
-    return () => abortRef.current?.abort();
-  }, [fetchRecommendation]);
+    void load();
+  }, [load]);
 
-  const parsed = parseReply(text);
+  /**
+   * Optimistic, but honest about it.
+   *
+   * The tap is confirmed instantly because waiting on a round trip to strike
+   * out a line feels broken. If the write fails the flag is put back and the
+   * user is told, rather than the app quietly showing a "done" the server
+   * never recorded — which would be the one thing worse than no feedback loop:
+   * a feedback loop that silently drops the feedback.
+   */
+  const respond = async (outcome: "acted" | "dismissed") => {
+    if (!recommendation || busy) return;
+
+    const previous = recommendation;
+    setRecommendation({
+      ...recommendation,
+      acted: outcome === "acted",
+      dismissed: outcome === "dismissed",
+    });
+    void Haptics.notificationAsync(
+      outcome === "acted"
+        ? Haptics.NotificationFeedbackType.Success
+        : Haptics.NotificationFeedbackType.Warning
+    );
+
+    try {
+      await api.sendRecommendationFeedback(previous.id, outcome);
+    } catch {
+      setRecommendation(previous);
+      setErrorMsg("Couldn't save that — tap again?");
+    }
+  };
+
+  const accent = recommendation
+    ? (categoryColor[recommendation.category as Category] ?? color.purple)
+    : color.purple;
+  const done = recommendation?.acted ?? false;
 
   return (
-    <Card accent={color.purple}>
+    <Card accent={done ? color.green : color.purple}>
       <View
         style={{
           flexDirection: "row",
@@ -161,27 +127,31 @@ export function MicroRecommendation() {
             width: 28,
             height: 28,
             borderRadius: radius.sm,
-            backgroundColor: tint(color.purple, 0.16),
+            backgroundColor: tint(done ? color.green : color.purple, 0.16),
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <Ionicons name="sparkles" size={15} color={color.purple} />
+          <Ionicons
+            name={done ? "checkmark" : "sparkles"}
+            size={15}
+            color={done ? color.green : color.purple}
+          />
         </View>
         <Txt variant="bodyStrong" style={{ flex: 1 }}>
           Micro Recommendation
         </Txt>
-        <Badge label="Live AI" accent={color.purple} />
+        <Badge label={learned.length ? "Learning" : "Live AI"} accent={done ? color.green : color.purple} />
       </View>
 
-      {state === "loading" && !text ? (
+      {phase === "loading" ? (
         <View style={{ paddingVertical: space.md }}>
           <TypingDots accent={color.purple} />
           <Txt variant="small" c={color.textFaint} style={{ marginTop: space.sm }}>
-            Reading your day…
+            {learned.length ? "Reading your day and what's worked before…" : "Reading your day…"}
           </Txt>
         </View>
-      ) : state === "error" ? (
+      ) : phase === "error" || !recommendation ? (
         <View>
           <Txt variant="body" c={color.textMuted}>
             {errorMsg}
@@ -189,14 +159,9 @@ export function MicroRecommendation() {
           <Pressable
             onPress={() => {
               void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              void fetchRecommendation();
+              void load();
             }}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 5,
-              marginTop: space.md,
-            }}
+            style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: space.md }}
           >
             <Ionicons name="refresh" size={14} color={color.purple} />
             <Txt variant="small" c={color.purple}>
@@ -206,11 +171,14 @@ export function MicroRecommendation() {
         </View>
       ) : (
         <Animated.View entering={FadeIn.duration(300)}>
-          <Txt variant="bodyStrong" style={{ opacity: done ? 0.5 : 1 }}>
-            {parsed.action}
+          <Txt
+            variant="bodyStrong"
+            style={done ? { opacity: 0.5, textDecorationLine: "line-through" } : undefined}
+          >
+            {recommendation.content}
           </Txt>
 
-          {parsed.why ? (
+          {recommendation.context ? (
             <View
               style={{
                 flexDirection: "row",
@@ -222,19 +190,24 @@ export function MicroRecommendation() {
                 opacity: done ? 0.5 : 1,
               }}
             >
-              <Ionicons name="git-branch-outline" size={14} color={color.purple} style={{ marginTop: 3 }} />
+              <Ionicons
+                name="git-branch-outline"
+                size={14}
+                color={accent}
+                style={{ marginTop: 3 }}
+              />
               <Txt variant="small" c={color.textMuted} style={{ flex: 1 }}>
-                {parsed.why}
+                {recommendation.context}
               </Txt>
             </View>
           ) : null}
 
           {/* What it was reading — the receipts for the line above. */}
-          {chips.length ? (
+          {basis.length ? (
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: space.md }}>
-              {chips.map((c) => (
+              {basis.map((b) => (
                 <View
-                  key={c}
+                  key={b}
                   style={{
                     paddingHorizontal: space.sm,
                     paddingVertical: 3,
@@ -244,19 +217,49 @@ export function MicroRecommendation() {
                   }}
                 >
                   <Txt variant="small" c={color.textFaint} style={{ fontSize: 10 }}>
-                    {c}
+                    {b}
                   </Txt>
                 </View>
               ))}
             </View>
           ) : null}
 
-          <View style={{ flexDirection: "row", gap: space.sm, marginTop: space.lg }}>
+          {/* What your feedback has taught it. Absent until it has actually
+              learned something — an empty "Learned from you" would be worse
+              than none at all. */}
+          {learned.length ? (
             <Pressable
               onPress={() => {
-                void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                setDone(true);
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push("/recommendations" as never);
               }}
+              style={{
+                flexDirection: "row",
+                gap: space.sm,
+                marginTop: space.md,
+                padding: space.md,
+                borderRadius: radius.md,
+                backgroundColor: tint(color.pink, 0.07),
+                borderWidth: 1,
+                borderColor: tint(color.pink, 0.18),
+              }}
+            >
+              <Ionicons name="school-outline" size={14} color={color.pink} style={{ marginTop: 2 }} />
+              <View style={{ flex: 1 }}>
+                <Txt variant="small" c={color.pink} style={{ fontSize: 11, fontWeight: "700" }}>
+                  LEARNED FROM YOU
+                </Txt>
+                <Txt variant="small" c={color.textMuted} style={{ marginTop: 3 }}>
+                  {learned[0]}
+                </Txt>
+              </View>
+              <Ionicons name="chevron-forward" size={14} color={color.textFaint} />
+            </Pressable>
+          ) : null}
+
+          <View style={{ flexDirection: "row", gap: space.sm, marginTop: space.lg }}>
+            <Pressable
+              onPress={() => void respond("acted")}
               disabled={done}
               style={{
                 flexDirection: "row",
@@ -283,8 +286,9 @@ export function MicroRecommendation() {
             <Pressable
               onPress={() => {
                 void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                void fetchRecommendation();
+                void load({ refresh: true });
               }}
+              disabled={busy}
               style={{
                 flexDirection: "row",
                 alignItems: "center",
@@ -294,6 +298,7 @@ export function MicroRecommendation() {
                 borderRadius: 999,
                 borderWidth: 1,
                 borderColor: color.border,
+                opacity: busy ? 0.5 : 1,
               }}
             >
               <Ionicons name="shuffle" size={15} color={color.textMuted} />
@@ -302,6 +307,14 @@ export function MicroRecommendation() {
               </Txt>
             </Pressable>
           </View>
+
+          {/* Says out loud that skipping is information, because a user who
+              knows it teaches the system faster than one who doesn't. */}
+          {!done ? (
+            <Txt variant="small" c={color.textFaint} style={{ marginTop: space.md, fontSize: 11 }}>
+              Both answers train it. Skipping tells it as much as doing.
+            </Txt>
+          ) : null}
         </Animated.View>
       )}
     </Card>

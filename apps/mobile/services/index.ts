@@ -1,0 +1,622 @@
+/**
+ * Typed calls against the Kinextion data API. Every function takes the
+ * caller's Clerk token explicitly (rather than reading it from context) so
+ * these stay plain, testable functions — see hooks/useApi.ts for the
+ * component-facing wrapper that supplies the token automatically.
+ */
+
+import { apiRequest, apiRequestWithMeta } from "./client";
+import type {
+  OnboardingInput,
+  UpdateProfileInput,
+  CreateHabitInput,
+  UpdateHabitInput,
+  LogHabitInput,
+  CreateMoodEntryInput,
+  CheckInInput,
+  HabitDraft,
+} from "@kinextion/shared";
+
+export type {
+  OnboardingInput,
+  UpdateProfileInput,
+  CreateHabitInput,
+  UpdateHabitInput,
+  LogHabitInput,
+  CreateMoodEntryInput,
+  CheckInInput,
+  HabitDraft,
+};
+
+/**
+ * Where the user is in their own day.
+ *
+ * Sent with every assisted request because the server runs in UTC: without
+ * this, "you've got an hour free after work" would be computed against a
+ * datacentre clock. Both values come from the device with no permission
+ * prompt — the time zone is a coarse region, not a location.
+ */
+function deviceTimeContext(): { localHour: number; timeZone?: string } {
+  const localHour = new Date().getHours();
+  try {
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return timeZone ? { localHour, timeZone } : { localHour };
+  } catch {
+    return { localHour };
+  }
+}
+
+// ─── Profile ────────────────────────────────────────────────────────────────
+
+export interface RemoteProfile {
+  id: string;
+  userId: string;
+  displayName: string | null;
+  /** Ready Player Me avatar id, or null if none set yet. */
+  avatarId: string | null;
+  age: number | null;
+  fitnessLevel: string | null;
+  primaryGoals: string[] | null;
+  weeklyAvailability: number | null;
+  equipment: string[] | null;
+  /** Notification and guide settings — including Kairo's spiritual dial. */
+  preferences: {
+    notificationsEnabled?: boolean;
+    dailyCheckInTime?: string;
+    aiPersonalityDial?: "scripture" | "balanced" | "universal";
+    coachingIntensity?: "gentle" | "balanced" | "intense";
+    scorePeriod?: "weekly" | "monthly" | "yearly";
+    doesTherapy?: boolean;
+    doesJournal?: boolean;
+    currentlyWorkingOut?: boolean;
+  } | null;
+  onboardingComplete: boolean;
+}
+
+export interface RemoteUser {
+  id: string;
+  clerkId: string;
+  email: string;
+  profile: RemoteProfile | null;
+}
+
+export function getMyProfile(token: string | null) {
+  return apiRequest<RemoteUser>("/api/users/me/profile", { token });
+}
+
+export function completeOnboarding(token: string | null, input: OnboardingInput) {
+  return apiRequest<RemoteProfile>("/api/users/me/onboard", { method: "POST", body: input, token });
+}
+
+export function updateProfile(token: string | null, input: UpdateProfileInput) {
+  return apiRequest<RemoteProfile>("/api/users/me/profile", {
+    method: "PATCH",
+    body: input,
+    token,
+  });
+}
+
+/** Counts of what's stored on this account — powers the privacy screen. */
+export interface DataSummary {
+  counts: {
+    habits: number;
+    habitLogs: number;
+    checkIns: number;
+    reflections: number;
+    conversations: number;
+    messages: number;
+    memoryFacts: number;
+    wearableMetrics: number;
+    recommendations: number;
+    scores: number;
+  };
+  connected: string[];
+  /** Categories currently shared with a therapist, if any. */
+  therapistSharing: string[];
+  since: string | null;
+}
+
+export function getDataSummary(token: string | null) {
+  return apiRequest<DataSummary>("/api/users/me/data-summary", { token });
+}
+
+/** Permanently deletes the account and all associated data. Not reversible. */
+export function deleteAccount(token: string | null) {
+  return apiRequest<{ deleted: boolean }>("/api/users/me", { method: "DELETE", token });
+}
+
+// ─── Habits ─────────────────────────────────────────────────────────────────
+
+export interface RemoteHabit {
+  id: string;
+  userId: string;
+  name: string;
+  category: string;
+  cue: string | null;
+  craving: string | null;
+  response: string | null;
+  reward: string | null;
+  frequency: string;
+  targetDays: number[] | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export function listHabits(token: string | null, includeArchived = false) {
+  return apiRequest<RemoteHabit[]>("/api/habits", {
+    token,
+    query: includeArchived ? { includeArchived: "true" } : undefined,
+  });
+}
+
+export function createHabit(token: string | null, input: CreateHabitInput) {
+  return apiRequest<RemoteHabit>("/api/habits", { method: "POST", body: input, token });
+}
+
+export function updateHabit(token: string | null, id: string, input: UpdateHabitInput) {
+  return apiRequest<RemoteHabit>(`/api/habits/${id}`, { method: "PATCH", body: input, token });
+}
+
+/** Archives rather than deletes — the logs and streak history survive. */
+export function archiveHabit(token: string | null, id: string) {
+  return apiRequest<{ archived: boolean }>(`/api/habits/${id}`, { method: "DELETE", token });
+}
+
+export function restoreHabit(token: string | null, id: string) {
+  return apiRequest<RemoteHabit>(`/api/habits/${id}`, {
+    method: "PATCH",
+    body: { isActive: true },
+    token,
+  });
+}
+
+// ─── Habit assistance ───────────────────────────────────────────────────────
+// Both endpoints return *drafts*. Nothing is saved until the user accepts one
+// and it goes through createHabit like any hand-typed habit.
+
+export interface HabitSuggestions {
+  drafts: HabitDraft[];
+  /** The signals the proposals were actually built from. Shown as chips. */
+  basis: string[];
+}
+
+export function suggestHabits(
+  token: string | null,
+  input: { focus?: string; count?: number } = {}
+) {
+  return apiRequest<HabitSuggestions>("/api/habits/suggest", {
+    method: "POST",
+    body: { ...input, ...deviceTimeContext() },
+    token,
+  });
+}
+
+export interface DiscoverTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface DiscoverResponse {
+  reply: string;
+  drafts: HabitDraft[];
+  complete: boolean;
+  basis: string[];
+}
+
+export function discoverHabits(token: string | null, turns: DiscoverTurn[]) {
+  return apiRequest<DiscoverResponse>("/api/habits/discover", {
+    method: "POST",
+    body: { turns, ...deviceTimeContext() },
+    token,
+  });
+}
+
+export interface RemoteHabitLog {
+  id: string;
+  habitId: string;
+  userId: string;
+  date: string;
+  completed: boolean;
+  notes: string | null;
+}
+
+export function logHabit(token: string | null, input: LogHabitInput) {
+  return apiRequest<RemoteHabitLog>("/api/habits/log", { method: "POST", body: input, token });
+}
+
+export function listHabitLogs(token: string | null, range?: { from?: string; to?: string }) {
+  return apiRequest<Array<RemoteHabitLog & { habit: { name: string; category: string } }>>(
+    "/api/habits/logs",
+    { token, query: range }
+  );
+}
+
+// ─── Mood ───────────────────────────────────────────────────────────────────
+
+export interface RemoteMoodEntry {
+  id: string;
+  userId: string;
+  mood: number;
+  energy: number | null;
+  stress: number | null;
+  journal: string | null;
+  gratitude: string | null;
+  tags: string[] | null;
+  createdAt: string;
+}
+
+export function createMoodEntry(token: string | null, input: CreateMoodEntryInput) {
+  return apiRequest<RemoteMoodEntry>("/api/mood", { method: "POST", body: input, token });
+}
+
+export function listMoodEntries(token: string | null, limit = 30) {
+  return apiRequest<RemoteMoodEntry[]>("/api/mood", { token, query: { limit: String(limit) } });
+}
+
+export function getLatestMood(token: string | null) {
+  return apiRequest<RemoteMoodEntry | null>("/api/mood/latest", { token });
+}
+
+// ─── Daily check-in ─────────────────────────────────────────────────────────
+// One per day: submitting again edits today's entry rather than adding a
+// second, so the score reads a day as a day.
+
+export interface TodayCheckIn {
+  entry: RemoteMoodEntry | null;
+  /** Whether the reflection component of the score has been earned. */
+  reflectionDone: boolean;
+}
+
+export function getTodayCheckIn(token: string | null) {
+  return apiRequest<TodayCheckIn>("/api/checkin/today", { token });
+}
+
+export interface CheckInResult {
+  entry: RemoteMoodEntry;
+  /** Recomputed in the same round trip, so the ring moves immediately. */
+  score: RemoteScore;
+}
+
+export function submitCheckIn(token: string | null, input: CheckInInput) {
+  return apiRequest<CheckInResult>("/api/checkin", { method: "POST", body: input, token });
+}
+
+export interface CheckInPrompt {
+  prompt: string;
+  /** One real observation about today, or null when there's nothing to say. */
+  observation: string | null;
+  basis: string[];
+}
+
+export function getCheckInPrompt(token: string | null) {
+  return apiRequest<CheckInPrompt>("/api/checkin/prompt", {
+    method: "POST",
+    body: deviceTimeContext(),
+    token,
+  });
+}
+
+// ─── Recommendations ────────────────────────────────────────────────────────
+// Stored server-side at generation time so feedback has a row to attach to.
+// Without that, "I did it" is a local boolean that teaches the system nothing.
+
+export interface RemoteRecommendation {
+  id: string;
+  content: string;
+  category: string;
+  /** Why this one — shown under the action. */
+  context: string | null;
+  acted: boolean;
+  dismissed: boolean;
+  createdAt: string;
+}
+
+export interface RecommendationEnvelope {
+  recommendation: RemoteRecommendation;
+  /** Signals today's recommendation was built from. */
+  basis: string[];
+  /** What the system has concluded from past feedback, in plain sentences. */
+  learned: string[];
+}
+
+/** Today's recommendation if one exists, without generating anything. */
+export function getTodayRecommendation(token: string | null) {
+  return apiRequest<RemoteRecommendation | null>("/api/recommendations/today", { token });
+}
+
+/**
+ * Get today's recommendation, generating one only if needed.
+ * `refresh` asks for a different one — and records the current one as dismissed.
+ */
+export async function requestRecommendation(
+  token: string | null,
+  options: { refresh?: boolean } = {}
+): Promise<RecommendationEnvelope> {
+  const { data, meta } = await apiRequestWithMeta<
+    RemoteRecommendation,
+    { basis?: string[]; learned?: string[] }
+  >("/api/recommendations/today", {
+    method: "POST",
+    body: { ...options, ...deviceTimeContext() },
+    token,
+  });
+
+  return {
+    recommendation: data,
+    basis: meta?.basis ?? [],
+    learned: meta?.learned ?? [],
+  };
+}
+
+export function sendRecommendationFeedback(
+  token: string | null,
+  id: string,
+  outcome: "acted" | "dismissed"
+) {
+  return apiRequest<{ id: string; acted: boolean; dismissed: boolean }>(
+    `/api/recommendations/${id}/feedback`,
+    { method: "POST", body: { outcome }, token }
+  );
+}
+
+export interface RecommendationHistory {
+  recommendations: RemoteRecommendation[];
+  preferences: {
+    lines: string[];
+    answered: number;
+    acted: number;
+    provisional: boolean;
+  };
+}
+
+export function listRecommendations(token: string | null, limit = 30) {
+  const { timeZone } = deviceTimeContext();
+  return apiRequest<RecommendationHistory>("/api/recommendations", {
+    token,
+    query: { limit: String(limit), timeZone },
+  });
+}
+
+// ─── Score ──────────────────────────────────────────────────────────────────
+
+export interface ScoreBreakdown {
+  habitsCompleted: number;
+  habitsTotal: number;
+  workoutLogged: boolean;
+  moodCheckedIn: boolean;
+  reflectionDone: boolean;
+  streakDays: number;
+}
+
+export interface RemoteScore {
+  id: string;
+  userId: string;
+  date: string;
+  overallScore: number;
+  breakdown: ScoreBreakdown | null;
+}
+
+export function getTodayScore(token: string | null) {
+  return apiRequest<RemoteScore>("/api/score/today", { token });
+}
+
+export interface RemotePeriodScore {
+  period: "weekly" | "monthly" | "yearly";
+  periodStart: string;
+  /** null until at least one day in the period has a logged score. */
+  average: number | null;
+  daysLogged: number;
+}
+
+export function getPeriodScore(token: string | null) {
+  return apiRequest<RemotePeriodScore>("/api/score/period", { token });
+}
+
+// ─── Nearby groups (real-world discovery) ──────────────────────────────────
+
+export interface RemoteNearbyGroup {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  address: string;
+  city: string;
+  lat: number;
+  lng: number;
+  website: string | null;
+  phone: string | null;
+  schedule: string | null;
+  isFree: boolean;
+  sourceUrl: string;
+  verifiedAt: string;
+  /** null when the request didn't include the device's coordinates. */
+  distanceKm: number | null;
+}
+
+export function getNearbyGroups(
+  token: string | null,
+  params: { city?: string; category?: string; lat?: number; lng?: number } = {}
+) {
+  return apiRequest<RemoteNearbyGroup[]>("/api/nearby/groups", {
+    token,
+    query: {
+      ...(params.city ? { city: params.city } : {}),
+      ...(params.category ? { category: params.category } : {}),
+      ...(params.lat !== undefined ? { lat: String(params.lat) } : {}),
+      ...(params.lng !== undefined ? { lng: String(params.lng) } : {}),
+    },
+  });
+}
+
+export function getScoreHistory(token: string | null, days = 30) {
+  return apiRequest<RemoteScore[]>("/api/score/history", { token, query: { days: String(days) } });
+}
+
+// ─── Integrations ───────────────────────────────────────────────────────────
+
+export type IntegrationProvider =
+  | "strava"
+  | "whoop"
+  | "oura"
+  | "spotify"
+  | "google_calendar"
+  | "outlook_calendar";
+
+/** Calendars are a different kind of connection from a wearable, and the app
+ *  groups them separately so the disclosure can say what's actually read. */
+export const CALENDAR_PROVIDERS: readonly IntegrationProvider[] = [
+  "google_calendar",
+  "outlook_calendar",
+];
+
+export interface RemoteIntegration {
+  id: string;
+  provider: IntegrationProvider;
+  status: "connected" | "error" | "disconnected";
+  lastSyncedAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+}
+
+export interface IntegrationsList {
+  integrations: RemoteIntegration[];
+  /** Which providers have server-side credentials configured at all. */
+  available: Record<IntegrationProvider, boolean>;
+}
+
+export function listIntegrations(token: string | null) {
+  return apiRequest<IntegrationsList>("/api/integrations", { token });
+}
+
+export function startConnect(token: string | null, provider: IntegrationProvider) {
+  return apiRequest<{ authorizeUrl: string }>(`/api/integrations/${provider}/connect`, {
+    method: "POST",
+    token,
+  });
+}
+
+export function disconnectIntegration(token: string | null, provider: IntegrationProvider) {
+  return apiRequest<{ disconnected: boolean }>(`/api/integrations/${provider}`, {
+    method: "DELETE",
+    token,
+  });
+}
+
+export function syncIntegration(token: string | null, provider: IntegrationProvider) {
+  return apiRequest<{ synced: number }>(`/api/integrations/${provider}/sync`, {
+    method: "POST",
+    token,
+  });
+}
+
+export interface RemoteWearableMetric {
+  id: string;
+  provider: IntegrationProvider;
+  metricType: string;
+  date: string;
+  value: number;
+  unit: string | null;
+}
+
+export function listMetrics(
+  token: string | null,
+  filter?: { type?: string; from?: string; to?: string }
+) {
+  return apiRequest<RemoteWearableMetric[]>("/api/integrations/metrics", { token, query: filter });
+}
+
+export interface PatternInsight {
+  metricType: string;
+  summary: string;
+  r: number;
+  n: number;
+}
+
+export function listPatterns(token: string | null) {
+  return apiRequest<PatternInsight[]>("/api/integrations/patterns", { token });
+}
+
+// ─── Therapist Starter Pack ─────────────────────────────────────────────────
+// We don't provide therapists — this shares real, tracked context with the
+// licensed therapist a user already has. Every category is opt-in.
+
+export interface TherapistCategories {
+  habits: boolean;
+  moodTrends: boolean;
+  journalExcerpts: boolean;
+  patterns: boolean;
+  score: boolean;
+}
+
+export interface TherapistConsent {
+  active: boolean;
+  categories: TherapistCategories;
+  updatedAt: string | null;
+}
+
+export function getTherapistConsent(token: string | null) {
+  return apiRequest<TherapistConsent>("/api/therapist/consent", { token });
+}
+
+export function updateTherapistConsent(token: string | null, categories: TherapistCategories) {
+  return apiRequest<{ active: boolean; categories: TherapistCategories }>("/api/therapist/consent", {
+    method: "PUT",
+    body: categories,
+    token,
+  });
+}
+
+export function revokeTherapistConsent(token: string | null) {
+  return apiRequest<{ active: boolean; categories: TherapistCategories }>("/api/therapist/consent/revoke", {
+    method: "POST",
+    token,
+  });
+}
+
+export interface TherapistReportSummary {
+  periodStart: string;
+  periodEnd: string;
+  categories: TherapistCategories;
+  habits?: { total: number; completionRate: number; longestActiveStreak: number };
+  moodTrends?: {
+    entries: number;
+    averageMood: number | null;
+    averageEnergy: number | null;
+    averageStress: number | null;
+    commonTags: string[];
+  };
+  journalExcerpts?: Array<{ date: string; journal?: string; gratitude?: string }>;
+  patterns?: string[];
+  score?: { average: number | null; trend: "up" | "down" | "flat" | "not_enough_data" };
+}
+
+export interface TherapistReport {
+  id: string;
+  periodStart: string;
+  periodEnd: string;
+  createdAt: string;
+  summary: TherapistReportSummary;
+}
+
+export interface TherapistReportListItem {
+  id: string;
+  periodStart: string;
+  periodEnd: string;
+  createdAt: string;
+}
+
+export function generateTherapistReport(token: string | null, days = 30) {
+  return apiRequest<TherapistReport>("/api/therapist/reports", { method: "POST", body: { days }, token });
+}
+
+export function listTherapistReports(token: string | null) {
+  return apiRequest<TherapistReportListItem[]>("/api/therapist/reports", { token });
+}
+
+export function getTherapistReport(token: string | null, id: string) {
+  return apiRequest<TherapistReport>(`/api/therapist/reports/${id}`, { token });
+}
+
+export * from "./community";
+
+export { ApiRequestError } from "./client";

@@ -1,6 +1,9 @@
 import { SCORE_WEIGHTS, MAX_SCORE } from "../constants/index.js";
 import type { ScoreBreakdown } from "../types/index.js";
 
+export * from "./insights.js";
+export * from "./preferences.js";
+
 /**
  * Calculate the Kinextion Score from daily activity breakdown.
  * Score is 0-100, weighted across habits, workouts, mood, reflection, and streaks.

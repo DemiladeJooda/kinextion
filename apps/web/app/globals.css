@@ -34,12 +34,22 @@
   /* Display type is set optically: the larger it gets, the tighter it wants to
      be. Setting this once on the elements means individual sections stop
      hand-tuning `tracking-*` and drifting apart from each other. */
+  /* Headings inherited the body's 1.5 leading, which reads as loose and
+     unset at display sizes — a 32px headline was getting 48px lines. Leading
+     tightens as type grows, mirroring the letter-spacing above. Utility
+     classes still win, so any section needing looser lines can say so. */
   h1, h2 {
     letter-spacing: -0.03em;
+    line-height: 1.08;
   }
 
   h3, h4 {
     letter-spacing: -0.02em;
+    line-height: 1.25;
+  }
+
+  h5, h6 {
+    line-height: 1.35;
   }
 
   /* Figures should never shimmy as they animate or count. */

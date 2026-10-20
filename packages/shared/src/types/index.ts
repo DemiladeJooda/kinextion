@@ -24,6 +24,8 @@ export type HabitFrequency = "daily" | "weekly" | "custom";
 
 export interface UserProfile {
   displayName?: string;
+  /** Ready Player Me avatar id — a stylized, face-matched avatar, not a body scan. */
+  avatarId?: string;
   age?: number;
   fitnessLevel?: FitnessLevel;
   primaryGoals?: string[];
@@ -39,6 +41,14 @@ export interface UserPreferences {
   dailyCheckInTime?: string;
   aiPersonalityDial?: "scripture" | "balanced" | "universal";
   theme?: "aurora" | "light";
+  /** How hard the guides push. Read by both personas' prompt context. */
+  coachingIntensity?: "gentle" | "balanced" | "intense";
+  /** The window the displayed Kinextion Score aggregates and resets on. */
+  scorePeriod?: "weekly" | "monthly" | "yearly";
+  /** Volunteered once at onboarding — supplementary context, never a gate. */
+  doesTherapy?: boolean;
+  doesJournal?: boolean;
+  currentlyWorkingOut?: boolean;
 }
 
 // ─── Kinextion Score ─────────────────────────────────────────────

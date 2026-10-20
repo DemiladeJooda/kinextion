@@ -15,6 +15,7 @@ export {
   KAIRO_SYSTEM_PROMPT,
   KAIRO_GREETING,
   CRISIS_PROTOCOL,
+  CRISIS_RESOURCES,
   MEDICAL_BOUNDARIES,
   SAFETY_BLOCK,
   GUIDES,
@@ -34,8 +35,30 @@ export type {
 } from "./personas/index";
 
 // ── Context assembly ──────────────────────────────────────────────────────────
-export { buildContext } from "./context/index";
+export { buildContext, COMMUNITY_VOICE_RULE } from "./context/index";
 export type { UserContext, BuiltContext } from "./context/index";
+
+// ── Community facilitation ────────────────────────────────────────────────────
+export {
+  FACILITATOR_SYSTEM_PROMPT,
+  TOPIC_OPTIONS_SCHEMA,
+  PROMPT_BANK,
+  buildSynthesisMessage,
+  parseGeneratedOptions,
+  synthesizeTopics,
+  rhythmGuidance,
+  selectOptions,
+} from "./facilitator/index";
+
+export type {
+  SynthesisInput,
+  SynthesisResult,
+  TopicGenerator,
+  TopicGeneratorRequest,
+  CandidateOption,
+  RhythmGuidance,
+  BankPrompt,
+} from "./facilitator/index";
 
 // ── Atomic Habits helpers ─────────────────────────────────────────────────────
 export {

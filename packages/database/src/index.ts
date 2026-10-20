@@ -1,4 +1,6 @@
-export { PrismaClient } from "@prisma/client";
+// `Prisma` is a value as well as a namespace — `Prisma.DbNull` and the other
+// JSON-null sentinels are needed at runtime, so it can't be a type-only export.
+export { PrismaClient, Prisma } from "@prisma/client";
 export type * from "@prisma/client";
 
 import { PrismaClient } from "@prisma/client";

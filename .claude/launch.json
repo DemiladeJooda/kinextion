@@ -2,11 +2,16 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "api",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@kinextion/api", "dev"],
+      "port": 3001
+    },
+    {
       "name": "web",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@kinextion/web", "dev"],
-      "port": 3000,
-      "autoPort": true
+      "port": 3000
     }
   ]
 }

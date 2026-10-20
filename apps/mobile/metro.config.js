@@ -23,8 +23,23 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, "node_modules"),
 ];
 
-// Follow pnpm's symlinks rather than treating them as opaque files.
-config.resolver.unstable_enableSymlinks = true;
-config.resolver.disableHierarchicalLookup = true;
+// Symlink handling and hierarchical lookup are left at Expo's defaults: since
+// SDK 52 Expo configures pnpm workspaces itself, and overriding them conflicts.
+
+// The shared packages are also run by Node (apps/api), which needs ESM imports
+// written with the extension of the *compiled* file: `./types/index.js` for a
+// source file that is actually `./types/index.ts`. Metro resolves source files
+// and won't make that leap on its own, so a relative `.js` import that doesn't
+// exist is retried without its extension, letting Metro find the `.ts`.
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName.startsWith(".") && moduleName.endsWith(".js")) {
+    try {
+      return context.resolveRequest(context, moduleName, platform);
+    } catch {
+      return context.resolveRequest(context, moduleName.slice(0, -3), platform);
+    }
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
 
 module.exports = config;

@@ -1,6 +1,6 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Platform, View } from "react-native";
+import { Platform, View, type ColorValue } from "react-native";
 import { BlurView } from "expo-blur";
 
 import { color, space } from "../../theme";
@@ -47,28 +47,9 @@ export default function TabLayout() {
         tabBarItemStyle: { paddingTop: 2 },
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: "Today",
-          tabBarIcon: ({ color: c, focused }) => (
-            <TabIcon name={focused ? "sunny" : "sunny-outline"} c={c} focused={focused} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="habits"
-        options={{
-          title: "Habits",
-          tabBarIcon: ({ color: c, focused }) => (
-            <TabIcon
-              name={focused ? "checkbox" : "checkbox-outline"}
-              c={c}
-              focused={focused}
-            />
-          ),
-        }}
-      />
+      {/* Hidden — exists only so "/(tabs)" has a route to resolve to; it
+          immediately redirects into the Guides tab below. */}
+      <Tabs.Screen name="index" options={{ href: null }} />
       <Tabs.Screen
         name="chat"
         options={{
@@ -79,6 +60,33 @@ export default function TabLayout() {
               c={c}
               focused={focused}
             />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="habits"
+        options={{
+          title: "Habits",
+          tabBarIcon: ({ color: c, focused }) => (
+            <TabIcon name={focused ? "checkbox" : "checkbox-outline"} c={c} focused={focused} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="pocket"
+        options={{
+          title: "In Your Pocket",
+          tabBarIcon: ({ color: c, focused }) => (
+            <TabIcon name={focused ? "cube" : "cube-outline"} c={c} focused={focused} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="community"
+        options={{
+          title: "Community",
+          tabBarIcon: ({ color: c, focused }) => (
+            <TabIcon name={focused ? "people" : "people-outline"} c={c} focused={focused} />
           ),
         }}
       />
@@ -102,7 +110,8 @@ function TabIcon({
   focused,
 }: {
   name: keyof typeof Ionicons.glyphMap;
-  c: string;
+  /** Navigation hands tab colours over as ColorValue, not plain strings. */
+  c: ColorValue;
   focused: boolean;
 }) {
   return (

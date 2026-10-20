@@ -26,9 +26,19 @@ import { ChatError } from "../../lib/api";
 import { color, radius, space, tint } from "../../theme";
 
 const SPORTS = [
-  { id: "pickleball", label: "Pickleball", icon: "tennisball-outline", target: 11 },
+  {
+    id: "pickleball",
+    label: "Pickleball",
+    icon: "tennisball-outline",
+    target: 11,
+  },
   { id: "tennis", label: "Tennis", icon: "tennisball-outline", target: 4 },
-  { id: "basketball", label: "3-Point Shootout", icon: "basketball-outline", target: 25 },
+  {
+    id: "basketball",
+    label: "3-Point Shootout",
+    icon: "basketball-outline",
+    target: 25,
+  },
   { id: "pickup", label: "Pick-up Game", icon: "people-outline", target: 21 },
 ] as const;
 
@@ -122,7 +132,10 @@ export default function RefereeScreen() {
           {
             ...call,
             id: `c-${Date.now()}`,
-            at: new Date().toLocaleTimeString([], { minute: "2-digit", second: "2-digit" }),
+            at: new Date().toLocaleTimeString([], {
+              minute: "2-digit",
+              second: "2-digit",
+            }),
             runningScore: next,
           },
           ...prev,
@@ -179,14 +192,18 @@ export default function RefereeScreen() {
       <Stack.Screen
         options={{
           title: "Smart Referee",
-          headerStyle: { backgroundColor: color.surface },
+          headerStyle: { backgroundColor: color.bg },
+          headerShadowVisible: false,
           headerTintColor: color.green,
           headerTitleStyle: { color: color.text, fontWeight: "700" },
         }}
       />
       <SafeAreaView style={{ flex: 1, backgroundColor: color.bg }} edges={["bottom"]}>
         <ScrollView
-          contentContainerStyle={{ padding: space.xl, paddingBottom: space.xxxl }}
+          contentContainerStyle={{
+            padding: space.xl,
+            paddingBottom: space.xxxl,
+          }}
           showsVerticalScrollIndicator={false}
         >
           {/* Camera */}
@@ -202,8 +219,19 @@ export default function RefereeScreen() {
           >
             {permission?.granted ? (
               <CameraView ref={cameraRef} style={{ flex: 1 }} facing="back">
-                <View style={{ flex: 1, padding: space.md, justifyContent: "space-between" }}>
-                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <View
+                  style={{
+                    flex: 1,
+                    padding: space.md,
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                    }}
+                  >
                     <Badge
                       label={running ? (analysing ? "● Reading frame" : "● Officiating") : "Ready"}
                       accent={color.green}
@@ -232,9 +260,20 @@ export default function RefereeScreen() {
                 </View>
               </CameraView>
             ) : (
-              <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: space.xl }}>
+              <View
+                style={{
+                  flex: 1,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: space.xl,
+                }}
+              >
                 <Ionicons name="videocam-off-outline" size={30} color={color.textFaint} />
-                <Txt variant="body" c={color.textMuted} style={{ marginTop: space.md, textAlign: "center" }}>
+                <Txt
+                  variant="body"
+                  c={color.textMuted}
+                  style={{ marginTop: space.md, textAlign: "center" }}
+                >
                   Camera access is needed to watch the game.
                 </Txt>
                 <Button
@@ -321,7 +360,14 @@ export default function RefereeScreen() {
 
           {/* Sport picker */}
           <Label>Sport</Label>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginTop: space.md }}>
+          <View
+            style={{
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: space.sm,
+              marginTop: space.md,
+            }}
+          >
             {SPORTS.map((s) => (
               <Chip
                 key={s.id}
@@ -372,7 +418,10 @@ export default function RefereeScreen() {
             </View>
           </View>
 
-          <Pressable onPress={() => router.back()} style={{ marginTop: space.xl, alignItems: "center" }}>
+          <Pressable
+            onPress={() => router.back()}
+            style={{ marginTop: space.xl, alignItems: "center" }}
+          >
             <Txt variant="small" c={color.textFaint}>
               Back to Today
             </Txt>
@@ -393,8 +442,11 @@ export default function RefereeScreen() {
 // ─── A single call, expandable into its evidence ──────────────────────────────
 function CallRow({ call, onOverturn }: { call: Call; onOverturn: () => void }) {
   const [open, setOpen] = useState(false);
-  const accent =
-    call.overturned ? color.textFaint : call.kind === "point" ? color.green : color.amber;
+  const accent = call.overturned
+    ? color.textFaint
+    : call.kind === "point"
+      ? color.green
+      : color.amber;
 
   return (
     <Animated.View entering={FadeInDown.duration(260)} layout={Layout.springify().damping(20)}>
@@ -426,7 +478,10 @@ function CallRow({ call, onOverturn }: { call: Call; onOverturn: () => void }) {
           />
           <Txt
             variant="small"
-            style={{ flex: 1, textDecorationLine: call.overturned ? "line-through" : "none" }}
+            style={{
+              flex: 1,
+              textDecorationLine: call.overturned ? "line-through" : "none",
+            }}
             c={call.overturned ? color.textFaint : color.text}
           >
             {call.text}
@@ -438,13 +493,20 @@ function CallRow({ call, onOverturn }: { call: Call; onOverturn: () => void }) {
         </View>
 
         {call.confidence < 0.55 && !call.overturned ? (
-          <Txt variant="small" c={color.amber} style={{ fontSize: 11, marginTop: 4, marginLeft: 29 }}>
+          <Txt
+            variant="small"
+            c={color.amber}
+            style={{ fontSize: 11, marginTop: 4, marginLeft: 29 }}
+          >
             {confidenceLabel(call.confidence)} — this one didn&apos;t score
           </Txt>
         ) : null}
 
         {open ? (
-          <Animated.View entering={FadeIn.duration(180)} style={{ marginTop: space.md, marginLeft: 29 }}>
+          <Animated.View
+            entering={FadeIn.duration(180)}
+            style={{ marginTop: space.md, marginLeft: 29 }}
+          >
             <Label c={accent}>What the camera saw</Label>
             <View style={{ gap: 5, marginTop: space.sm }}>
               {call.observed.map((o) => (
@@ -470,7 +532,14 @@ function CallRow({ call, onOverturn }: { call: Call; onOverturn: () => void }) {
               {call.reasoning}
             </Txt>
 
-            <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm, marginTop: space.md }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: space.sm,
+                marginTop: space.md,
+              }}
+            >
               <Badge label={confidenceLabel(call.confidence)} accent={accent} />
               {call.kind === "point" && !call.overturned ? (
                 <Pressable
@@ -519,7 +588,13 @@ function ScoreBreakdown({
 
   return (
     <Modal visible={open} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: color.scrim, justifyContent: "flex-end" }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: color.scrim,
+          justifyContent: "flex-end",
+        }}
+      >
         <View
           style={{
             maxHeight: "84%",
@@ -531,7 +606,13 @@ function ScoreBreakdown({
             padding: space.xl,
           }}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: space.lg }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginBottom: space.lg,
+            }}
+          >
             <View style={{ flex: 1 }}>
               <Label c={color.green}>How it got to</Label>
               <Txt variant="title" style={{ marginTop: 2 }}>
@@ -584,11 +665,19 @@ function ScoreBreakdown({
                       <Txt variant="small" style={{ fontWeight: "600" }}>
                         {c.text}
                       </Txt>
-                      <Txt variant="small" c={color.textMuted} style={{ marginTop: 3, fontSize: 12 }}>
+                      <Txt
+                        variant="small"
+                        c={color.textMuted}
+                        style={{ marginTop: 3, fontSize: 12 }}
+                      >
                         {c.reasoning}
                       </Txt>
                       {c.observed.length ? (
-                        <Txt variant="small" c={color.textFaint} style={{ marginTop: 5, fontSize: 11 }}>
+                        <Txt
+                          variant="small"
+                          c={color.textFaint}
+                          style={{ marginTop: 5, fontSize: 11 }}
+                        >
                           Saw: {c.observed.join(" · ")}
                         </Txt>
                       ) : null}

@@ -146,14 +146,18 @@ export default function FormScreen() {
       <Stack.Screen
         options={{
           title: "Form Control",
-          headerStyle: { backgroundColor: color.surface },
+          headerStyle: { backgroundColor: color.bg },
+          headerShadowVisible: false,
           headerTintColor: color.amber,
           headerTitleStyle: { color: color.text, fontWeight: "700" },
         }}
       />
       <SafeAreaView style={{ flex: 1, backgroundColor: color.bg }} edges={["bottom"]}>
         <ScrollView
-          contentContainerStyle={{ padding: space.xl, paddingBottom: space.xxxl }}
+          contentContainerStyle={{
+            padding: space.xl,
+            paddingBottom: space.xxxl,
+          }}
           showsVerticalScrollIndicator={false}
         >
           <View
@@ -168,8 +172,19 @@ export default function FormScreen() {
           >
             {permission?.granted ? (
               <CameraView ref={cameraRef} style={{ flex: 1 }} facing="front">
-                <View style={{ flex: 1, padding: space.md, justifyContent: "space-between" }}>
-                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <View
+                  style={{
+                    flex: 1,
+                    padding: space.md,
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                    }}
+                  >
                     <Badge
                       label={running ? (analysing ? "● Reading" : "● Watching") : "Ready"}
                       accent={color.amber}
@@ -193,7 +208,11 @@ export default function FormScreen() {
 
                   {/* Live cue, over the frame — the only thing worth reading mid-set. */}
                   {running && latest?.cue ? (
-                    <Animated.View key={latest.id} entering={FadeIn} style={{ alignItems: "center" }}>
+                    <Animated.View
+                      key={latest.id}
+                      entering={FadeIn}
+                      style={{ alignItems: "center" }}
+                    >
                       <View
                         style={{
                           paddingHorizontal: space.lg,
@@ -220,9 +239,20 @@ export default function FormScreen() {
                 </View>
               </CameraView>
             ) : (
-              <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: space.xl }}>
+              <View
+                style={{
+                  flex: 1,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: space.xl,
+                }}
+              >
                 <Ionicons name="videocam-off-outline" size={30} color={color.textFaint} />
-                <Txt variant="body" c={color.textMuted} style={{ marginTop: space.md, textAlign: "center" }}>
+                <Txt
+                  variant="body"
+                  c={color.textMuted}
+                  style={{ marginTop: space.md, textAlign: "center" }}
+                >
                   Camera access is needed to check your form.
                 </Txt>
                 <Button
@@ -265,7 +295,14 @@ export default function FormScreen() {
           </View>
 
           <Label>Exercise</Label>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginTop: space.md }}>
+          <View
+            style={{
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: space.sm,
+              marginTop: space.md,
+            }}
+          >
             {EXERCISES.map((e) => (
               <Chip
                 key={e.id}
@@ -306,11 +343,23 @@ export default function FormScreen() {
               {!latest ? (
                 <Card style={{ alignItems: "center", paddingVertical: space.xxl }}>
                   <Ionicons name="body-outline" size={26} color={color.textFaint} />
-                  <Txt variant="small" c={color.textMuted} style={{ marginTop: space.sm, textAlign: "center" }}>
-                    Each checkpoint gets a score out of ten — and the reason it
-                    earned that score, not just the number.
+                  <Txt
+                    variant="small"
+                    c={color.textMuted}
+                    style={{ marginTop: space.sm, textAlign: "center" }}
+                  >
+                    Each checkpoint gets a score out of ten — and the reason it earned that score,
+                    not just the number.
                   </Txt>
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginTop: space.lg, justifyContent: "center" }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      flexWrap: "wrap",
+                      gap: space.sm,
+                      marginTop: space.lg,
+                      justifyContent: "center",
+                    }}
+                  >
                     {def.watch.map((w) => (
                       <Chip key={w} label={w} accent={color.textMuted} />
                     ))}
@@ -334,7 +383,11 @@ export default function FormScreen() {
               <Label>Earlier in this set</Label>
               <View style={{ marginTop: space.md, gap: space.sm }}>
                 {readings.slice(1, 6).map((r) => (
-                  <Animated.View key={r.id} entering={FadeInDown.duration(220)} layout={Layout.springify()}>
+                  <Animated.View
+                    key={r.id}
+                    entering={FadeInDown.duration(220)}
+                    layout={Layout.springify()}
+                  >
                     <View
                       style={{
                         flexDirection: "row",
@@ -374,9 +427,9 @@ export default function FormScreen() {
                   A second pair of eyes, not a spotter
                 </Txt>
                 <Txt variant="small" c={color.textFaint} style={{ marginTop: 3 }}>
-                  Form Control reads single frames from one angle. It catches the
-                  common faults well and can miss what the camera can&apos;t see —
-                  keep a human nearby for genuinely heavy work.
+                  Form Control reads single frames from one angle. It catches the common faults well
+                  and can miss what the camera can&apos;t see — keep a human nearby for genuinely
+                  heavy work.
                 </Txt>
               </View>
             </View>
@@ -391,7 +444,11 @@ export default function FormScreen() {
 function CheckpointCard({ checkpoint }: { checkpoint: FormCheckpoint }) {
   const [open, setOpen] = useState(false);
   const accent =
-    checkpoint.verdict === "good" ? color.green : checkpoint.verdict === "watch" ? color.amber : color.red;
+    checkpoint.verdict === "good"
+      ? color.green
+      : checkpoint.verdict === "watch"
+        ? color.amber
+        : color.red;
   const score = Math.max(0, Math.min(10, Math.round(checkpoint.score)));
 
   return (
@@ -429,7 +486,12 @@ function CheckpointCard({ checkpoint }: { checkpoint: FormCheckpoint }) {
 
         <View style={{ flex: 1 }}>
           <Txt variant="bodyStrong">{checkpoint.name}</Txt>
-          <Txt variant="small" c={color.textMuted} style={{ marginTop: 2, fontSize: 12 }} numberOfLines={open ? undefined : 2}>
+          <Txt
+            variant="small"
+            c={color.textMuted}
+            style={{ marginTop: 2, fontSize: 12 }}
+            numberOfLines={open ? undefined : 2}
+          >
             {checkpoint.observed}
           </Txt>
         </View>

@@ -33,6 +33,8 @@ import { ResearchSection }   from "@/components/sections/ResearchSection";
 import { StorySection }      from "@/components/sections/StorySection";
 import { ShootingStars }     from "@/components/aurora/ShootingStars";
 import { SpaceBackground }   from "@/components/aurora/SpaceBackground";
+import { SiteFooter }        from "@/components/marketing/SiteFooter";
+import { PageAnalytics }     from "@/components/analytics/PageAnalytics";
 
 // Tabs that render on the dark, immersive "space" backdrop. Every other tab
 // uses the light backdrop (white) with shooting stars.
@@ -72,13 +74,24 @@ export function TabLayout() {
     }
   }
 
+  // The nav CTA now scrolls to the form in the footer rather than dropping
+  // people on a different tab and hoping they find it.
+  const scrollToEarlyAccess = useCallback(() => {
+    const target = document.getElementById("early-access");
+    if (!target) return;
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    target.querySelector<HTMLInputElement>('input[type="email"]')?.focus({ preventScroll: true });
+  }, []);
+
   return (
     <NavigateContext value={navigate}>
+      <PageAnalytics tab={activeTab} />
+
       <TabNav
         tabs={TABS}
         activeTab={activeTab}
         onTabChange={navigate}
-        onEarlyAccess={() => navigate("shift")}
+        onEarlyAccess={scrollToEarlyAccess}
       />
 
       {/* Dark deep-space backdrop. Always mounted at the very back; on light
@@ -152,6 +165,10 @@ export function TabLayout() {
         >
           {renderSection()}
         </motion.div>
+
+        {/* Outside the keyed cross-fade: the footer is the same on every tab,
+            and remounting a form mid-typing would lose what someone had typed. */}
+        <SiteFooter tab={activeTab} dark={isSpace} />
       </div>
     </NavigateContext>
   );

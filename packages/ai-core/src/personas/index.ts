@@ -1,6 +1,6 @@
 export { ALTHEO_SYSTEM_PROMPT, ALTHEO_GREETING } from "./altheo";
 export { KAIRO_SYSTEM_PROMPT, KAIRO_GREETING } from "./kairo";
-export { CRISIS_PROTOCOL, MEDICAL_BOUNDARIES, SAFETY_BLOCK } from "./safety";
+export { CRISIS_PROTOCOL, CRISIS_RESOURCES, MEDICAL_BOUNDARIES, SAFETY_BLOCK } from "./safety";
 export {
   GUIDES,
   GUIDE_IDS,

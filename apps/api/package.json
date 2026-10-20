@@ -4,20 +4,27 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx watch --env-file-if-exists=../../.env src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js",
+    "start": "node --env-file-if-exists=../../.env dist/server.js",
+    "retention": "tsx --env-file-if-exists=../../.env src/jobs/retention.ts",
+    "community": "tsx --env-file-if-exists=../../.env src/jobs/community.ts",
+    "community:seed": "tsx --env-file-if-exists=../../.env src/jobs/seed-community.ts",
+    "nearby:seed": "tsx --env-file-if-exists=../../.env src/jobs/seed-nearby-groups.ts",
     "test": "vitest run",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "media:smoke": "tsx --env-file-if-exists=../../.env scripts/media-smoke.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
+    "@anthropic-ai/sdk": "^0.115.0",
     "@clerk/fastify": "^2.0.0",
     "@kinextion/ai-core": "workspace:*",
     "@kinextion/database": "workspace:*",
     "@kinextion/shared": "workspace:*",
     "fastify": "^5.2.0",
     "@fastify/cors": "^11.0.0",
+    "@fastify/helmet": "^13.0.0",
+    "@fastify/rate-limit": "^10.2.0",
     "@fastify/websocket": "^11.0.0",
     "zod": "^3.24.0"
   },
