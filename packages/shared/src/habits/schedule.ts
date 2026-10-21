@@ -352,3 +352,46 @@ export function canRestOn(rest: ReadonlySet<DateKey>, day: DateKey): boolean {
   }
   return used < REST_DAYS_PER_WEEK;
 }
+
+export type TimeWindow = "morning" | "midday" | "evening" | "anytime";
+
+/** Which window the clock is in: morning before 12, midday until 5pm. */
+export function currentWindow(hour: number): Exclude<TimeWindow, "anytime"> {
+  return hour < 12 ? "morning" : hour < 17 ? "midday" : "evening";
+}
+
+const WINDOW_ORDER: Record<Exclude<TimeWindow, "anytime">, number> = {
+  morning: 0,
+  midday: 1,
+  evening: 2,
+};
+
+/**
+ * The order today's unfinished habits are shown in.
+ *
+ *   1. Now: habits whose window is now or already passed (still doable).
+ *   2. Any time.
+ *   3. Later today.
+ *
+ * Within each, the easiest win first — the habit kept most often — so the
+ * first action of the day is likely a success (Process, in Zoe Chance's
+ * 4Ps: order matters). A brand-new habit with no history yet sits in the
+ * middle, then the user's own order breaks ties.
+ */
+export function orderForToday<
+  T extends { timeWindow?: TimeWindow | null; consistency: number | null; sortOrder?: number | null },
+>(habits: readonly T[], hour: number): T[] {
+  const now = WINDOW_ORDER[currentWindow(hour)];
+  const bucket = (h: T) => {
+    const w = h.timeWindow ?? "anytime";
+    if (w === "anytime") return 1;
+    return WINDOW_ORDER[w] <= now ? 0 : 2;
+  };
+  const ease = (h: T) => h.consistency ?? 0.5;
+  return [...habits].sort(
+    (a, b) =>
+      bucket(a) - bucket(b) ||
+      ease(b) - ease(a) ||
+      (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
+  );
+}

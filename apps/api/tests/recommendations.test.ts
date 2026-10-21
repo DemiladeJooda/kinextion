@@ -31,6 +31,9 @@ interface StoredRec {
   acted: boolean;
   dismissed: boolean;
   createdAt: Date;
+  alternative?: string | null;
+  alternativeCategory?: string | null;
+  chosenAt?: Date | null;
 }
 
 const state: { recs: StoredRec[] } = { recs: [] };
@@ -344,5 +347,62 @@ describe("GET /api/recommendations", () => {
     for (const line of body.data.preferences.lines) {
       expect(line).toMatch(/\d+ of \d+/);
     }
+  });
+});
+
+describe("two options to choose from", () => {
+  const TWO = {
+    options: [
+      { action: "Walk to the end of the road.", why: "You'll feel less stiff by lunch.", category: "physical" },
+      { action: "Text one friend back.", why: "You'll stop carrying it around today.", category: "emotional" },
+    ],
+  };
+  const choose = (id: string, option: string) =>
+    app.inject({ method: "POST", url: `/api/recommendations/${id}/choose`, payload: { option } });
+
+  it("stores both, the first as the main one", async () => {
+    generateStructured.mockResolvedValueOnce(TWO);
+    await generate();
+    expect(state.recs[0]).toMatchObject({
+      content: "Walk to the end of the road.",
+      alternative: "Text one friend back.",
+      alternativeCategory: "emotional",
+    });
+  });
+
+  it("asks the model for two genuinely different options framed as same-day benefits", async () => {
+    generateStructured.mockResolvedValueOnce(TWO);
+    await generate();
+    const call = generateStructured.mock.calls.at(-1)?.[0];
+    expect(call.inputSchema.properties.options.minItems).toBe(2);
+    expect(lastSystemPrompt()).toMatch(/genuinely different/);
+    expect(lastSystemPrompt()).toMatch(/feel today/);
+  });
+
+  it("swaps the alternative into place when it's picked, keeping the one passed over", async () => {
+    generateStructured.mockResolvedValueOnce(TWO);
+    const created = (await generate()).json().data;
+    const res = await choose(created.id, "alternative");
+    expect(res.statusCode).toBe(200);
+    expect(state.recs[0]).toMatchObject({
+      content: "Text one friend back.",
+      category: "emotional",
+      alternative: "Walk to the end of the road.",
+    });
+    expect(state.recs[0].chosenAt).toBeInstanceOf(Date);
+  });
+
+  it("only counts the first pick", async () => {
+    generateStructured.mockResolvedValueOnce(TWO);
+    const created = (await generate()).json().data;
+    await choose(created.id, "primary");
+    await choose(created.id, "alternative");
+    expect(state.recs[0].content).toBe("Walk to the end of the road.");
+  });
+
+  it("rejects an unknown option", async () => {
+    generateStructured.mockResolvedValueOnce(TWO);
+    const created = (await generate()).json().data;
+    expect((await choose(created.id, "both")).statusCode).toBe(400);
   });
 });

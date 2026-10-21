@@ -18,6 +18,7 @@ import { prisma } from "@kinextion/database";
 import {
   generateRecommendationSchema,
   recommendationFeedbackSchema,
+  chooseRecommendationSchema,
 } from "@kinextion/shared";
 import { buildHabitContext } from "../../lib/habit-context.js";
 import { startOfToday } from "../../lib/score.js";
@@ -91,6 +92,9 @@ export async function recommendationRoutes(app: FastifyInstance) {
         content: generated.action,
         category: generated.category,
         context: generated.why,
+        alternative: generated.alternative?.action ?? null,
+        alternativeCategory: generated.alternative?.category ?? null,
+        alternativeContext: generated.alternative?.why ?? null,
       },
     });
 
@@ -99,6 +103,54 @@ export async function recommendationRoutes(app: FastifyInstance) {
       data: created,
       meta: { basis: context.basis, learned: history.lines },
     });
+  });
+
+  /**
+   * Pick one of the two options.
+   *
+   * Picking the alternative swaps it into the main fields, so everything
+   * downstream — feedback, history, what the generator learns from — keeps
+   * reading `content` as "the thing they chose", and the option passed over
+   * stays in `alternative`. Only the first pick counts.
+   */
+  app.post<{ Params: { id: string } }>("/:id/choose", async (request, reply) => {
+    const parsed = chooseRecommendationSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        success: false,
+        error: parsed.error.issues.map((i) => i.message).join(", "),
+      });
+    }
+
+    const rec = await prisma.recommendation.findFirst({
+      where: { id: request.params.id, userId: request.userId },
+    });
+    if (!rec) {
+      return reply.status(404).send({ success: false, error: "Recommendation not found" });
+    }
+    if (rec.chosenAt || !rec.alternative) {
+      return { success: true, data: rec };
+    }
+
+    const swap = parsed.data.option === "alternative";
+    const updated = await prisma.recommendation.update({
+      where: { id: rec.id },
+      data: {
+        chosenAt: new Date(),
+        ...(swap
+          ? {
+              content: rec.alternative,
+              category: rec.alternativeCategory ?? rec.category,
+              context: rec.alternativeContext,
+              alternative: rec.content,
+              alternativeCategory: rec.category,
+              alternativeContext: rec.context,
+            }
+          : {}),
+      },
+    });
+
+    return { success: true, data: updated };
   });
 
   /**

@@ -19,7 +19,13 @@
  * action is always the top row.
  */
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   Modal,
   Pressable,
@@ -32,7 +38,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import Animated, { FadeIn, FadeInDown, Layout } from "react-native-reanimated";
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  Layout,
+  ZoomIn,
+} from "react-native-reanimated";
 
 import { MicroRecommendation } from "../../components/MicroRecommendation";
 import {
@@ -46,7 +57,7 @@ import {
   Txt,
 } from "../../components/ui";
 import { useApi } from "../../hooks/useApi";
-import { addDays, today } from "@kinextion/shared";
+import { addDays, localHour, orderForToday, today } from "@kinextion/shared";
 import { useAppState, type Habit } from "../../lib/store";
 import { categoryColor, color, radius, space, tint } from "../../theme";
 
@@ -103,7 +114,12 @@ export default function TodayScreen() {
   // you're failing. It's a day off, and it waits out of the way.
   const due = allHabits.filter((h) => h.due);
   const notToday = allHabits.filter((h) => !h.due);
-  const habitsLeft = due.filter((h) => h.todayState === null);
+  // Easiest win first, within what's due now — so the first tap of the day
+  // is very likely a success. See orderForToday in @kinextion/shared.
+  const habitsLeft = orderForToday(
+    due.filter((h) => h.todayState === null),
+    localHour(),
+  );
   // Done, the tiny version, and rest days all leave the list.
   const habitsDone = due.filter((h) => h.todayState !== null);
   const habitsKept = due.filter(
@@ -122,6 +138,20 @@ export default function TodayScreen() {
   const required = due.length - rested + 1;
   const completed = habitsKept.length + (moodLogged ? 1 : 0);
   const remaining = required - completed;
+
+  // Fire once on the transition to zero, not on every render at zero, and
+  // not when the screen simply opens on a finished day.
+  const lastRemaining = useRef<number | null>(null);
+  useEffect(() => {
+    if (
+      lastRemaining.current !== null &&
+      lastRemaining.current > 0 &&
+      remaining === 0
+    ) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    lastRemaining.current = remaining;
+  }, [remaining]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -226,6 +256,7 @@ export default function TodayScreen() {
             >
               <HabitRow
                 habit={h}
+                isNext={i === 0}
                 onToggle={() => toggleHabit(h.id)}
                 onMore={() => setSheetFor(h)}
               />
@@ -252,7 +283,7 @@ export default function TodayScreen() {
         </View>
 
         {remaining === 0 && due.length > 0 ? (
-          <Animated.View entering={FadeIn.duration(300)}>
+          <Animated.View entering={ZoomIn.springify().damping(14)}>
             <Card accent={color.green} style={{ marginTop: space.md }}>
               <Txt variant="bodyStrong" c={color.green}>
                 That&apos;s everything for today.
@@ -482,17 +513,34 @@ function TaskRow({
 
 function HabitRow({
   habit,
+  isNext,
   onToggle,
   onMore,
 }: {
   habit: Habit;
+  /** The top of the list: the one thing to do now, so the eye lands there. */
+  isNext?: boolean;
   onToggle: () => void;
   onMore: () => void;
 }) {
   const accent = categoryColor[habit.category];
 
   return (
-    <PressCard haptic="medium" onPress={onToggle} style={{ padding: space.lg }}>
+    <PressCard
+      haptic="medium"
+      onPress={onToggle}
+      accent={isNext ? accent : undefined}
+      style={{ padding: space.lg }}
+    >
+      {isNext ? (
+        <Txt
+          variant="label"
+          c={accent}
+          style={{ fontSize: 10, marginBottom: space.sm }}
+        >
+          NEXT UP
+        </Txt>
+      ) : null}
       <View
         style={{ flexDirection: "row", alignItems: "center", gap: space.md }}
       >

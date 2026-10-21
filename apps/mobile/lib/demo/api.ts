@@ -549,12 +549,17 @@ let currentRec: RemoteRecommendation | null = null;
 
 function makeRec(): RemoteRecommendation {
   const base = RECS[recIndex % RECS.length]!;
+  const alt = RECS[(recIndex + 1) % RECS.length]!;
   return {
     id: uid("rec"),
     createdAt: new Date().toISOString(),
     acted: false,
     dismissed: false,
     ...base,
+    alternative: alt.content,
+    alternativeCategory: alt.category,
+    alternativeContext: alt.context,
+    chosenAt: null,
   };
 }
 
@@ -1470,6 +1475,25 @@ export const demoApi: Api = {
       basis: ["HRV · Oura", "Calendar gaps", "Last 7 check-ins"],
       learned: LEARNED,
     };
+  },
+  chooseRecommendation: async (id, option) => {
+    await wait(150);
+    if (currentRec?.id === id && !currentRec.chosenAt) {
+      currentRec =
+        option === "alternative" && currentRec.alternative
+          ? {
+              ...currentRec,
+              content: currentRec.alternative,
+              category: currentRec.alternativeCategory ?? currentRec.category,
+              context: currentRec.alternativeContext ?? null,
+              alternative: currentRec.content,
+              alternativeCategory: currentRec.category,
+              alternativeContext: currentRec.context,
+              chosenAt: new Date().toISOString(),
+            }
+          : { ...currentRec, chosenAt: new Date().toISOString() };
+    }
+    return currentRec!;
   },
   sendRecommendationFeedback: async (id, outcome) => {
     await wait();

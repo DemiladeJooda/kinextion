@@ -415,6 +415,12 @@ export interface RemoteRecommendation {
   acted: boolean;
   dismissed: boolean;
   createdAt: string;
+  /** The second option on offer, until one is picked. */
+  alternative?: string | null;
+  alternativeCategory?: string | null;
+  alternativeContext?: string | null;
+  /** Set once one of the two was picked. */
+  chosenAt?: string | null;
 }
 
 export interface RecommendationEnvelope {
@@ -465,6 +471,19 @@ export function sendRecommendationFeedback(
     `/api/recommendations/${id}/feedback`,
     { method: "POST", body: { outcome }, token },
   );
+}
+
+/** Pick one of the two options; the API swaps it into the main fields. */
+export function chooseRecommendation(
+  token: string | null,
+  id: string,
+  option: "primary" | "alternative",
+) {
+  return apiRequest<RemoteRecommendation>(`/api/recommendations/${id}/choose`, {
+    method: "POST",
+    body: { option },
+    token,
+  });
 }
 
 export interface RecommendationHistory {

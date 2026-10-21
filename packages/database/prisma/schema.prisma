@@ -374,14 +374,25 @@ model MoodEntry {
 // ─── Daily Recommendations ───────────────────────────────────────
 
 model Recommendation {
-  id        String   @id @default(cuid())
-  userId    String
-  content   String // the micro-recommendation text
-  category  String // "physical" | "mental" | "emotional" | "spiritual"
-  context   String? // why this was recommended
-  acted     Boolean  @default(false)
-  dismissed Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id                  String    @id @default(cuid())
+  userId              String
+  content             String // the micro-recommendation text
+  category            String // "physical" | "mental" | "emotional" | "spiritual"
+  context             String? // why this was recommended
+  acted               Boolean   @default(false)
+  dismissed           Boolean   @default(false)
+  /**
+   * Two options are offered; the one not picked is kept here, so a
+   * choice is data too ("passed over X for Y").
+   */
+  alternative         String?
+  alternativeCategory String?
+  alternativeContext  String?
+  /**
+   * When one of the two was picked. Null while both are still on offer.
+   */
+  chosenAt            DateTime?
+  createdAt           DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

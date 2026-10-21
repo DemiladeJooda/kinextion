@@ -21,12 +21,21 @@ import { generateStructured } from "../ai/services/ai-service.js";
 import type { HabitContext } from "../../lib/habit-context.js";
 import type { RecommendationHistory } from "./preferences.js";
 
-export interface GeneratedRecommendation {
+export interface RecommendationOption {
   /** The action. Under 15 words, starts with a verb. */
   action: string;
-  /** Why this one, referring to real signals. Stored as the row's context. */
+  /** Why this one, as a benefit felt today. Stored as the row's context. */
   why: string;
   category: string;
+}
+
+/**
+ * Two options rather than one. Choosing between two feels like your own
+ * decision rather than being told what to do (Possibilities, in Zoe
+ * Chance's 4Ps), and which one gets picked is a preference signal too.
+ */
+export interface GeneratedRecommendation extends RecommendationOption {
+  alternative: RecommendationOption | null;
 }
 
 /** Used when the model is unreachable — see the note at the call site. */
@@ -34,7 +43,27 @@ const FALLBACK: GeneratedRecommendation = {
   action: "Pick the easiest thing on your list and start it now.",
   why: "Couldn't reach the model just now, so this is the general answer rather than one built from your day.",
   category: "mental",
+  alternative: {
+    action: "Stand up and stretch for one minute.",
+    why: "Also a general one: your back and your focus will both feel it this afternoon.",
+    category: "physical",
+  },
 };
+
+function toOption(
+  raw: { action?: string; why?: string; category?: string } | undefined
+): RecommendationOption | null {
+  const action = raw?.action?.trim();
+  const why = raw?.why?.trim();
+  if (!action || !why) return null;
+  return {
+    action,
+    why,
+    category: WELLNESS_CATEGORIES.includes(raw?.category as never)
+      ? (raw?.category as string)
+      : "mental",
+  };
+}
 
 function historySection(history: RecommendationHistory): string {
   const parts: string[] = [];
@@ -78,7 +107,13 @@ export async function generateRecommendation(
   history: RecommendationHistory
 ): Promise<GeneratedRecommendation> {
   const system = [
-    "You give one micro-action for right now inside Kinextion. One action, doable in two minutes or less.",
+    "You offer two micro-actions for right now inside Kinextion, for the user to choose between. Each is doable in two minutes or less.",
+    "",
+    "## The two options",
+    "- Make them genuinely different: a different category, or a different kind of ask (move vs. pause, alone vs. reaching out). Never two versions of the same thing.",
+    "- Put the one most likely to get done first.",
+    "- Each reason is a benefit they'd feel today, concrete and immediate ('You'll sleep easier tonight'), never a long-term health claim.",
+    "- Write them as invitations, not orders.",
     "",
     "## What makes a good one",
     "- It starts with a verb and takes under two minutes.",
@@ -102,6 +137,8 @@ export async function generateRecommendation(
 
   try {
     const result = await generateStructured<{
+      options?: Array<{ action?: string; why?: string; category?: string }>;
+      // The older single-option shape, still accepted.
       action?: string;
       why?: string;
       category?: string;
@@ -110,43 +147,50 @@ export async function generateRecommendation(
       messages: [
         {
           role: "user",
-          content: "What's the one thing I should do right now?",
+          content: "Give me two small things I could do right now.",
         },
       ],
       toolName: "recommend",
-      toolDescription: "Return one micro-action, the reason for it, and its category.",
+      toolDescription:
+        "Return two micro-actions to choose between, each with its reason and category.",
       inputSchema: {
         type: "object",
         properties: {
-          action: {
-            type: "string",
-            maxLength: 120,
-            description: "The action. Under 15 words, starting with a verb. No preamble.",
+          options: {
+            type: "array",
+            minItems: 2,
+            maxItems: 2,
+            items: {
+              type: "object",
+              properties: {
+                action: {
+                  type: "string",
+                  maxLength: 120,
+                  description: "The action. Under 15 words, starting with a verb. No preamble.",
+                },
+                why: {
+                  type: "string",
+                  maxLength: 240,
+                  description:
+                    "One sentence: the benefit they'd feel today, grounded in the specifics above.",
+                },
+                category: { type: "string", enum: [...WELLNESS_CATEGORIES] },
+              },
+              required: ["action", "why", "category"],
+            },
           },
-          why: {
-            type: "string",
-            maxLength: 240,
-            description:
-              "One sentence on why this one and not something else, referring to the specifics above.",
-          },
-          category: { type: "string", enum: [...WELLNESS_CATEGORIES] },
         },
-        required: ["action", "why", "category"],
+        required: ["options"],
       },
       maxTokens: 2048,
     });
 
-    const action = result.action?.trim();
-    const why = result.why?.trim();
-    if (!action || !why) return FALLBACK;
+    const options = result.options?.length ? result.options.map(toOption) : [toOption(result)];
+    const [first, second] = options;
+    if (!first) return FALLBACK;
 
-    return {
-      action,
-      why,
-      category: WELLNESS_CATEGORIES.includes(result.category as never)
-        ? (result.category as string)
-        : "mental",
-    };
+    const alternative = second && second.action !== first.action ? second : null;
+    return { ...first, alternative };
   } catch {
     // A failed model call shouldn't leave the home screen with a hole in it,
     // and the fallback says what it is rather than passing itself off as

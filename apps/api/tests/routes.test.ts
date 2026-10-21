@@ -123,6 +123,7 @@ const PROTECTED: Array<[string, string]> = [
   ["GET", "/api/recommendations/today"],
   ["POST", "/api/recommendations/today"],
   ["POST", "/api/recommendations/r1/feedback"],
+  ["POST", "/api/recommendations/r1/choose"],
   ["GET", "/api/score/today"],
   ["GET", "/api/score/history"],
   ["POST", "/api/chat/me/message"],

@@ -296,6 +296,11 @@ export type LogWorkoutInput = z.infer<typeof logWorkoutSchema>;
  * nobody responded to stays open forever rather than decaying into a rejection.
  * Silence is not a signal — see packages/shared/src/utils/preferences.ts.
  */
+/** Which of the two offered micro-actions the user picked. */
+export const chooseRecommendationSchema = z.object({
+  option: z.enum(["primary", "alternative"]),
+});
+
 export const recommendationFeedbackSchema = z.object({
   outcome: z.enum(["acted", "dismissed"]),
 });

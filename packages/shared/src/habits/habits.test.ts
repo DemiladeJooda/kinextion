@@ -13,7 +13,10 @@ import {
   isDueOn,
   showingUpStreak,
   canRestOn,
+  currentWindow,
+  orderForToday,
   type DateKey,
+  type TimeWindow,
   type ScheduledHabit,
 } from "./index.js";
 
@@ -293,5 +296,33 @@ describe("canRestOn", () => {
     expect(canRestOn(set(MON), "2026-10-20")).toBe(false);
     expect(canRestOn(set("2026-10-20"), "2026-10-20")).toBe(true); // re-saving the same day
     expect(canRestOn(set("2026-10-18"), "2026-10-20")).toBe(true); // last week's Sunday
+  });
+});
+
+describe("orderForToday", () => {
+  const h = (id: string, timeWindow: TimeWindow, consistency: number | null) => ({ id, timeWindow, consistency });
+
+  it("puts what's due now first, then any time, then later", () => {
+    const list = [h("eve", "evening", 1), h("any", "anytime", 1), h("am", "morning", 0.2)];
+    expect(orderForToday(list, 9).map((x) => x.id)).toEqual(["am", "any", "eve"]);
+  });
+
+  it("keeps a missed morning habit near the top in the afternoon", () => {
+    const list = [h("any", "anytime", 1), h("am", "morning", 0.2), h("eve", "evening", 1)];
+    expect(orderForToday(list, 14).map((x) => x.id)).toEqual(["am", "any", "eve"]);
+  });
+
+  it("puts the easiest win first within a window", () => {
+    const list = [h("hard", "anytime", 0.3), h("new", "anytime", null), h("easy", "anytime", 0.95)];
+    expect(orderForToday(list, 9).map((x) => x.id)).toEqual(["easy", "new", "hard"]);
+  });
+
+  it("knows the windows", () => {
+    expect([currentWindow(6), currentWindow(12), currentWindow(16), currentWindow(17)]).toEqual([
+      "morning",
+      "midday",
+      "midday",
+      "evening",
+    ]);
   });
 });

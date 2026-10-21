@@ -14,6 +14,11 @@
  *     rather than a render;
  *   - "Learned from you" shows what the feedback has actually taught it, in
  *     the same words the generator is given.
+ *
+ * It offers two options first. Choosing between two feels like your own
+ * decision rather than being told what to do (Possibilities, in Zoe Chance's
+ * 4Ps), and the pick itself is a signal: the option passed over is kept on
+ * the row. Once one is picked, the card is the single action as before.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -26,7 +31,14 @@ import Animated, { FadeIn } from "react-native-reanimated";
 import { useApi } from "../hooks/useApi";
 import type { RemoteRecommendation } from "../services";
 import { Badge, Card, Txt, TypingDots } from "./ui";
-import { categoryColor, color, radius, space, tint, type Category } from "../theme";
+import {
+  categoryColor,
+  color,
+  radius,
+  space,
+  tint,
+  type Category,
+} from "../theme";
 
 type Phase = "loading" | "ready" | "error";
 
@@ -34,7 +46,8 @@ export function MicroRecommendation() {
   const api = useApi();
   const router = useRouter();
 
-  const [recommendation, setRecommendation] = useState<RemoteRecommendation | null>(null);
+  const [recommendation, setRecommendation] =
+    useState<RemoteRecommendation | null>(null);
   const [basis, setBasis] = useState<string[]>([]);
   const [learned, setLearned] = useState<string[]>([]);
   const [phase, setPhase] = useState<Phase>("loading");
@@ -61,14 +74,16 @@ export function MicroRecommendation() {
         setPhase("ready");
       } catch (err) {
         if (id !== requestId.current) return;
-        setErrorMsg(err instanceof Error ? err.message : "Couldn't load today's action.");
+        setErrorMsg(
+          err instanceof Error ? err.message : "Couldn't load today's action.",
+        );
         setPhase("error");
       } finally {
         if (id === requestId.current) setBusy(false);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [],
   );
 
   useEffect(() => {
@@ -96,7 +111,7 @@ export function MicroRecommendation() {
     void Haptics.notificationAsync(
       outcome === "acted"
         ? Haptics.NotificationFeedbackType.Success
-        : Haptics.NotificationFeedbackType.Warning
+        : Haptics.NotificationFeedbackType.Warning,
     );
 
     try {
@@ -106,6 +121,38 @@ export function MicroRecommendation() {
       setErrorMsg("Couldn't save that — tap again?");
     }
   };
+
+  /** Pick one of the two. Optimistic, rolled back if the write fails. */
+  const choose = async (option: "primary" | "alternative") => {
+    if (!recommendation || busy) return;
+    const previous = recommendation;
+    const now = new Date().toISOString();
+    setRecommendation(
+      option === "alternative" && previous.alternative
+        ? {
+            ...previous,
+            content: previous.alternative,
+            category: previous.alternativeCategory ?? previous.category,
+            context: previous.alternativeContext ?? null,
+            alternative: previous.content,
+            alternativeCategory: previous.category,
+            alternativeContext: previous.context,
+            chosenAt: now,
+          }
+        : { ...previous, chosenAt: now },
+    );
+    void Haptics.selectionAsync();
+    try {
+      setRecommendation(await api.chooseRecommendation(previous.id, option));
+    } catch {
+      setRecommendation(previous);
+      setErrorMsg("Couldn't save that — tap again?");
+    }
+  };
+
+  const choosing = Boolean(
+    recommendation?.alternative && !recommendation?.chosenAt,
+  );
 
   const accent = recommendation
     ? (categoryColor[recommendation.category as Category] ?? color.purple)
@@ -141,14 +188,23 @@ export function MicroRecommendation() {
         <Txt variant="bodyStrong" style={{ flex: 1 }}>
           Micro Recommendation
         </Txt>
-        <Badge label={learned.length ? "Learning" : "Live AI"} accent={done ? color.green : color.purple} />
+        <Badge
+          label={learned.length ? "Learning" : "Live AI"}
+          accent={done ? color.green : color.purple}
+        />
       </View>
 
       {phase === "loading" ? (
         <View style={{ paddingVertical: space.md }}>
           <TypingDots accent={color.purple} />
-          <Txt variant="small" c={color.textFaint} style={{ marginTop: space.sm }}>
-            {learned.length ? "Reading your day and what's worked before…" : "Reading your day…"}
+          <Txt
+            variant="small"
+            c={color.textFaint}
+            style={{ marginTop: space.sm }}
+          >
+            {learned.length
+              ? "Reading your day and what's worked before…"
+              : "Reading your day…"}
           </Txt>
         </View>
       ) : phase === "error" || !recommendation ? (
@@ -161,7 +217,12 @@ export function MicroRecommendation() {
               void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               void load();
             }}
-            style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: space.md }}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 5,
+              marginTop: space.md,
+            }}
           >
             <Ionicons name="refresh" size={14} color={color.purple} />
             <Txt variant="small" c={color.purple}>
@@ -169,11 +230,75 @@ export function MicroRecommendation() {
             </Txt>
           </Pressable>
         </View>
+      ) : choosing ? (
+        <Animated.View
+          entering={FadeIn.duration(300)}
+          style={{ gap: space.sm }}
+        >
+          <Txt variant="small" c={color.textMuted}>
+            Two small things. Pick whichever sounds easier right now.
+          </Txt>
+          {(
+            [
+              [
+                "primary",
+                recommendation.content,
+                recommendation.context,
+                recommendation.category,
+              ],
+              [
+                "alternative",
+                recommendation.alternative ?? "",
+                recommendation.alternativeContext ?? null,
+                recommendation.alternativeCategory ?? recommendation.category,
+              ],
+            ] as const
+          ).map(([option, content, why, category]) => {
+            const optionAccent =
+              categoryColor[category as Category] ?? color.purple;
+            return (
+              <Pressable
+                key={option}
+                onPress={() => void choose(option)}
+                disabled={busy}
+                accessibilityRole="button"
+                accessibilityLabel={`Pick: ${content}`}
+                style={({ pressed }) => ({
+                  padding: space.md,
+                  borderRadius: radius.md,
+                  borderWidth: 1,
+                  borderColor: tint(optionAccent, 0.35),
+                  backgroundColor: tint(optionAccent, pressed ? 0.14 : 0.06),
+                })}
+              >
+                <Txt variant="bodyStrong">{content}</Txt>
+                {why ? (
+                  <Txt
+                    variant="small"
+                    c={color.textMuted}
+                    style={{ marginTop: 3 }}
+                  >
+                    {why}
+                  </Txt>
+                ) : null}
+              </Pressable>
+            );
+          })}
+          {errorMsg ? (
+            <Txt variant="small" c={color.red}>
+              {errorMsg}
+            </Txt>
+          ) : null}
+        </Animated.View>
       ) : (
         <Animated.View entering={FadeIn.duration(300)}>
           <Txt
             variant="bodyStrong"
-            style={done ? { opacity: 0.5, textDecorationLine: "line-through" } : undefined}
+            style={
+              done
+                ? { opacity: 0.5, textDecorationLine: "line-through" }
+                : undefined
+            }
           >
             {recommendation.content}
           </Txt>
@@ -204,7 +329,14 @@ export function MicroRecommendation() {
 
           {/* What it was reading — the receipts for the line above. */}
           {basis.length ? (
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: space.md }}>
+            <View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                gap: 5,
+                marginTop: space.md,
+              }}
+            >
               {basis.map((b) => (
                 <View
                   key={b}
@@ -216,7 +348,11 @@ export function MicroRecommendation() {
                     borderColor: color.border,
                   }}
                 >
-                  <Txt variant="small" c={color.textFaint} style={{ fontSize: 10 }}>
+                  <Txt
+                    variant="small"
+                    c={color.textFaint}
+                    style={{ fontSize: 10 }}
+                  >
                     {b}
                   </Txt>
                 </View>
@@ -244,20 +380,39 @@ export function MicroRecommendation() {
                 borderColor: tint(color.pink, 0.18),
               }}
             >
-              <Ionicons name="school-outline" size={14} color={color.pink} style={{ marginTop: 2 }} />
+              <Ionicons
+                name="school-outline"
+                size={14}
+                color={color.pink}
+                style={{ marginTop: 2 }}
+              />
               <View style={{ flex: 1 }}>
-                <Txt variant="small" c={color.pink} style={{ fontSize: 11, fontWeight: "700" }}>
+                <Txt
+                  variant="small"
+                  c={color.pink}
+                  style={{ fontSize: 11, fontWeight: "700" }}
+                >
                   LEARNED FROM YOU
                 </Txt>
-                <Txt variant="small" c={color.textMuted} style={{ marginTop: 3 }}>
+                <Txt
+                  variant="small"
+                  c={color.textMuted}
+                  style={{ marginTop: 3 }}
+                >
                   {learned[0]}
                 </Txt>
               </View>
-              <Ionicons name="chevron-forward" size={14} color={color.textFaint} />
+              <Ionicons
+                name="chevron-forward"
+                size={14}
+                color={color.textFaint}
+              />
             </Pressable>
           ) : null}
 
-          <View style={{ flexDirection: "row", gap: space.sm, marginTop: space.lg }}>
+          <View
+            style={{ flexDirection: "row", gap: space.sm, marginTop: space.lg }}
+          >
             <Pressable
               onPress={() => void respond("acted")}
               disabled={done}
@@ -311,7 +466,11 @@ export function MicroRecommendation() {
           {/* Says out loud that skipping is information, because a user who
               knows it teaches the system faster than one who doesn't. */}
           {!done ? (
-            <Txt variant="small" c={color.textFaint} style={{ marginTop: space.md, fontSize: 11 }}>
+            <Txt
+              variant="small"
+              c={color.textFaint}
+              style={{ marginTop: space.md, fontSize: 11 }}
+            >
               Both answers train it. Skipping tells it as much as doing.
             </Txt>
           ) : null}

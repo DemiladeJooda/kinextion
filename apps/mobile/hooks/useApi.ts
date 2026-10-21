@@ -74,6 +74,8 @@ function useLiveApi() {
       getTodayRecommendation: () => withToken(api.getTodayRecommendation),
       requestRecommendation: (options?: { refresh?: boolean }) =>
         withToken((token) => api.requestRecommendation(token, options)),
+      chooseRecommendation: (id: string, option: "primary" | "alternative") =>
+        withToken((token) => api.chooseRecommendation(token, id, option)),
       sendRecommendationFeedback: (
         id: string,
         outcome: "acted" | "dismissed",
