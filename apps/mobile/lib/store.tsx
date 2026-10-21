@@ -27,6 +27,8 @@ import {
   habitProgress,
   isDueOn,
   localDateKey,
+  localHour,
+  tallyBetween,
   today,
   type DateKey,
 } from "@kinextion/shared";
@@ -63,6 +65,17 @@ export interface Habit {
   streakUnit: "day" | "week";
   /** Kept ÷ due over the loaded history; null before anything was due. */
   consistency: number | null;
+  /** Today's log, if any: done, the tiny version, or a planned rest day. */
+  todayState: "done" | "minimum" | "rest" | null;
+  /** Streak alive but the last occasion was missed — today saves it. */
+  atRisk: boolean;
+  /** Today's tick restarted the habit after a streak ended. */
+  comeback: boolean;
+  /** Due yesterday, not done, not rested — and it's still before noon, so
+   *  it can still be ticked. */
+  yesterdayOpen: boolean;
+  /** This calendar month so far: occasions kept and due. */
+  month: { kept: number; due: number };
   /** The rest of the loop, carried so the edit screen prefills without
    *  a second fetch. */
   craving: string | null;
@@ -89,7 +102,17 @@ interface AppState {
   } | null;
   loading: boolean;
   error: string | null;
+  /** Tap on a row: done if it isn't, cleared if it is. */
   toggleHabit: (id: string) => Promise<void>;
+  /**
+   * Set a habit's day to done, the tiny version, a rest day, or clear it.
+   * Defaults to today; pass `date` for yesterday (allowed until noon).
+   */
+  setHabitDay: (
+    id: string,
+    state: "done" | "minimum" | "rest" | "clear",
+    options?: { date?: DateKey; notes?: string },
+  ) => Promise<void>;
   addHabit: (input: CreateHabitInput) => Promise<void>;
   /** Accept several AI drafts at once, then refresh once rather than n times. */
   addHabits: (inputs: CreateHabitInput[]) => Promise<void>;
@@ -108,17 +131,26 @@ const Ctx = createContext<AppState | null>(null);
 /** How much history the phone loads — enough for streaks and a month view. */
 const HISTORY_DAYS = 90;
 
-/** Completed dates per habit, for the shared schedule functions. */
-function completedDates(logs: RemoteHabitLog[]): Map<string, Set<DateKey>> {
-  const map = new Map<string, Set<DateKey>>();
+/** Yesterday can be ticked until this local hour — matches the API. */
+const BACKFILL_UNTIL_HOUR = 12;
+
+function addTo(map: Map<string, Set<DateKey>>, habitId: string, key: DateKey) {
+  const set = map.get(habitId);
+  if (set) set.add(key);
+  else map.set(habitId, new Set([key]));
+}
+
+/** Kept dates (done or minimum) and rest dates per habit, for the shared
+ *  schedule functions. The same split the API scores with. */
+function logMaps(logs: RemoteHabitLog[]) {
+  const completed = new Map<string, Set<DateKey>>();
+  const rest = new Map<string, Set<DateKey>>();
   for (const l of logs) {
-    if (!l.completed) continue;
     const key = dateKeyOf(l.date);
-    const set = map.get(l.habitId);
-    if (set) set.add(key);
-    else map.set(l.habitId, new Set([key]));
+    if (l.completed) addTo(completed, l.habitId, key);
+    else if (l.state === "rest") addTo(rest, l.habitId, key);
   }
-  return map;
+  return { completed, rest };
 }
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
@@ -186,22 +218,25 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn]);
 
-  const toggleHabit = useCallback(
-    async (id: string) => {
-      const todayStr = today();
+  const setHabitDay = useCallback<AppState["setHabitDay"]>(
+    async (id, state, options = {}) => {
+      const date = options.date ?? today();
       const sameDay = (l: RemoteHabitLog) =>
-        l.habitId === id && dateKeyOf(l.date) === todayStr;
+        l.habitId === id && dateKeyOf(l.date) === date;
       const previous = logs.find(sameDay);
-      const completed = !(previous?.completed ?? false);
+      const completed = state === "done" || state === "minimum";
+      const logState = state === "clear" ? "done" : state;
+      const notes = options.notes ?? previous?.notes ?? undefined;
 
       // Show it now; the server's row replaces this placeholder when it lands.
       const optimistic: RemoteHabitLog = {
-        id: previous?.id ?? `pending-${id}`,
+        id: previous?.id ?? `pending-${id}-${date}`,
         habitId: id,
         userId: previous?.userId ?? "",
-        date: todayStr,
+        date,
         completed,
-        notes: previous?.notes ?? null,
+        state: logState,
+        notes: notes ?? null,
       };
       setLogs((prev) => [optimistic, ...prev.filter((l) => !sameDay(l))]);
       setError(null);
@@ -209,20 +244,40 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       try {
         const { log, score: newScore } = await api.logHabit({
           habitId: id,
-          date: todayStr,
+          date,
           completed,
+          state: logState,
+          notes,
         });
         setLogs((prev) => [log, ...prev.filter((l) => !sameDay(l))]);
         applyScore(newScore ?? (await api.getTodayScore()));
-      } catch {
+      } catch (err) {
         setLogs((prev) => [
           ...(previous ? [previous] : []),
           ...prev.filter((l) => !sameDay(l)),
         ]);
-        setError("Couldn't save that. Try again.");
+        // The API's own words when it refused (a second rest day this week,
+        // yesterday after noon); a generic line when the network failed.
+        const message = err instanceof Error && err.message ? err.message : "";
+        setError(
+          message && !/reach Kinextion|Request failed/.test(message)
+            ? message
+            : "Couldn't save that. Try again.",
+        );
       }
     },
     [logs, api, applyScore],
+  );
+
+  const toggleHabit = useCallback(
+    async (id: string) => {
+      const todayStr = today();
+      const current = logs.find(
+        (l) => l.habitId === id && dateKeyOf(l.date) === todayStr,
+      );
+      await setHabitDay(id, current?.completed ? "clear" : "done");
+    },
+    [logs, setHabitDay],
   );
 
   const addHabit = useCallback(
@@ -284,16 +339,44 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   const habits = useMemo<Habit[]>(() => {
     const todayStr = today();
-    const byHabit = completedDates(logs);
+    const yesterday = addDays(todayStr, -1);
+    const monthStart = `${todayStr.slice(0, 7)}-01`;
+    const beforeNoon = localHour() < BACKFILL_UNTIL_HOUR;
+    const maps = logMaps(logs);
     const none = new Set<DateKey>();
+    const todayLog = new Map(
+      logs
+        .filter((l) => dateKeyOf(l.date) === todayStr)
+        .map((l) => [l.habitId, l]),
+    );
     return remoteHabits.map((h) => {
-      const done = byHabit.get(h.id) ?? none;
+      const done = maps.completed.get(h.id) ?? none;
+      const rest = maps.rest.get(h.id) ?? none;
       const scheduled = {
         ...h,
         startDate: localDateKey(new Date(h.createdAt)),
       };
-      const progress = habitProgress(scheduled, done, todayStr);
+      const progress = habitProgress(scheduled, done, todayStr, rest);
+      const log = todayLog.get(h.id);
+      const todayState = log?.completed
+        ? log.state === "minimum"
+          ? "minimum"
+          : "done"
+        : log?.state === "rest"
+          ? "rest"
+          : null;
       return {
+        todayState,
+        atRisk: progress.atRisk,
+        comeback: progress.comeback,
+        yesterdayOpen:
+          beforeNoon &&
+          h.frequency !== "weekly" &&
+          scheduled.startDate <= yesterday &&
+          isDueOn(scheduled, yesterday, done) &&
+          !done.has(yesterday) &&
+          !rest.has(yesterday),
+        month: tallyBetween(scheduled, done, monthStart, todayStr, rest),
         id: h.id,
         name: h.name,
         cue: h.cue ?? "",
@@ -332,6 +415,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       archiveHabit,
       submitCheckIn,
       logWorkout,
+      setHabitDay,
       refresh,
     }),
     [
@@ -351,6 +435,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       archiveHabit,
       submitCheckIn,
       logWorkout,
+      setHabitDay,
       refresh,
     ],
   );

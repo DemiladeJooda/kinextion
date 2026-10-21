@@ -20,7 +20,14 @@
  */
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Pressable, RefreshControl, ScrollView, View } from "react-native";
+import {
+  Modal,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  TextInput,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -39,6 +46,7 @@ import {
   Txt,
 } from "../../components/ui";
 import { useApi } from "../../hooks/useApi";
+import { addDays, today } from "@kinextion/shared";
 import { useAppState, type Habit } from "../../lib/store";
 import { categoryColor, color, radius, space, tint } from "../../theme";
 
@@ -78,6 +86,7 @@ export default function TodayScreen() {
   const {
     habits: allHabits,
     toggleHabit,
+    setHabitDay,
     score,
     periodScore,
     checkIn,
@@ -94,13 +103,24 @@ export default function TodayScreen() {
   // you're failing. It's a day off, and it waits out of the way.
   const due = allHabits.filter((h) => h.due);
   const notToday = allHabits.filter((h) => !h.due);
-  const habitsLeft = due.filter((h) => !h.done);
-  const habitsDone = due.filter((h) => h.done);
+  const habitsLeft = due.filter((h) => h.todayState === null);
+  // Done, the tiny version, and rest days all leave the list.
+  const habitsDone = due.filter((h) => h.todayState !== null);
+  const habitsKept = due.filter(
+    (h) => h.todayState === "done" || h.todayState === "minimum",
+  );
+  const yesterdayOpen = allHabits.filter((h) => h.yesterdayOpen);
+  const comeback = due.find(
+    (h) => h.comeback && h.todayState !== null && h.todayState !== "rest",
+  );
+  const [sheetFor, setSheetFor] = useState<Habit | null>(null);
 
   // The check-in counts as a to-do; the workout is offered, not required,
-  // so it never sits in the count as something you're behind on.
-  const required = due.length + 1;
-  const completed = habitsDone.length + (moodLogged ? 1 : 0);
+  // so it never sits in the count as something you're behind on. A rested
+  // habit isn't owed today, so it leaves the count too.
+  const rested = due.filter((h) => h.todayState === "rest").length;
+  const required = due.length - rested + 1;
+  const completed = habitsKept.length + (moodLogged ? 1 : 0);
   const remaining = required - completed;
 
   const onRefresh = useCallback(() => {
@@ -174,6 +194,17 @@ export default function TodayScreen() {
           <Label c={color.textFaint}>To do</Label>
         </View>
 
+        {comeback ? <ComebackBanner name={comeback.name} /> : null}
+
+        {yesterdayOpen.length > 0 ? (
+          <YesterdayList
+            habits={yesterdayOpen}
+            onTick={(h) =>
+              setHabitDay(h.id, "done", { date: addDays(today(), -1) })
+            }
+          />
+        ) : null}
+
         {allHabits.length === 0 ? <NoHabitsYet onStart={openNew} /> : null}
         {allHabits.length > 0 && due.length === 0 ? (
           <Txt
@@ -196,7 +227,7 @@ export default function TodayScreen() {
               <HabitRow
                 habit={h}
                 onToggle={() => toggleHabit(h.id)}
-                onEdit={() => openHabit(h.id)}
+                onMore={() => setSheetFor(h)}
               />
             </Animated.View>
           ))}
@@ -250,9 +281,16 @@ export default function TodayScreen() {
             <DoneRow
               key={h.id}
               title={h.name}
-              detail="Tap to undo"
+              detail={
+                h.todayState === "rest"
+                  ? "Rest day · undo"
+                  : h.todayState === "minimum"
+                    ? "Tiny version · undo"
+                    : "Tap to undo"
+              }
               accent={categoryColor[h.category]}
-              onPress={() => toggleHabit(h.id)}
+              faded={h.todayState === "rest"}
+              onPress={() => setHabitDay(h.id, "clear")}
             />
           ))}
           {moodLogged ? (
@@ -337,6 +375,19 @@ export default function TodayScreen() {
           <PatternsSection />
         </View>
       </ScrollView>
+
+      <LogSheet
+        habit={sheetFor}
+        onClose={() => setSheetFor(null)}
+        onMinimum={(h) => setHabitDay(h.id, "minimum")}
+        onRest={(h) => setHabitDay(h.id, "rest")}
+        onNote={(h, notes) =>
+          setHabitDay(h.id, h.todayState === null ? "clear" : h.todayState, {
+            notes,
+          })
+        }
+        onEdit={(h) => openHabit(h.id)}
+      />
     </SafeAreaView>
   );
 }
@@ -434,11 +485,11 @@ function TaskRow({
 function HabitRow({
   habit,
   onToggle,
-  onEdit,
+  onMore,
 }: {
   habit: Habit;
   onToggle: () => void;
-  onEdit: () => void;
+  onMore: () => void;
 }) {
   const accent = categoryColor[habit.category];
 
@@ -460,7 +511,20 @@ function HabitRow({
 
         <View style={{ flex: 1 }}>
           <Txt variant="bodyStrong">{habit.name}</Txt>
-          {habit.cue ? (
+          {/* At risk beats the cue: it's the one thing worth knowing today,
+              said as an invitation, never as "you broke it". */}
+          {habit.atRisk ? (
+            <Txt
+              variant="small"
+              c={color.amber}
+              style={{ marginTop: 1 }}
+              numberOfLines={1}
+            >
+              {habit.response
+                ? `Save your streak · even "${habit.response}" counts`
+                : "Save your streak today"}
+            </Txt>
+          ) : habit.cue ? (
             <Txt
               variant="small"
               c={color.textFaint}
@@ -484,15 +548,16 @@ function HabitRow({
           </View>
         ) : null}
 
-        {/* Separate hit target: tapping the row logs the habit, so editing
-            needs its own control rather than a long-press nobody discovers. */}
+        {/* Separate hit target: tapping the row logs the habit, so the other
+            options need their own control rather than a long-press nobody
+            discovers. */}
         <Pressable
           onPress={() => {
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            onEdit();
+            onMore();
           }}
           accessibilityRole="button"
-          accessibilityLabel={`Edit ${habit.name}`}
+          accessibilityLabel={`More options for ${habit.name}`}
           hitSlop={12}
           style={{ paddingLeft: space.sm }}
         >
@@ -504,6 +569,264 @@ function HabitRow({
         </Pressable>
       </View>
     </PressCard>
+  );
+}
+
+// ─── Logging options ──────────────────────────────────────────────────────────
+/**
+ * What "…" on a habit opens: the ways a day can go other than "done".
+ * The tiny version is first because it's the one to reach for on a bad day,
+ * and it names the user's own tiny version so there's nothing to recall.
+ */
+function LogSheet({
+  habit,
+  onClose,
+  onMinimum,
+  onRest,
+  onNote,
+  onEdit,
+}: {
+  habit: Habit | null;
+  onClose: () => void;
+  onMinimum: (h: Habit) => void;
+  onRest: (h: Habit) => void;
+  onNote: (h: Habit, notes: string) => void;
+  onEdit: (h: Habit) => void;
+}) {
+  const [writing, setWriting] = useState(false);
+  const [note, setNote] = useState("");
+
+  const close = () => {
+    setWriting(false);
+    setNote("");
+    onClose();
+  };
+  const choose = (fn: (h: Habit) => void) => () => {
+    if (!habit) return;
+    void Haptics.selectionAsync();
+    fn(habit);
+    close();
+  };
+
+  return (
+    <Modal
+      visible={habit !== null}
+      transparent
+      animationType="slide"
+      onRequestClose={close}
+    >
+      <Pressable
+        style={{ flex: 1, backgroundColor: color.scrim }}
+        onPress={close}
+        accessibilityLabel="Close"
+      />
+      <View
+        style={{
+          backgroundColor: color.surface,
+          borderTopLeftRadius: radius.xl,
+          borderTopRightRadius: radius.xl,
+          padding: space.xl,
+          paddingBottom: space.xxxl,
+          gap: space.sm,
+        }}
+      >
+        {habit ? (
+          <>
+            <Txt variant="heading" style={{ marginBottom: space.sm }}>
+              {habit.name}
+            </Txt>
+
+            {writing ? (
+              <View style={{ gap: space.md }}>
+                <TextInput
+                  value={note}
+                  onChangeText={setNote}
+                  placeholder="How did it go?"
+                  placeholderTextColor={color.textFaint}
+                  maxLength={500}
+                  multiline
+                  autoFocus
+                  style={{
+                    minHeight: 80,
+                    color: color.text,
+                    borderWidth: 1,
+                    borderColor: color.border,
+                    borderRadius: radius.md,
+                    padding: space.md,
+                    textAlignVertical: "top",
+                  }}
+                />
+                <Button
+                  label="Save note"
+                  accent={color.amber}
+                  disabled={!note.trim()}
+                  onPress={() => {
+                    onNote(habit, note.trim());
+                    close();
+                  }}
+                />
+              </View>
+            ) : (
+              <>
+                <SheetOption
+                  icon="leaf-outline"
+                  accent={color.green}
+                  title="I did the tiny version"
+                  detail={
+                    habit.response
+                      ? `"${habit.response}" · keeps your streak`
+                      : "Keeps your streak"
+                  }
+                  onPress={choose(onMinimum)}
+                />
+                <SheetOption
+                  icon="moon-outline"
+                  accent={color.teal}
+                  title="Take a rest day"
+                  detail="One a week · your streak is safe"
+                  onPress={choose(onRest)}
+                />
+                <SheetOption
+                  icon="create-outline"
+                  accent={color.amber}
+                  title="Add a note"
+                  onPress={() => setWriting(true)}
+                />
+                <SheetOption
+                  icon="options-outline"
+                  accent={color.textMuted}
+                  title="Edit habit"
+                  onPress={choose(onEdit)}
+                />
+              </>
+            )}
+          </>
+        ) : null}
+      </View>
+    </Modal>
+  );
+}
+
+function SheetOption({
+  icon,
+  accent,
+  title,
+  detail,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  accent: string;
+  title: string;
+  detail?: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "center",
+        gap: space.md,
+        paddingVertical: space.md,
+        paddingHorizontal: space.md,
+        borderRadius: radius.md,
+        backgroundColor: pressed ? color.surfaceAlt : "transparent",
+      })}
+    >
+      <View
+        style={{
+          width: 34,
+          height: 34,
+          borderRadius: 17,
+          backgroundColor: tint(accent, 0.14),
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Ionicons name={icon} size={17} color={accent} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Txt variant="bodyStrong">{title}</Txt>
+        {detail ? (
+          <Txt variant="small" c={color.textFaint} numberOfLines={1}>
+            {detail}
+          </Txt>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+}
+
+// ─── Yesterday and comebacks ──────────────────────────────────────────────────
+/**
+ * Habits due yesterday that were never ticked, until noon. Forgetting to tap
+ * shouldn't cost a streak for something that actually happened.
+ */
+function YesterdayList({
+  habits,
+  onTick,
+}: {
+  habits: Habit[];
+  onTick: (h: Habit) => void;
+}) {
+  return (
+    <Card style={{ marginBottom: space.lg, padding: space.lg, gap: space.md }}>
+      <View>
+        <Txt variant="bodyStrong">Did these yesterday?</Txt>
+        <Txt variant="small" c={color.textFaint} style={{ marginTop: 1 }}>
+          You can still tick them until noon.
+        </Txt>
+      </View>
+      {habits.map((h) => (
+        <Pressable
+          key={h.id}
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            onTick(h);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={`Mark ${h.name} done for yesterday`}
+          style={{ flexDirection: "row", alignItems: "center", gap: space.md }}
+        >
+          <View
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: 11,
+              borderWidth: 2,
+              borderColor: categoryColor[h.category],
+            }}
+          />
+          <Txt variant="body" style={{ flex: 1 }}>
+            {h.name}
+          </Txt>
+          <Txt variant="small" c={color.textFaint} style={{ fontSize: 12 }}>
+            Yesterday
+          </Txt>
+        </Pressable>
+      ))}
+    </Card>
+  );
+}
+
+/**
+ * The first tick after a streak ended. Coming back is the behaviour worth
+ * celebrating (in a 61,000-person study, a small reward for returning after
+ * a miss beat 53 other ideas), so it gets its own moment instead of a zero.
+ */
+function ComebackBanner({ name }: { name: string }) {
+  return (
+    <Animated.View entering={FadeInDown.duration(350)}>
+      <Card accent={color.green} style={{ marginBottom: space.lg }}>
+        <Txt variant="bodyStrong" c={color.green}>
+          You&apos;re back on {name}.
+        </Txt>
+        <Txt variant="small" c={color.textMuted} style={{ marginTop: 3 }}>
+          Coming back is the habit. Day one of the next run starts now.
+        </Txt>
+      </Card>
+    </Animated.View>
   );
 }
 

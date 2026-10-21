@@ -1340,7 +1340,8 @@ export const demoApi: Api = {
       habitId: input.habitId,
       userId: USER_ID,
       date: input.date,
-      completed: input.completed,
+      completed: input.state === "rest" ? false : input.completed,
+      state: input.state ?? "done",
       notes: input.notes ?? null,
     };
     logs = [

@@ -74,12 +74,28 @@ vi.mock("@kinextion/database", () => {
           state.habits.find((h) => h.id === where.id) ?? null,
       },
       habitLog: {
-        findMany: async ({ where }: { where: { userId: string; completed?: boolean; date?: DateRange } }) => {
+        findMany: async ({
+          where,
+        }: {
+          where: {
+            userId: string;
+            habitId?: string;
+            completed?: boolean;
+            state?: string;
+            date?: DateRange;
+            OR?: Array<{ completed?: boolean; state?: string }>;
+          };
+        }) => {
           state.logQueries++;
+          const matches = (l: StoredLog, c: { completed?: boolean; state?: string }) =>
+            (c.completed === undefined || l.completed === c.completed) &&
+            (c.state === undefined || (l.state ?? "done") === c.state);
           return state.logs.filter(
             (l) =>
               l.userId === where.userId &&
-              (where.completed === undefined || l.completed === where.completed) &&
+              (where.habitId === undefined || l.habitId === where.habitId) &&
+              matches(l, where) &&
+              (!where.OR || where.OR.some((c) => matches(l, c))) &&
               inRange(l.date, where.date)
           );
         },
@@ -90,12 +106,13 @@ vi.mock("@kinextion/database", () => {
         }: {
           where: { habitId_date: { habitId: string; date: Date } };
           create: Omit<StoredLog, "id">;
-          update: { completed: boolean };
+          update: { completed: boolean; state?: string };
         }) => {
           const { habitId, date } = where.habitId_date;
           const existing = state.logs.find((l) => l.habitId === habitId && l.date.getTime() === date.getTime());
           if (existing) {
             existing.completed = update.completed;
+            existing.state = update.state;
             return existing;
           }
           const row = { id: `log_${state.logs.length + 1}`, ...create };
@@ -226,6 +243,7 @@ describe("log states", () => {
   });
 
   it("marks a log for an earlier day as a backfill", async () => {
+    vi.setSystemTime(new Date("2026-10-20T15:00:00Z")); // 10am in Dallas
     await app.inject({
       method: "POST",
       url: "/api/habits/log",
@@ -294,5 +312,51 @@ describe("POST /api/workouts", () => {
       payload: { name: "Nap", type: "napping" },
     });
     expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("backfill and rest rules", () => {
+  const log = (payload: Record<string, unknown>) =>
+    app.inject({
+      method: "POST",
+      url: "/api/habits/log",
+      headers: DALLAS,
+      payload: { habitId: "ckdaily0000000000000000", completed: true, ...payload },
+    });
+
+  it("lets yesterday be ticked before noon", async () => {
+    vi.setSystemTime(new Date("2026-10-20T15:00:00Z")); // 10am Tuesday in Dallas
+    expect((await log({ date: "2026-10-19" })).statusCode).toBe(200);
+  });
+
+  it("locks yesterday after noon, and anything older", async () => {
+    vi.setSystemTime(new Date("2026-10-20T18:00:00Z")); // 1pm in Dallas
+    expect((await log({ date: "2026-10-19" })).statusCode).toBe(400);
+    vi.setSystemTime(new Date("2026-10-20T15:00:00Z"));
+    expect((await log({ date: "2026-10-18" })).statusCode).toBe(400);
+  });
+
+  it("allows one rest day per habit per week", async () => {
+    vi.setSystemTime(new Date("2026-10-20T15:00:00Z")); // Tuesday morning
+    expect((await log({ date: "2026-10-19", state: "rest" })).statusCode).toBe(200); // Monday
+    const second = await log({ date: "2026-10-20", state: "rest" });
+    expect(second.statusCode).toBe(400);
+    expect(second.json().error).toMatch(/rest day/);
+  });
+
+  it("leaves a rest day out of the score and doesn't break the streak", async () => {
+    vi.setSystemTime(new Date("2026-10-20T15:00:00Z"));
+    state.logs.push({
+      id: "sun",
+      habitId: "ckdaily0000000000000000",
+      userId: "user_1",
+      date: new Date("2026-10-18T00:00:00Z"),
+      completed: true,
+      state: "done",
+    });
+    await log({ date: "2026-10-19", state: "rest" });
+    const res = await app.inject({ method: "GET", url: "/api/score/today", headers: DALLAS });
+    // Sunday kept, Monday rested: the showing-up streak runs through Monday.
+    expect(res.json().data.breakdown.streakDays).toBe(1);
   });
 });

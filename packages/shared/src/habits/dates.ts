@@ -63,6 +63,11 @@ export function localDateKey(at: Date = new Date(), timeZone?: string | null): D
   return `${p.year}-${pad(p.month)}-${pad(p.day)}`;
 }
 
+/** The hour (0–23) on the wall clock in `timeZone` at `at`. */
+export function localHour(at: Date = new Date(), timeZone?: string | null): number {
+  return timeZone ? zonedParts(at, timeZone).hour : at.getHours();
+}
+
 /** A `@db.Date` value (UTC midnight) back to its key. */
 export function dateKeyOf(date: Date | string): DateKey {
   return typeof date === "string" ? date.slice(0, 10) : date.toISOString().slice(0, 10);

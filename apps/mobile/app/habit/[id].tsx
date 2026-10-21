@@ -126,11 +126,7 @@ export default function EditHabitScreen() {
         >
           <ScreenHeader
             title={habit.name}
-            subtitle={
-              habit.streak > 0
-                ? `${habit.streak}-day streak running. Changes won't reset it.`
-                : "Shrink it until it's easy. That's usually the fix."
-            }
+            subtitle={habitSummary(habit)}
           />
 
           <HabitForm
@@ -170,4 +166,25 @@ export default function EditHabitScreen() {
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
+}
+
+/**
+ * "Best 23 · 18 of 22 this month" rather than a bare streak: the month count
+ * never drops to zero after one bad day, so it's the number that keeps
+ * someone going when the streak just reset.
+ */
+function habitSummary(habit: {
+  streak: number;
+  bestStreak: number;
+  streakUnit: "day" | "week";
+  month: { kept: number; due: number };
+}): string {
+  const unit = habit.streakUnit === "week" ? "week" : "day";
+  const parts: string[] = [];
+  if (habit.streak > 0) parts.push(`${habit.streak}-${unit} streak`);
+  if (habit.bestStreak > habit.streak) parts.push(`best ${habit.bestStreak}`);
+  if (habit.month.due > 0) parts.push(`${habit.month.kept} of ${habit.month.due} this month`);
+  return parts.length
+    ? `${parts.join(" · ")}. Changes won't reset it.`
+    : "Shrink it until it's easy. That's usually the fix.";
 }

@@ -19,7 +19,7 @@ import {
   localDateKey,
   tallyBetween,
 } from "@kinextion/shared";
-import { completedByHabit, toScheduled } from "./score.js";
+import { habitLogMaps, toScheduled } from "./score.js";
 import { computePatterns } from "./patterns.js";
 import { loadFactsForPrompt } from "./memory/store.js";
 
@@ -79,7 +79,7 @@ export async function buildHabitContext(
     }),
     prisma.habitLog.findMany({
       where: { userId, date: { gte: since } },
-      select: { habitId: true, completed: true, date: true },
+      select: { habitId: true, completed: true, date: true, state: true },
     }),
     prisma.moodEntry.findMany({
       where: { userId, createdAt: { gte: moodSince } },
@@ -131,13 +131,14 @@ export async function buildHabitContext(
      * isn't failing on Tuesdays — scoring either way would have the
      * assistant shrink a habit that's going fine.
      */
-    const byHabit = completedByHabit(logs);
+    const { completed: byHabit, rest: restByHabit } = habitLogMaps(logs);
     const stats = active.map((h) => {
       const { kept, due } = tallyBetween(
         toScheduled(h, tz),
         byHabit.get(h.id) ?? new Set<string>(),
         fromKey,
-        today
+        today,
+        restByHabit.get(h.id)
       );
       return { habit: h, age: due, done: kept, rate: due ? kept / due : 0 };
     });

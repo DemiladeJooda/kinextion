@@ -12,6 +12,7 @@ import {
   habitTotalsForDay,
   isDueOn,
   showingUpStreak,
+  canRestOn,
   type DateKey,
   type ScheduledHabit,
 } from "./index.js";
@@ -98,11 +99,12 @@ describe("X times a week", () => {
   });
 
   it("only keeps a week that reached the target", () => {
-    // Week of 5 Oct: 3 done. Week of 12 Oct: only 2.
+    // Week of 5 Oct: 3 done. Week of 12 Oct: only 2, so that week is missed —
+    // forgiven once, which leaves the streak alive but at risk.
     const done = set("2026-10-05", "2026-10-07", "2026-10-09", "2026-10-13", "2026-10-15");
     const p = habitProgress(thrice, done, "2026-10-20");
-    expect(p.streak).toBe(0);
-    expect(p.bestStreak).toBe(1);
+    expect(p.streak).toBe(1);
+    expect(p.atRisk).toBe(true);
     expect(p.consistency).toBe(1 / 2);
   });
 
@@ -112,13 +114,11 @@ describe("X times a week", () => {
 });
 
 describe("habitProgress", () => {
-  it("matches the old rule for a daily habit", () => {
+  it("counts a daily run, and today stays open until it's done", () => {
     const done = set("2026-10-17", "2026-10-18", MON);
     expect(habitProgress(daily, done, MON).streak).toBe(3);
     // Today not done yet: counts back from yesterday, not zero.
-    expect(habitProgress(daily, done, "2026-10-20").streak).toBe(3);
-    // A missed day ends it.
-    expect(habitProgress(daily, done, "2026-10-21").streak).toBe(0);
+    expect(habitProgress(daily, done, "2026-10-20")).toMatchObject({ streak: 3, atRisk: false });
   });
 
   it("an off-day never breaks a custom-day streak", () => {
@@ -128,11 +128,11 @@ describe("habitProgress", () => {
     expect(p.consistency).toBe(1);
   });
 
-  it("a missed scheduled day does break it", () => {
+  it("forgives one missed scheduled day, and still counts it as missed", () => {
     const done = set("2026-10-12", "2026-10-16", MON); // Wednesday missed
     const p = habitProgress({ ...mwf, startDate: "2026-10-12" }, done, MON);
-    expect(p.streak).toBe(2);
-    expect(p.bestStreak).toBe(2);
+    expect(p.streak).toBe(3);
+    expect(p.atRisk).toBe(false); // saved on Friday
     expect(p.consistency).toBe(3 / 4);
   });
 
@@ -146,8 +146,10 @@ describe("habitProgress", () => {
   });
 
   it("keeps the best streak after the current one ends", () => {
-    const done = set("2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-06");
-    const p = habitProgress({ ...daily, startDate: "2026-10-01" }, done, "2026-10-07");
+    // Four kept, then three misses: the first is forgiven, the month's freeze
+    // covers the second, the third ends it.
+    const done = set("2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-08");
+    const p = habitProgress({ ...daily, startDate: "2026-10-01" }, done, "2026-10-08");
     expect(p.streak).toBe(1);
     expect(p.bestStreak).toBe(4);
   });
@@ -205,5 +207,91 @@ describe("describeSchedule", () => {
     expect(describeSchedule(mwf)).toBe("Mon · Wed · Fri");
     expect(describeSchedule({ frequency: "custom", targetDays: [0, 6] })).toBe("Sat · Sun");
     expect(describeSchedule(weekly)).toBe("Once a week");
+  });
+});
+
+describe("forgiving streaks", () => {
+  const start = { ...daily, startDate: "2026-10-01" };
+
+  it("produces 11 for the 14-day example in the plan", () => {
+    // M T W(min) T F S(rest) S | M T(miss) W T F(min) S | S today, open.
+    const done = set(
+      "2026-10-05", "2026-10-06", "2026-10-07", "2026-10-08", "2026-10-09",
+      "2026-10-11", "2026-10-12", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17"
+    );
+    const rest = set("2026-10-10");
+    const p = habitProgress({ ...daily, startDate: "2026-10-05" }, done, "2026-10-18", rest);
+    expect(p.streak).toBe(11);
+    expect(p.atRisk).toBe(false);
+    // 11 kept of 12 due: the rest day isn't due, today isn't over.
+    expect(p.consistency).toBeCloseTo(11 / 12);
+  });
+
+  it("puts the streak at risk after one miss, without ending it", () => {
+    const done = set("2026-10-01", "2026-10-02", "2026-10-03");
+    expect(habitProgress(start, done, "2026-10-05")).toMatchObject({ streak: 3, atRisk: true });
+  });
+
+  it("uses one freeze a month on a second miss, then ends the streak on the next", () => {
+    const done = set("2026-10-01", "2026-10-02", "2026-10-03");
+    // Misses on the 4th (forgiven) and 5th (freeze): still alive on the 6th.
+    expect(habitProgress(start, done, "2026-10-06")).toMatchObject({ streak: 3, atRisk: true });
+    // A third miss in a row ends it.
+    expect(habitProgress(start, done, "2026-10-07")).toMatchObject({ streak: 0, atRisk: false });
+  });
+
+  it("allows only one freeze per calendar month", () => {
+    // Two separate double-misses in October: the first uses the freeze, the
+    // second ends the streak.
+    const done = set("2026-10-01", "2026-10-02", "2026-10-05", "2026-10-06", "2026-10-09");
+    const p = habitProgress(start, done, "2026-10-09");
+    expect(p.streak).toBe(1);
+    expect(p.bestStreak).toBe(4);
+  });
+
+  it("treats a rest day as neutral", () => {
+    const done = set("2026-10-01", "2026-10-03");
+    const p = habitProgress(start, done, "2026-10-03", set("2026-10-02"));
+    expect(p).toMatchObject({ streak: 2, atRisk: false, consistency: 1 });
+  });
+
+  it("flags a comeback on the first keep after a streak ended", () => {
+    const done = set("2026-10-01", "2026-10-02", "2026-10-09");
+    expect(habitProgress(start, done, "2026-10-09")).toMatchObject({ streak: 1, comeback: true });
+    // The first-ever keep isn't a comeback.
+    expect(habitProgress(start, set("2026-10-01"), "2026-10-01").comeback).toBe(false);
+    // Nor is a keep that only continues a forgiven run.
+    expect(habitProgress(start, set("2026-10-01", "2026-10-03"), "2026-10-03").comeback).toBe(false);
+  });
+});
+
+describe("rest days and minimums in the score", () => {
+  const habits = [{ id: "a", ...daily }];
+
+  it("drops a rested habit from the day's denominator", () => {
+    const totals = habitTotalsForDay(habits, new Map(), "2026-10-20", {
+      restByHabit: new Map([["a", set("2026-10-20")]]),
+    });
+    expect(totals).toEqual({ habitsTotal: 0, habitsCompleted: 0 });
+  });
+
+  it("gives the minimum most, but not all, of the credit", () => {
+    const totals = habitTotalsForDay(habits, new Map([["a", set("2026-10-20")]]), "2026-10-20", {
+      minimumByHabit: new Map([["a", set("2026-10-20")]]),
+    });
+    expect(totals).toEqual({ habitsTotal: 1, habitsCompleted: 0.75 });
+  });
+
+  it("doesn't let a rest day break the showing-up streak", () => {
+    expect(showingUpStreak([daily], set("2026-10-17", MON), "2026-10-20", 90, set("2026-10-18"))).toBe(2);
+  });
+});
+
+describe("canRestOn", () => {
+  it("allows one rest day per week", () => {
+    expect(canRestOn(set(), "2026-10-20")).toBe(true);
+    expect(canRestOn(set(MON), "2026-10-20")).toBe(false);
+    expect(canRestOn(set("2026-10-20"), "2026-10-20")).toBe(true); // re-saving the same day
+    expect(canRestOn(set("2026-10-18"), "2026-10-20")).toBe(true); // last week's Sunday
   });
 });

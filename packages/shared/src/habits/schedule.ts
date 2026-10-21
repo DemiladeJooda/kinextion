@@ -100,13 +100,15 @@ interface Occurrence {
  *
  * Today (or this week) is left out while it's still open and not done yet —
  * an unticked habit at 9am hasn't been missed, so it must neither extend nor
- * break anything.
+ * break anything. A planned rest day is left out entirely: it's neutral, not
+ * a miss and not a keep.
  */
 function occurrences(
   habit: ScheduledHabit,
   completed: ReadonlySet<DateKey>,
   from: DateKey,
-  today: DateKey
+  today: DateKey,
+  rest: ReadonlySet<DateKey> = EMPTY
 ): Occurrence[] {
   const start = habit.startDate && habit.startDate > from ? habit.startDate : from;
   const out: Occurrence[] = [];
@@ -131,11 +133,14 @@ function occurrences(
   for (let d = start; d <= today; d = addDays(d, 1)) {
     if (!isPlannedOn(habit, d)) continue;
     const done = completed.has(d);
+    if (!done && rest.has(d)) continue;
     if (d === today && !done) continue;
     out.push({ key: d, done });
   }
   return out;
 }
+
+const EMPTY: ReadonlySet<DateKey> = new Set();
 
 /** Earliest day worth walking from: the start date, else the oldest log. */
 function walkStart(habit: ScheduledHabit, completed: ReadonlySet<DateKey>, today: DateKey): DateKey {
@@ -145,55 +150,110 @@ function walkStart(habit: ScheduledHabit, completed: ReadonlySet<DateKey>, today
   return earliest < floor ? floor : earliest;
 }
 
+/** Streak freezes available per calendar month, used automatically. */
+export const STREAK_FREEZES_PER_MONTH = 1;
+
 export interface HabitProgress {
-  /** Consecutive kept occasions ending at the latest one. Days for daily and
-   *  custom habits, weeks for weekly ones. */
+  /** Kept occasions in the current run. Days for daily and custom habits,
+   *  weeks for weekly ones. A forgiven miss doesn't add to it. */
   streak: number;
   /** Longest run inside the history passed in. */
   bestStreak: number;
-  /** Kept ÷ due over the history passed in, or null before anything was due. */
+  /** Kept ÷ due over the history passed in, or null before anything was due.
+   *  Rest days aren't due. */
   consistency: number | null;
   /** "day" or "week" — what one unit of `streak` means. */
   unit: "day" | "week";
+  /**
+   * The streak is alive but its latest occasion was missed: doing the next
+   * one saves it. Shown as "save your streak", never as "you broke it".
+   */
+  atRisk: boolean;
+  /** Today's (or this week's) keep started a new run after a streak ended. */
+  comeback: boolean;
 }
 
+/**
+ * Streaks that survive a bad day.
+ *
+ *   - Done and "did the minimum" both count.
+ *   - A planned rest day is neutral.
+ *   - Never miss twice: one missed occasion puts the streak at risk instead
+ *     of ending it. The next keep saves it.
+ *   - A second miss in a row ends it, unless a streak freeze covers it — one
+ *     a month, applied automatically.
+ *
+ * Why: missing a single day barely affects habit formation (Lally et al.
+ * 2010), while showing someone a broken streak makes them drop off, and
+ * that drop is smaller when a streak can be repaired (Silverman & Barasch
+ * 2023). Coming back after a miss is the behaviour worth rewarding
+ * (Milkman et al. 2021), so it's tracked as `comeback`.
+ */
 export function habitProgress(
   habit: ScheduledHabit,
   completed: ReadonlySet<DateKey>,
-  today: DateKey
+  today: DateKey,
+  rest: ReadonlySet<DateKey> = EMPTY
 ): HabitProgress {
-  const occ = occurrences(habit, completed, walkStart(habit, completed, today), today);
+  const occ = occurrences(habit, completed, walkStart(habit, completed, today), today, rest);
 
-  let best = 0;
   let run = 0;
+  let best = 0;
   let kept = 0;
+  let missesInARow = 0;
+  let everBroke = false;
+  let runStartedAfterBreak = false;
+  const freezesUsed = new Map<string, number>();
+
   for (const o of occ) {
     if (o.done) {
+      if (run === 0) runStartedAfterBreak = everBroke;
       run++;
       kept++;
+      missesInARow = 0;
       if (run > best) best = run;
-    } else {
-      run = 0;
+      continue;
     }
+
+    missesInARow++;
+    if (run === 0) continue; // nothing to lose
+    if (missesInARow === 1) continue; // never miss twice: the first is forgiven
+
+    const month = o.key.slice(0, 7);
+    const used = freezesUsed.get(month) ?? 0;
+    if (used < STREAK_FREEZES_PER_MONTH) {
+      freezesUsed.set(month, used + 1);
+      continue;
+    }
+
+    run = 0;
+    everBroke = true;
   }
+
+  const last = occ[occ.length - 1];
+  const current = isWeekly(habit) ? weekStartKey(today) : today;
 
   return {
     streak: run,
     bestStreak: best,
     consistency: occ.length ? kept / occ.length : null,
     unit: isWeekly(habit) ? "week" : "day",
+    atRisk: run > 0 && missesInARow > 0,
+    comeback: run === 1 && runStartedAfterBreak && !!last?.done && last.key === current,
   };
 }
 
 /** Occasions kept and occasions due between two dates (inclusive). Missed
- *  days count even though they have no log row — that's the point. */
+ *  days count even though they have no log row — that's the point. Rest
+ *  days don't count either way. */
 export function tallyBetween(
   habit: ScheduledHabit,
   completed: ReadonlySet<DateKey>,
   from: DateKey,
-  to: DateKey
+  to: DateKey,
+  rest: ReadonlySet<DateKey> = EMPTY
 ): { kept: number; due: number } {
-  const occ = occurrences(habit, completed, from, to);
+  const occ = occurrences(habit, completed, from, to, rest);
   return { kept: occ.filter((o) => o.done).length, due: occ.length };
 }
 
@@ -202,9 +262,10 @@ export function consistencyBetween(
   habit: ScheduledHabit,
   completed: ReadonlySet<DateKey>,
   from: DateKey,
-  to: DateKey
+  to: DateKey,
+  rest: ReadonlySet<DateKey> = EMPTY
 ): number | null {
-  const { kept, due } = tallyBetween(habit, completed, from, to);
+  const { kept, due } = tallyBetween(habit, completed, from, to, rest);
   return due ? kept / due : null;
 }
 
@@ -212,39 +273,53 @@ export interface DayHabit extends ScheduledHabit {
   id: string;
 }
 
+/** Share of a habit's score points earned by doing only the tiny version.
+ *  Full streak credit, most of the score: the minimum should always be
+ *  worth doing, and the full version still worth more. A design judgement. */
+export const MINIMUM_SCORE_CREDIT = 0.75;
+
 /**
  * The habit half of one day's score: how many habits were due that day and
  * how many of those were done. A habit done on a day it wasn't due is a
  * bonus, not extra credit — counting it would let the total exceed 100%.
+ * A rest day leaves the denominator; a minimum earns MINIMUM_SCORE_CREDIT.
  */
 export function habitTotalsForDay(
   habits: readonly DayHabit[],
   completedByHabit: ReadonlyMap<string, ReadonlySet<DateKey>>,
-  day: DateKey
+  day: DateKey,
+  options: {
+    restByHabit?: ReadonlyMap<string, ReadonlySet<DateKey>>;
+    minimumByHabit?: ReadonlyMap<string, ReadonlySet<DateKey>>;
+  } = {}
 ): { habitsTotal: number; habitsCompleted: number } {
   let habitsTotal = 0;
   let habitsCompleted = 0;
-  const none: ReadonlySet<DateKey> = new Set();
   for (const habit of habits) {
-    const completed = completedByHabit.get(habit.id) ?? none;
+    const completed = completedByHabit.get(habit.id) ?? EMPTY;
     if (!isDueOn(habit, day, completed)) continue;
+    if (!completed.has(day) && options.restByHabit?.get(habit.id)?.has(day)) continue;
     habitsTotal++;
-    if (completed.has(day)) habitsCompleted++;
+    if (completed.has(day)) {
+      habitsCompleted += options.minimumByHabit?.get(habit.id)?.has(day) ? MINIMUM_SCORE_CREDIT : 1;
+    }
   }
-  return { habitsTotal, habitsCompleted };
+  return { habitsTotal, habitsCompleted: Math.round(habitsCompleted * 100) / 100 };
 }
 
 /**
  * The score's "showing up" streak: consecutive days, ending yesterday, on
  * which at least one habit was done. A day when nothing was scheduled at all
- * (a rest day for every custom habit) is skipped rather than counted as a
- * break — nobody should lose a streak to their own plan.
+ * (a rest day for every custom habit), or a day the user rested, is skipped
+ * rather than counted as a break — nobody should lose a streak to their own
+ * plan.
  */
 export function showingUpStreak(
   habits: readonly ScheduledHabit[],
   activeDays: ReadonlySet<DateKey>,
   today: DateKey,
-  maxDays = 90
+  maxDays = 90,
+  restDays: ReadonlySet<DateKey> = EMPTY
 ): number {
   let streak = 0;
   for (let i = 1; i <= maxDays; i++) {
@@ -253,10 +328,27 @@ export function showingUpStreak(
       streak++;
       continue;
     }
+    if (restDays.has(day)) continue;
     // Weekly habits never make a single day mandatory, so only fixed-day
     // schedules can turn an empty day into a break.
     const anythingPlanned = habits.some((h) => !isWeekly(h) && isPlannedOn(h, day));
     if (anythingPlanned) break;
   }
   return streak;
+}
+
+/**
+ * Can a rest day be taken on `day`? One per habit per week (Mon–Sun), so rest
+ * stays a plan rather than a way around every miss. A design judgement.
+ */
+export const REST_DAYS_PER_WEEK = 1;
+
+export function canRestOn(rest: ReadonlySet<DateKey>, day: DateKey): boolean {
+  const start = weekStartKey(day);
+  let used = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(start, i);
+    if (d !== day && rest.has(d)) used++;
+  }
+  return used < REST_DAYS_PER_WEEK;
 }

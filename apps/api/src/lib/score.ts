@@ -41,18 +41,41 @@ export function toScheduled<T extends { createdAt: Date }>(habit: T, timeZone: s
   return { ...habit, startDate: localDateKey(habit.createdAt, timeZone) };
 }
 
-/** Completed log dates grouped by habit. */
-export function completedByHabit(logs: { habitId: string; date: Date; completed: boolean }[]) {
-  const map = new Map<string, Set<DateKey>>();
-  for (const log of logs) {
-    if (!log.completed) continue;
-    const key = dateKeyOf(log.date);
-    const set = map.get(log.habitId);
-    if (set) set.add(key);
-    else map.set(log.habitId, new Set([key]));
-  }
-  return map;
+type LogRow = { habitId: string; date: Date; completed: boolean; state?: string | null };
+
+function add(map: Map<string, Set<DateKey>>, habitId: string, key: DateKey) {
+  const set = map.get(habitId);
+  if (set) set.add(key);
+  else map.set(habitId, new Set([key]));
 }
+
+/**
+ * Log dates grouped by habit, three ways: days that count (done or minimum),
+ * planned rest days, and the subset of counted days that were the minimum.
+ */
+export function habitLogMaps(logs: LogRow[]) {
+  const completed = new Map<string, Set<DateKey>>();
+  const rest = new Map<string, Set<DateKey>>();
+  const minimum = new Map<string, Set<DateKey>>();
+  for (const log of logs) {
+    const key = dateKeyOf(log.date);
+    if (log.completed) {
+      add(completed, log.habitId, key);
+      if (log.state === "minimum") add(minimum, log.habitId, key);
+    } else if (log.state === "rest") {
+      add(rest, log.habitId, key);
+    }
+  }
+  return { completed, rest, minimum };
+}
+
+/** Completed (done or minimum) log dates grouped by habit. */
+export function completedByHabit(logs: LogRow[]) {
+  return habitLogMaps(logs).completed;
+}
+
+/** Every log row that matters to a streak: kept days and rest days. */
+export const STREAK_LOG_FILTER = { OR: [{ completed: true }, { state: "rest" }] };
 
 /**
  * Recompute today's score from live data and persist it.
@@ -75,27 +98,31 @@ export async function recomputeTodayScore(userId: string, timeZone = "UTC") {
     prisma.habitLog.findMany({
       where: {
         userId,
-        completed: true,
+        ...STREAK_LOG_FILTER,
         date: { gte: dateFromKey(addDays(today, -MAX_STREAK_LOOKBACK)), lte: todayDate },
       },
-      select: { habitId: true, date: true, completed: true },
+      select: { habitId: true, date: true, completed: true, state: true },
     }),
     prisma.workoutLog.findFirst({ where: { userId, createdAt: { gte: dayStart } } }),
     prisma.moodEntry.findMany({ where: { userId, createdAt: { gte: dayStart } } }),
   ]);
 
   const scheduled = habits.map((h) => toScheduled(h, timeZone));
-  const byHabit = completedByHabit(recentLogs);
-  const activeDays = new Set(recentLogs.map((l) => dateKeyOf(l.date)));
+  const maps = habitLogMaps(recentLogs);
+  const activeDays = new Set(recentLogs.filter((l) => l.completed).map((l) => dateKeyOf(l.date)));
+  const restDays = new Set(recentLogs.filter((l) => !l.completed).map((l) => dateKeyOf(l.date)));
 
   const breakdown = {
-    ...habitTotalsForDay(scheduled, byHabit, today),
+    ...habitTotalsForDay(scheduled, maps.completed, today, {
+      restByHabit: maps.rest,
+      minimumByHabit: maps.minimum,
+    }),
     workoutLogged: !!workoutLog,
     moodCheckedIn: moodEntries.length > 0,
     reflectionDone: moodEntries.some(
       (e: { journal: string | null; gratitude: string | null }) => !!(e.journal || e.gratitude)
     ),
-    streakDays: showingUpStreak(scheduled, activeDays, today, MAX_STREAK_LOOKBACK),
+    streakDays: showingUpStreak(scheduled, activeDays, today, MAX_STREAK_LOOKBACK, restDays),
   };
 
   const overallScore = calculateKinextionScore(breakdown);

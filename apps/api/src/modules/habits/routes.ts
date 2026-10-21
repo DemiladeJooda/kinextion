@@ -7,7 +7,19 @@ import {
   suggestHabitsSchema,
   discoverHabitsSchema,
 } from "@kinextion/shared";
-import { addDays, dateFromKey } from "@kinextion/shared";
+import {
+  addDays,
+  canRestOn,
+  dateFromKey,
+  dateKeyOf,
+  localHour,
+  weekStartKey,
+} from "@kinextion/shared";
+
+/** Yesterday stays editable until this local hour — long enough to catch a
+ *  habit done last night but never ticked, short enough that history stays
+ *  history. */
+const BACKFILL_UNTIL_HOUR = 12;
 import { buildHabitContext } from "../../lib/habit-context.js";
 import { recomputeTodayScore } from "../../lib/score.js";
 import { discoverHabits, suggestHabits } from "./assistant.js";
@@ -202,9 +214,41 @@ export async function habitRoutes(app: FastifyInstance) {
       return reply.status(400).send({ success: false, error: "That day hasn't happened yet." });
     }
 
+    if (date < today) {
+      const yesterday = addDays(today, -1);
+      if (date !== yesterday || localHour(new Date(), request.timeZone) >= BACKFILL_UNTIL_HOUR) {
+        return reply.status(400).send({
+          success: false,
+          error: "Yesterday can be changed until noon. Earlier days are locked.",
+        });
+      }
+    }
+
     const habit = await prisma.habit.findUnique({ where: { id: habitId } });
     if (!habit || habit.userId !== request.userId) {
       return reply.status(404).send({ success: false, error: "Habit not found" });
+    }
+
+    // One planned rest day per habit per week, so rest stays a plan rather
+    // than a way around every miss.
+    if (state === "rest") {
+      const weekStart = weekStartKey(date);
+      const rested = await prisma.habitLog.findMany({
+        where: {
+          userId: request.userId,
+          habitId,
+          state: "rest",
+          completed: false,
+          date: { gte: dateFromKey(weekStart), lte: dateFromKey(addDays(weekStart, 6)) },
+        },
+        select: { date: true },
+      });
+      if (!canRestOn(new Set(rested.map((r) => dateKeyOf(r.date))), date)) {
+        return reply.status(400).send({
+          success: false,
+          error: "You've already taken this week's rest day for this habit.",
+        });
+      }
     }
 
     const day = dateFromKey(date);

@@ -16,7 +16,7 @@ import {
   toDateString,
   type TherapistCategoriesInput,
 } from "@kinextion/shared";
-import { completedByHabit, toScheduled } from "./score.js";
+import { habitLogMaps, STREAK_LOG_FILTER, toScheduled } from "./score.js";
 import { computePatterns } from "./patterns.js";
 
 export type TherapistShareCategories = TherapistCategoriesInput;
@@ -77,11 +77,11 @@ export async function buildTherapistReport(
     const [habits, logs] = await Promise.all([
       prisma.habit.findMany({ where: { userId, isActive: true } }),
       prisma.habitLog.findMany({
-        where: { userId, completed: true, date: { gte: dateFromKey(addDays(startKey, -90)) } },
-        select: { habitId: true, date: true, completed: true },
+        where: { userId, ...STREAK_LOG_FILTER, date: { gte: dateFromKey(addDays(startKey, -90)) } },
+        select: { habitId: true, date: true, completed: true, state: true },
       }),
     ]);
-    const byHabit = completedByHabit(logs);
+    const { completed: byHabit, rest: restByHabit } = habitLogMaps(logs);
 
     /**
      * Rate = kept ÷ due across every habit's own schedule. The old version
@@ -95,10 +95,11 @@ export async function buildTherapistReport(
     for (const habit of habits) {
       const scheduled = toScheduled(habit, timeZone);
       const completed = byHabit.get(habit.id) ?? new Set<string>();
-      const tally = tallyBetween(scheduled, completed, startKey, endKey);
+      const rest = restByHabit.get(habit.id);
+      const tally = tallyBetween(scheduled, completed, startKey, endKey, rest);
       kept += tally.kept;
       due += tally.due;
-      longest = Math.max(longest, habitProgress(scheduled, completed, endKey).streak);
+      longest = Math.max(longest, habitProgress(scheduled, completed, endKey, rest).streak);
     }
 
     summary.habits = {
