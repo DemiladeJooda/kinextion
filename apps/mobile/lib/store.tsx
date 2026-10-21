@@ -30,7 +30,10 @@ import {
   localHour,
   tallyBetween,
   today,
+  displayFields,
   type DateKey,
+  type ReminderHabit,
+  type DisplayFields,
 } from "@kinextion/shared";
 import type {
   CreateHabitInput,
@@ -92,6 +95,13 @@ export interface Habit {
   status: "building" | "established" | "paused";
   /** First due day, when it was set to start later ("start Monday"). */
   startsOn: DateKey | null;
+  /**
+   * What to show back: Kinextion's tidied reading of the anchor, tiny
+   * version, why and backup plan. Raw fields above are for editing only.
+   */
+  display: DisplayFields;
+  /** Reminders for this habit, at the start of its part of the day. */
+  reminderEnabled: boolean;
 }
 
 interface AppState {
@@ -120,7 +130,12 @@ interface AppState {
   setHabitDay: (
     id: string,
     state: "done" | "minimum" | "rest" | "clear",
-    options?: { date?: DateKey; notes?: string },
+    options?: {
+      date?: DateKey;
+      notes?: string;
+      /** Where the log came from — "notification" for the lock-screen buttons. */
+      source?: "tap" | "notification";
+    },
   ) => Promise<void>;
   addHabit: (input: CreateHabitInput) => Promise<void>;
   /** Accept several AI drafts at once, then refresh once rather than n times. */
@@ -133,6 +148,8 @@ interface AppState {
   logWorkout: (input: LogWorkoutInput) => Promise<void>;
   /** Re-pull habits, logs, check-in, and score from the server. */
   refresh: () => Promise<void>;
+  /** Everything the reminder planner needs, kept in step with every log. */
+  reminderHabits: ReminderHabit[];
 }
 
 const Ctx = createContext<AppState | null>(null);
@@ -160,6 +177,14 @@ function logMaps(logs: RemoteHabitLog[]) {
     else if (l.state === "rest") addTo(rest, l.habitId, key);
   }
   return { completed, rest };
+}
+
+/** First due day for a habit as the server sent it: creation, or a later start. */
+function remoteStartDate(h: RemoteHabit | undefined): DateKey | null {
+  if (!h) return null;
+  const created = localDateKey(new Date(h.createdAt));
+  const starts = h.startsOn ? dateKeyOf(h.startsOn) : null;
+  return starts && starts > created ? starts : created;
 }
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
@@ -257,6 +282,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           completed,
           state: logState,
           notes,
+          source: options.source,
         });
         setLogs((prev) => [log, ...prev.filter((l) => !sameDay(l))]);
         applyScore(newScore ?? (await api.getTodayScore()));
@@ -411,9 +437,30 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         perWeekTarget: h.perWeekTarget ?? null,
         status: h.status ?? "building",
         startsOn,
+        display: displayFields(h),
+        reminderEnabled: h.reminderEnabled ?? true,
       };
     });
   }, [remoteHabits, logs]);
+
+  const reminderHabits = useMemo<ReminderHabit[]>(() => {
+    const maps = logMaps(logs);
+    const none = new Set<DateKey>();
+    return habits.map((h) => ({
+      id: h.id,
+      name: h.name,
+      frequency: h.frequency,
+      targetDays: h.targetDays,
+      perWeekTarget: h.perWeekTarget,
+      startDate: remoteStartDate(remoteHabits.find((r) => r.id === h.id)),
+      timeWindow: h.timeWindow,
+      reminderEnabled: h.reminderEnabled,
+      status: h.status,
+      display: h.display,
+      completed: maps.completed.get(h.id) ?? none,
+      rest: maps.rest.get(h.id) ?? none,
+    }));
+  }, [habits, logs, remoteHabits]);
 
   const value = useMemo<AppState>(
     () => ({
@@ -435,6 +482,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       logWorkout,
       setHabitDay,
       refresh,
+      reminderHabits,
     }),
     [
       habits,
@@ -455,6 +503,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       logWorkout,
       setHabitDay,
       refresh,
+      reminderHabits,
     ],
   );
 

@@ -57,6 +57,13 @@ The 4Ps (Chance, Gorlin & Dhar 2014) sort the same work by lever:
   Never "you broke your streak".
 - Reflect back what the user said before suggesting anything. One suggestion
   at a time.
+- Never show the user's raw text back verbatim. Use the AI-tidied reading
+  (`displayFields` in `@kinextion/shared`): same meaning, their voice, no
+  self-criticism. Keep the raw text for editing and for the model's context,
+  and show "How Kinextion reads this" so the tidy-up is never silent. A why
+  flagged as distress is never quoted.
+- The AI is an assistant working in the background (understanding, tidying,
+  planning), not mainly a chat. Prefer doing it for the user over asking.
 - Credit Chance's own claims to her (for example "up to 95% of decisions");
   don't state them as established fact.
 - Labelled thresholds (rest days, graduation score, the limit of 3) are design

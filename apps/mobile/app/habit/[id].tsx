@@ -21,6 +21,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
+import type { DisplayFields, PolishedField } from "@kinextion/shared";
 import {
   HabitForm,
   toCreateInput,
@@ -62,6 +63,7 @@ export default function EditHabitScreen() {
           backupPlan: habit.backupPlan ?? "",
           pairWith: habit.pairWith ?? "",
           start: "today",
+          reminderEnabled: habit.reminderEnabled,
         }
       : null,
   );
@@ -157,6 +159,7 @@ export default function EditHabitScreen() {
           <ScreenHeader title={habit.name} subtitle={habitSummary(habit)} />
 
           <HabitForm
+            readings={readingsOf(habit)}
             values={values}
             onChange={setValues}
             onSubmit={() => void onSave()}
@@ -224,4 +227,26 @@ function habitSummary(habit: {
   return parts.length
     ? `${parts.join(" · ")}. Changes won't reset it.`
     : "Shrink it until it's easy. That's usually the fix.";
+}
+
+/** The AI's reading of each field it tidied, with the text it came from. */
+function readingsOf(habit: {
+  cue: string;
+  response: string | null;
+  craving: string | null;
+  backupPlan: string | null;
+  display: DisplayFields;
+}) {
+  const raw: Record<PolishedField, string> = {
+    cue: habit.cue ?? "",
+    response: habit.response ?? "",
+    craving: habit.craving ?? "",
+    backupPlan: habit.backupPlan ?? "",
+  };
+  return Object.fromEntries(
+    habit.display.polishedByAi.map((f) => [
+      f,
+      { from: raw[f], text: habit.display[f] },
+    ]),
+  ) as Partial<Record<PolishedField, { from: string; text: string }>>;
 }

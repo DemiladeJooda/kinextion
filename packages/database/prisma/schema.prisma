@@ -228,6 +228,13 @@ model Habit {
    * First day it is due, when later than the day it was made ("start Monday").
    */
   startsOn        DateTime? @db.Date
+  /**
+   * How Kinextion reads the user's own words, tidied for display: what's
+   * shown back on Today, in reminders and in the plan sentence. The raw
+   * fields stay as typed, for editing and for the model's context.
+   * {cue?, response?, craving?, backupPlan?, concern?, source: "ai"|"basic"}
+   */
+  polished        Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

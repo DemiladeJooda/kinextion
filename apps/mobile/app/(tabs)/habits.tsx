@@ -57,7 +57,20 @@ import {
   Txt,
 } from "../../components/ui";
 import { useApi } from "../../hooks/useApi";
-import { addDays, localHour, orderForToday, today } from "@kinextion/shared";
+import {
+  addDays,
+  localHour,
+  orderForToday,
+  plannedReminders,
+  shouldOfferToFade,
+  today,
+  type ReminderHabit,
+} from "@kinextion/shared";
+import {
+  canAskForNotifications,
+  syncHabitReminders,
+} from "../../lib/habit-reminders";
+import { requestNotificationPermission } from "../../lib/notifications";
 import { useAppState, type Habit } from "../../lib/store";
 import { categoryColor, color, radius, space, tint } from "../../theme";
 
@@ -98,6 +111,8 @@ export default function TodayScreen() {
     habits: allHabits,
     toggleHabit,
     setHabitDay,
+    editHabit,
+    reminderHabits,
     score,
     periodScore,
     checkIn,
@@ -375,6 +390,13 @@ export default function TodayScreen() {
         >
           <Label c={color.textFaint}>For you</Label>
 
+          <RemindersPrompt reminderHabits={reminderHabits} />
+
+          <FadeTip
+            habits={allHabits}
+            onTurnOff={(h) => void editHabit(h.id, { reminderEnabled: false })}
+          />
+
           <SlippingTip habits={due} onResize={openHabit} />
 
           <View style={{ gap: space.md }}>
@@ -566,18 +588,18 @@ function HabitRow({
               style={{ marginTop: 1 }}
               numberOfLines={1}
             >
-              {habit.response
-                ? `Save your streak · even "${habit.response}" counts`
+              {habit.display.response
+                ? `Save your streak · even "${habit.display.response}" counts`
                 : "Save your streak today"}
             </Txt>
-          ) : habit.cue ? (
+          ) : habit.display.cue ? (
             <Txt
               variant="small"
               c={color.textFaint}
               style={{ marginTop: 1 }}
               numberOfLines={1}
             >
-              {habit.cue}
+              {habit.display.cue}
             </Txt>
           ) : null}
         </View>
@@ -719,8 +741,8 @@ function LogSheet({
                   accent={color.green}
                   title="I did the tiny version"
                   detail={
-                    habit.response
-                      ? `"${habit.response}" · keeps your streak`
+                    habit.display.response
+                      ? `"${habit.display.response}" · keeps your streak`
                       : "Keeps your streak"
                   }
                   onPress={choose(onMinimum)}
@@ -1086,6 +1108,128 @@ function FeelingTask({
 }
 
 // ─── For you ──────────────────────────────────────────────────────────────────
+/**
+ * Asks for notifications once there's something worth being reminded of,
+ * rather than at launch. Hidden once allowed, or once the OS won't ask again.
+ */
+function RemindersPrompt({
+  reminderHabits,
+}: {
+  reminderHabits: ReminderHabit[];
+}) {
+  const api = useApi();
+  const [show, setShow] = useState(false);
+  const worthIt = reminderHabits.some(
+    (h) => h.reminderEnabled && h.timeWindow !== "anytime",
+  );
+
+  useEffect(() => {
+    if (!worthIt) return;
+    void canAskForNotifications().then(setShow);
+  }, [worthIt]);
+
+  if (!show || !worthIt) return null;
+
+  const enable = async () => {
+    const granted = await requestNotificationPermission();
+    setShow(false);
+    if (!granted) return;
+    await api
+      .updateProfile({ preferences: { habitReminders: true } })
+      .catch(() => {});
+    const now = new Date();
+    await syncHabitReminders(
+      plannedReminders(
+        reminderHabits,
+        today(),
+        now.getHours() * 60 + now.getMinutes(),
+      ),
+    );
+  };
+
+  return (
+    <Card accent={color.amber}>
+      <View style={{ flexDirection: "row", gap: space.md }}>
+        <Ionicons name="notifications-outline" size={18} color={color.amber} />
+        <View style={{ flex: 1, gap: space.sm }}>
+          <Txt variant="bodyStrong" c={color.amber}>
+            Want a nudge at the right moment?
+          </Txt>
+          <Txt variant="small" c={color.textMuted}>
+            One reminder when each habit&apos;s part of the day starts, in your
+            words, with a Done button right on it. Nothing for habits
+            you&apos;ve already done.
+          </Txt>
+          <Pressable
+            onPress={() => void enable()}
+            accessibilityRole="button"
+            hitSlop={8}
+          >
+            <Txt variant="small" c={color.amber} style={{ fontWeight: "700" }}>
+              Turn on reminders →
+            </Txt>
+          </Pressable>
+        </View>
+      </View>
+    </Card>
+  );
+}
+
+/**
+ * Once a habit has held for two weeks, offers to drop its reminder. Leaning
+ * on a reminder keeps a habit going but can stop it becoming automatic, so
+ * the goal is a habit that no longer needs one.
+ */
+function FadeTip({
+  habits,
+  onTurnOff,
+}: {
+  habits: Habit[];
+  onTurnOff: (h: Habit) => void;
+}) {
+  const [kept, setKept] = useState<string[]>([]);
+  const habit = habits.find(
+    (h) => shouldOfferToFade(h) && !kept.includes(h.id),
+  );
+  if (!habit) return null;
+
+  return (
+    <Card accent={color.teal}>
+      <View style={{ flexDirection: "row", gap: space.md }}>
+        <Ionicons name="leaf-outline" size={18} color={color.teal} />
+        <View style={{ flex: 1, gap: space.sm }}>
+          <Txt variant="bodyStrong" c={color.teal}>
+            {habit.name}: {habit.streak} days running
+          </Txt>
+          <Txt variant="small" c={color.textMuted}>
+            You might not need the reminder anymore. Want to try without it?
+          </Txt>
+          <View style={{ flexDirection: "row", gap: space.lg }}>
+            <Pressable
+              onPress={() => onTurnOff(habit)}
+              accessibilityRole="button"
+              hitSlop={8}
+            >
+              <Txt variant="small" c={color.teal} style={{ fontWeight: "700" }}>
+                Turn it off
+              </Txt>
+            </Pressable>
+            <Pressable
+              onPress={() => setKept((k) => [...k, habit.id])}
+              accessibilityRole="button"
+              hitSlop={8}
+            >
+              <Txt variant="small" c={color.textFaint}>
+                Keep it
+              </Txt>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Card>
+  );
+}
+
 /**
  * Shown only when a habit is actually slipping: due, no current streak, and
  * kept under half the time. A permanent tip card is one more thing to read

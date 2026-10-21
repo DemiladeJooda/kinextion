@@ -23,7 +23,7 @@
  */
 
 import { useState } from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, Switch, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeIn } from "react-native-reanimated";
@@ -31,11 +31,12 @@ import {
   HABIT_CATEGORY_HINTS,
   WELLNESS_CATEGORIES,
   WELLNESS_LABELS,
+  basicTidy,
   describeHabitPlan,
   nextMondayKey,
   today,
 } from "@kinextion/shared";
-import type { CreateHabitInput } from "@kinextion/shared";
+import type { CreateHabitInput, PolishedField } from "@kinextion/shared";
 
 import { Button, Card, Chip, Field, Label, PressCard, Txt } from "./ui";
 import {
@@ -88,6 +89,8 @@ export interface HabitFormValues {
   pairWith: string;
   /** New habits only: start today, or on the coming Monday. */
   start: "today" | "monday";
+  /** A reminder at the start of its part of the day. */
+  reminderEnabled: boolean;
 }
 
 export function emptyHabitForm(): HabitFormValues {
@@ -106,6 +109,7 @@ export function emptyHabitForm(): HabitFormValues {
     backupPlan: "",
     pairWith: "",
     start: "today",
+    reminderEnabled: true,
   };
 }
 
@@ -128,6 +132,7 @@ export function toCreateInput(values: HabitFormValues): CreateHabitInput {
     backupPlan: trimmed(values.backupPlan),
     pairWith: trimmed(values.pairWith),
     startsOn: values.start === "monday" ? nextMondayKey(today()) : undefined,
+    reminderEnabled: values.reminderEnabled,
   };
 }
 
@@ -139,6 +144,7 @@ export function HabitForm({
   saving,
   error,
   isNew = false,
+  readings,
 }: {
   values: HabitFormValues;
   onChange: (next: HabitFormValues) => void;
@@ -149,6 +155,12 @@ export function HabitForm({
   /** New habits require a tiny version and can start on Monday. Existing
    *  ones built before the tiny version existed can still be saved. */
   isNew?: boolean;
+  /**
+   * Kinextion's tidied reading of each field, and the raw text it was read
+   * from. Shown under a field while that field is unchanged, so the tidy-up
+   * is visible rather than silent.
+   */
+  readings?: Partial<Record<PolishedField, { from: string; text: string }>>;
 }) {
   // Open by default when the user has already filled an extra, so editing
   // never hides content behind a collapsed section.
@@ -165,7 +177,23 @@ export function HabitForm({
   const isMonday = nextMondayKey(today()) === today();
   const missingTiny = isNew && values.response.trim().length === 0;
   const canSubmit = values.name.trim().length > 0 && !missingTiny && !saving;
-  const preview = describeHabitPlan(values);
+  /** The reading for a field, if it still applies to what's in the box. */
+  const readingFor = (field: PolishedField): string | null => {
+    const r = readings?.[field];
+    if (!r || r.from !== values[field]) return null;
+    return r.text.trim() && r.text.trim() !== values[field].trim()
+      ? r.text
+      : null;
+  };
+  /** What the app will show for a field: the reading, else a basic tidy. */
+  const shown = (field: PolishedField) =>
+    readingFor(field) ?? basicTidy(values[field]);
+  const preview = describeHabitPlan({
+    ...values,
+    cue: shown("cue"),
+    response: shown("response"),
+    backupPlan: shown("backupPlan"),
+  });
 
   return (
     <View style={{ gap: space.lg }}>
@@ -215,6 +243,7 @@ export function HabitForm({
             accent={accent}
             hint="Attach it to something you already do every day."
           />
+          <Reading text={readingFor("cue")} />
           <View
             style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}
           >
@@ -243,6 +272,30 @@ export function HabitForm({
                 />
               ))}
             </View>
+            {values.timeWindow === "anytime" ? (
+              <Txt variant="small" c={color.textFaint} style={{ fontSize: 12 }}>
+                Any-time habits only appear in the evening "still open" nudge.
+              </Txt>
+            ) : (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: space.md,
+                  marginTop: space.xs,
+                }}
+              >
+                <Txt variant="small" c={color.textMuted} style={{ flex: 1 }}>
+                  Remind me when this part of the day starts
+                </Txt>
+                <Switch
+                  value={values.reminderEnabled}
+                  onValueChange={(v) => set("reminderEnabled", v)}
+                  trackColor={{ true: accent }}
+                  accessibilityLabel="Remind me"
+                />
+              </View>
+            )}
           </View>
         </View>
       </Card>
@@ -261,6 +314,7 @@ export function HabitForm({
             accent={accent}
             hint="Small enough to do on your worst day. Doing it keeps your streak."
           />
+          <Reading text={readingFor("response")} />
           <Field
             label="The full version (optional)"
             value={values.fullVersion}
@@ -386,6 +440,7 @@ export function HabitForm({
           accent={accent}
           hint="In your words. Kinextion will remind you of it on the days it's hard."
         />
+        <Reading text={readingFor("craving")} />
       </Card>
 
       {/* ── Extras, optional ───────────────────────────────────────── */}
@@ -426,6 +481,7 @@ export function HabitForm({
                 accent={accent}
                 hint="Plan for the most likely obstacle now, so you don't have to think later."
               />
+              <Reading text={readingFor("backupPlan")} />
               <Field
                 label="Pair it with"
                 value={values.pairWith}
@@ -516,6 +572,28 @@ export function HabitForm({
         disabled={!canSubmit}
         onPress={onSubmit}
       />
+    </View>
+  );
+}
+
+/** "How Kinextion reads this": the tidied version, under the user's own. */
+function Reading({ text }: { text: string | null }) {
+  if (!text) return null;
+  return (
+    <View style={{ flexDirection: "row", gap: space.sm, marginTop: -space.xs }}>
+      <Ionicons
+        name="sparkles-outline"
+        size={13}
+        color={color.textFaint}
+        style={{ marginTop: 2 }}
+      />
+      <Txt
+        variant="small"
+        c={color.textFaint}
+        style={{ flex: 1, fontSize: 12 }}
+      >
+        How Kinextion reads this: {text}
+      </Txt>
     </View>
   );
 }

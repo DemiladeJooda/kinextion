@@ -9,17 +9,19 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { DEMO_MODE, useAuth } from "../lib/auth";
 
 import { AppStateProvider } from "../lib/store";
+import { HabitReminderSync } from "../components/HabitReminderSync";
 import { tokenCache } from "../lib/clerk-token-cache";
 import { useApi } from "../hooks/useApi";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { AuroraBackdrop, BrandMark, Txt } from "../components/ui";
 import { color, space } from "../theme";
 
-const CLERK_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "";
+const CLERK_PUBLISHABLE_KEY =
+  process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "";
 
 if (!CLERK_PUBLISHABLE_KEY && !DEMO_MODE) {
   console.warn(
-    "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY is not set — sign-in will fail. See apps/mobile/.env."
+    "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY is not set — sign-in will fail. See apps/mobile/.env.",
   );
 }
 
@@ -131,70 +133,144 @@ export default function RootLayout() {
    * default is pinned here rather than in app.json.
    */
   useEffect(() => {
-    void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+    void ScreenOrientation.lockAsync(
+      ScreenOrientation.OrientationLock.PORTRAIT_UP,
+    ).catch(() => {});
   }, []);
 
   return (
     <SessionProvider>
-        {/* GestureHandlerRootView must wrap the whole tree for Reanimated gestures
+      {/* GestureHandlerRootView must wrap the whole tree for Reanimated gestures
             and the swipe-back stack transitions to work on Android. */}
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <AppStateProvider>
-            <StatusBar style="light" />
-            <AuthGate>
-              <Stack
-                screenOptions={{
-                  headerShown: false,
-                  contentStyle: { backgroundColor: color.bg },
-                  animation: "slide_from_right",
-                  // Defaults for every screen that turns its header on.
-                  headerStyle: { backgroundColor: color.bg },
-                  headerTintColor: color.text,
-                  headerTitleStyle: { fontWeight: "700", fontSize: 17 },
-                  headerShadowVisible: false,
-                  headerBackTitle: "Back",
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <AppStateProvider>
+          <StatusBar style="light" />
+          <AuthGate>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: color.bg },
+                animation: "slide_from_right",
+                // Defaults for every screen that turns its header on.
+                headerStyle: { backgroundColor: color.bg },
+                headerTintColor: color.text,
+                headerTitleStyle: { fontWeight: "700", fontSize: 17 },
+                headerShadowVisible: false,
+                headerBackTitle: "Back",
+              }}
+            >
+              <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen
+                name="onboarding/index"
+                options={{ animation: "fade" }}
+              />
+              <Stack.Screen
+                name="chat/[persona]"
+                options={{ headerShown: true }}
+              />
+              {/* Feature screens set their own header options per screen. */}
+              <Stack.Screen
+                name="features/referee"
+                options={{ headerShown: true }}
+              />
+              <Stack.Screen
+                name="features/form"
+                options={{ headerShown: true }}
+              />
+              <Stack.Screen
+                name="features/environment"
+                options={{ headerShown: true }}
+              />
+              <Stack.Screen
+                name="features/pose-preview"
+                options={{ headerShown: true }}
+              />
+              <Stack.Screen
+                name="therapist/index"
+                options={{ headerShown: true }}
+              />
+              <Stack.Screen
+                name="therapist/report/[id]"
+                options={{ headerShown: true }}
+              />
+              <Stack.Screen
+                name="discover/map"
+                options={{ headerShown: true }}
+              />
+              <Stack.Screen
+                name="discover/group/[id]"
+                options={{ headerShown: true }}
+              />
+              <Stack.Screen
+                name="discover/response/[id]"
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="avatar/create"
+                options={{ headerShown: true }}
+              />
+              <Stack.Screen
+                name="admissions/index"
+                options={{ headerShown: true }}
+              />
+              {/* Habit builder and check-in set their own titles per screen. */}
+              <Stack.Screen name="habit/new" options={{ headerShown: true }} />
+              <Stack.Screen
+                name="habit/suggest"
+                options={{ headerShown: true }}
+              />
+              <Stack.Screen
+                name="habit/discover"
+                options={{ headerShown: true }}
+              />
+              <Stack.Screen name="habit/[id]" options={{ headerShown: true }} />
+              <Stack.Screen
+                name="habit/starter"
+                options={{ headerShown: true }}
+              />
+              <Stack.Screen
+                name="workout/log"
+                options={{ headerShown: true }}
+              />
+              <Stack.Screen
+                name="recommendations/index"
+                options={{ headerShown: true }}
+              />
+              <Stack.Screen
+                name="metrics/index"
+                options={{ headerShown: true }}
+              />
+              <Stack.Screen
+                name="settings/edit"
+                options={{ headerShown: true }}
+              />
+              <Stack.Screen
+                name="settings/notifications"
+                options={{ headerShown: true }}
+              />
+              <Stack.Screen
+                name="settings/privacy"
+                options={{ headerShown: true }}
+              />
+              <Stack.Screen
+                name="settings/help"
+                options={{ headerShown: true }}
+              />
+              <Stack.Screen
+                name="checkin/index"
+                options={{
+                  headerShown: true,
+                  presentation: "modal",
+                  animation: "slide_from_bottom",
                 }}
-              >
-                <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
-                <Stack.Screen name="(tabs)" />
-                <Stack.Screen name="onboarding/index" options={{ animation: "fade" }} />
-                <Stack.Screen name="chat/[persona]" options={{ headerShown: true }} />
-                {/* Feature screens set their own header options per screen. */}
-                <Stack.Screen name="features/referee" options={{ headerShown: true }} />
-                <Stack.Screen name="features/form" options={{ headerShown: true }} />
-                <Stack.Screen name="features/environment" options={{ headerShown: true }} />
-                <Stack.Screen name="features/pose-preview" options={{ headerShown: true }} />
-                <Stack.Screen name="therapist/index" options={{ headerShown: true }} />
-                <Stack.Screen name="therapist/report/[id]" options={{ headerShown: true }} />
-                <Stack.Screen name="discover/map" options={{ headerShown: true }} />
-                <Stack.Screen name="discover/group/[id]" options={{ headerShown: true }} />
-                <Stack.Screen name="discover/response/[id]" options={{ headerShown: false }} />
-                <Stack.Screen name="avatar/create" options={{ headerShown: true }} />
-                <Stack.Screen name="admissions/index" options={{ headerShown: true }} />
-                {/* Habit builder and check-in set their own titles per screen. */}
-                <Stack.Screen name="habit/new" options={{ headerShown: true }} />
-                <Stack.Screen name="habit/suggest" options={{ headerShown: true }} />
-                <Stack.Screen name="habit/discover" options={{ headerShown: true }} />
-                <Stack.Screen name="habit/[id]" options={{ headerShown: true }} />
-                <Stack.Screen name="recommendations/index" options={{ headerShown: true }} />
-                <Stack.Screen name="metrics/index" options={{ headerShown: true }} />
-                <Stack.Screen name="settings/edit" options={{ headerShown: true }} />
-                <Stack.Screen name="settings/notifications" options={{ headerShown: true }} />
-                <Stack.Screen name="settings/privacy" options={{ headerShown: true }} />
-                <Stack.Screen name="settings/help" options={{ headerShown: true }} />
-                <Stack.Screen
-                  name="checkin/index"
-                  options={{
-                    headerShown: true,
-                    presentation: "modal",
-                    animation: "slide_from_bottom",
-                  }}
-                />
-              </Stack>
-            </AuthGate>
-            {DEMO_MODE ? <DemoBadge /> : null}
-          </AppStateProvider>
-        </GestureHandlerRootView>
+              />
+            </Stack>
+          </AuthGate>
+          <HabitReminderSync />
+          {DEMO_MODE ? <DemoBadge /> : null}
+        </AppStateProvider>
+      </GestureHandlerRootView>
     </SessionProvider>
   );
 }
@@ -203,7 +279,10 @@ export default function RootLayout() {
 function SessionProvider({ children }: { children: React.ReactNode }) {
   if (DEMO_MODE) return <>{children}</>;
   return (
-    <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache}>
+    <ClerkProvider
+      publishableKey={CLERK_PUBLISHABLE_KEY}
+      tokenCache={tokenCache}
+    >
       <ClerkLoaded>{children}</ClerkLoaded>
     </ClerkProvider>
   );

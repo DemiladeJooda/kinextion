@@ -25,16 +25,31 @@ import {
   Txt,
 } from "../../components/ui";
 import { useApi } from "../../hooks/useApi";
-import { cancelDailyReminder, requestNotificationPermission, scheduleDailyReminder } from "../../lib/notifications";
+import {
+  cancelDailyReminder,
+  requestNotificationPermission,
+  scheduleDailyReminder,
+} from "../../lib/notifications";
+import { syncHabitReminders } from "../../lib/habit-reminders";
 import { color, radius, space, tint } from "../../theme";
 
 /** Times offered. A fixed set beats a wheel picker for a once-a-day choice. */
-const TIMES = ["07:00", "08:00", "09:00", "12:00", "18:00", "20:00", "21:00", "22:00"];
+const TIMES = [
+  "07:00",
+  "08:00",
+  "09:00",
+  "12:00",
+  "18:00",
+  "20:00",
+  "21:00",
+  "22:00",
+];
 
 export default function NotificationSettingsScreen() {
   const api = useApi();
 
   const [enabled, setEnabled] = useState(false);
+  const [habitReminders, setHabitReminders] = useState(true);
   const [time, setTime] = useState("20:00");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -50,6 +65,7 @@ export default function NotificationSettingsScreen() {
         const prefs = user.profile?.preferences;
         setEnabled(prefs?.notificationsEnabled ?? false);
         setTime(prefs?.dailyCheckInTime ?? "20:00");
+        setHabitReminders(prefs?.habitReminders !== false);
       })
       .catch(() => setError("Couldn't load your settings."))
       .finally(() => {
@@ -67,22 +83,31 @@ export default function NotificationSettingsScreen() {
     try {
       let actuallyEnabled = enabled;
 
-      if (enabled) {
+      if (enabled || habitReminders) {
         const granted = await requestNotificationPermission();
         if (!granted) {
           actuallyEnabled = false;
           setError(
-            "Notifications are blocked for Kinextion in your device settings — the preference below is saved, but nothing will arrive until you allow them there."
+            "Notifications are blocked for Kinextion in your device settings — the preference below is saved, but nothing will arrive until you allow them there.",
           );
-        } else {
+        } else if (enabled) {
           await scheduleDailyReminder(time);
+        } else {
+          await cancelDailyReminder();
         }
       } else {
         await cancelDailyReminder();
       }
+      // Habit reminders are re-planned by HabitReminderSync from the saved
+      // preference; turning them off here clears them straight away.
+      if (!habitReminders) await syncHabitReminders([]);
 
       await api.updateProfile({
-        preferences: { notificationsEnabled: actuallyEnabled, dailyCheckInTime: time },
+        preferences: {
+          notificationsEnabled: actuallyEnabled,
+          dailyCheckInTime: time,
+          habitReminders,
+        },
       });
       setEnabled(actuallyEnabled);
       setSaved(true);
@@ -94,7 +119,10 @@ export default function NotificationSettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: color.bg }} edges={["bottom"]}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: color.bg }}
+      edges={["bottom"]}
+    >
       <Stack.Screen
         options={{
           title: "Notifications",
@@ -110,7 +138,10 @@ export default function NotificationSettingsScreen() {
         contentContainerStyle={{ padding: space.xl, paddingBottom: space.xxxl }}
         showsVerticalScrollIndicator={false}
       >
-        <ScreenHeader title="Reminders" subtitle="One nudge a day, at a time that suits you." />
+        <ScreenHeader
+          title="Reminders"
+          subtitle="Nudges at the moment they're useful, never more."
+        />
 
         {/* Sets expectations: this is a local, on-device nudge pointing back
             at the app, not a push carrying that day's specific text. */}
@@ -127,8 +158,9 @@ export default function NotificationSettingsScreen() {
                 A nudge, not the recommendation itself
               </Txt>
               <Txt variant="small" c={color.textMuted} style={{ marginTop: 3 }}>
-                This points you back to today's one thing on the Habits tab — it can't carry that
-                day's specific text yet, since there's no server sending it.
+                This points you back to today's one thing on the Habits tab — it
+                can't carry that day's specific text yet, since there's no
+                server sending it.
               </Txt>
             </View>
           </View>
@@ -145,9 +177,51 @@ export default function NotificationSettingsScreen() {
                 }}
               >
                 <View style={{ flex: 1 }}>
+                  <Txt variant="bodyStrong">Habit reminders</Txt>
+                  <Txt
+                    variant="small"
+                    c={color.textMuted}
+                    style={{ marginTop: 2 }}
+                  >
+                    One nudge when each habit&apos;s part of the day starts,
+                    with a Done button on it, and one in the evening for
+                    anything still open. Nothing for habits you&apos;ve done.
+                    Turn them off for a single habit in its settings.
+                  </Txt>
+                </View>
+                <Switch
+                  value={habitReminders}
+                  onValueChange={(v) => {
+                    void Haptics.selectionAsync();
+                    setHabitReminders(v);
+                    setSaved(false);
+                  }}
+                  trackColor={{
+                    false: "rgba(255,255,255,0.08)",
+                    true: tint(color.amber, 0.45),
+                  }}
+                  thumbColor={habitReminders ? color.amber : "#64748B"}
+                />
+              </View>
+            </Card>
+
+            <Card style={{ marginTop: space.md }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: space.md,
+                }}
+              >
+                <View style={{ flex: 1 }}>
                   <Txt variant="bodyStrong">Daily check-in reminder</Txt>
-                  <Txt variant="small" c={color.textMuted} style={{ marginTop: 2 }}>
-                    A prompt to log how the day went, while you still remember it.
+                  <Txt
+                    variant="small"
+                    c={color.textMuted}
+                    style={{ marginTop: 2 }}
+                  >
+                    A prompt to log how the day went, while you still remember
+                    it.
                   </Txt>
                 </View>
                 <Switch
@@ -189,13 +263,18 @@ export default function NotificationSettingsScreen() {
                         paddingVertical: space.sm,
                         paddingHorizontal: space.lg,
                         borderRadius: radius.pill,
-                        backgroundColor: time === t ? tint(color.amber, 0.16) : "transparent",
-                        borderColor: time === t ? tint(color.amber, 0.4) : color.border,
+                        backgroundColor:
+                          time === t ? tint(color.amber, 0.16) : "transparent",
+                        borderColor:
+                          time === t ? tint(color.amber, 0.4) : color.border,
                         shadowOpacity: 0,
                         elevation: 0,
                       }}
                     >
-                      <Txt variant="small" c={time === t ? color.amber : color.textMuted}>
+                      <Txt
+                        variant="small"
+                        c={time === t ? color.amber : color.textMuted}
+                      >
                         {t}
                       </Txt>
                     </PressCard>
@@ -212,7 +291,11 @@ export default function NotificationSettingsScreen() {
             ) : null}
 
             {error ? (
-              <Txt variant="small" c={color.red} style={{ marginTop: space.md }}>
+              <Txt
+                variant="small"
+                c={color.red}
+                style={{ marginTop: space.md }}
+              >
                 {error}
               </Txt>
             ) : null}

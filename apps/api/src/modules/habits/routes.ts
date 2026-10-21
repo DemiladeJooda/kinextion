@@ -13,6 +13,7 @@ import {
   dateFromKey,
   dateKeyOf,
   localHour,
+  needsPolish,
   weekStartKey,
 } from "@kinextion/shared";
 
@@ -36,6 +37,10 @@ function checkStartsOn(startsOn: string | undefined, today: string): Date | null
 import { buildHabitContext } from "../../lib/habit-context.js";
 import { recomputeTodayScore } from "../../lib/score.js";
 import { discoverHabits, suggestHabits } from "./assistant.js";
+import { schedulePolish } from "./polish.js";
+
+/** Background polishes started per list load, so one open never fans out. */
+const POLISH_PER_LOAD = 3;
 
 export async function habitRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.requireAuth);
@@ -56,6 +61,14 @@ export async function habitRoutes(app: FastifyInstance) {
       },
       orderBy: [{ isActive: "desc" }, { sortOrder: "asc" }, { createdAt: "desc" }],
     });
+
+    // Catch up on habits saved before polishing existed (or whose polish
+    // failed): a few per load, in the background, so the list never waits.
+    habits
+      .filter((h) => h.isActive && needsPolish(h))
+      .slice(0, POLISH_PER_LOAD)
+      .forEach((h) => schedulePolish(request.log, h.id, request.userId));
+
     return { success: true, data: habits };
   });
 
@@ -88,6 +101,7 @@ export async function habitRoutes(app: FastifyInstance) {
       "habit event"
     );
 
+    schedulePolish(request.log, habit.id, request.userId);
     return reply.status(201).send({ success: true, data: habit });
   });
 
@@ -124,6 +138,7 @@ export async function habitRoutes(app: FastifyInstance) {
     }
 
     const habit = await prisma.habit.findUnique({ where: { id: request.params.id } });
+    if (habit) schedulePolish(request.log, habit.id, request.userId);
     return { success: true, data: habit };
   });
 

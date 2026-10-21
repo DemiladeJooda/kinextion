@@ -89,6 +89,9 @@ export const userPreferencesSchema = z.object({
   aiPersonalityDial: spiritualDialSchema.optional(),
   /** How hard both guides push. */
   coachingIntensity: coachingIntensitySchema.optional(),
+  /** Per-habit reminders at each habit's part of the day, plus the evening
+   *  last call. On by default once notifications are allowed. */
+  habitReminders: z.boolean().optional(),
   /** The window the displayed Kinextion Score aggregates and resets on. */
   scorePeriod: scorePeriodSchema.optional(),
   doesTherapy: z.boolean().optional(),

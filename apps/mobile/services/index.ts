@@ -68,6 +68,7 @@ export interface RemoteProfile {
     aiPersonalityDial?: "scripture" | "balanced" | "universal";
     coachingIntensity?: "gentle" | "balanced" | "intense";
     scorePeriod?: "weekly" | "monthly" | "yearly";
+    habitReminders?: boolean;
     doesTherapy?: boolean;
     doesJournal?: boolean;
     currentlyWorkingOut?: boolean;
@@ -163,6 +164,8 @@ export interface RemoteHabit {
   reminderEnabled?: boolean;
   /** "YYYY-MM-DD…" when it starts later than the day it was made. */
   startsOn?: string | null;
+  /** How Kinextion reads the free-text fields, tidied for display. */
+  polished?: unknown;
 }
 
 export function listHabits(token: string | null, includeArchived = false) {
