@@ -14,7 +14,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
-import { WELLNESS_CATEGORIES, WELLNESS_LABELS } from "@kinextion/shared";
+import {
+  WELLNESS_CATEGORIES,
+  WELLNESS_LABELS,
+  draftToCreateInput,
+} from "@kinextion/shared";
 import type { HabitDraft } from "@kinextion/shared";
 
 import { BasisChips, HabitDraftCard } from "../../components/HabitDraftCard";
@@ -60,13 +64,15 @@ export default function SuggestHabitsScreen() {
         setState("ready");
       } catch (err) {
         setErrorMsg(
-          err instanceof Error ? err.message : "Couldn't put suggestions together just now."
+          err instanceof Error
+            ? err.message
+            : "Couldn't put suggestions together just now.",
         );
         setState("error");
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [],
   );
 
   useEffect(() => {
@@ -77,16 +83,7 @@ export default function SuggestHabitsScreen() {
   const onAccept = async (draft: HabitDraft, index: number) => {
     setSaving(index);
     try {
-      await addHabit({
-        name: draft.name,
-        category: draft.category,
-        cue: draft.cue,
-        craving: draft.craving,
-        response: draft.response,
-        reward: draft.reward,
-        frequency: draft.frequency,
-        targetDays: draft.targetDays,
-      });
+      await addHabit(draftToCreateInput(draft));
       setAccepted((prev) => new Set(prev).add(index));
     } catch {
       setErrorMsg("Couldn't add that one. Try again.");
@@ -96,7 +93,10 @@ export default function SuggestHabitsScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: color.bg }} edges={["bottom"]}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: color.bg }}
+      edges={["bottom"]}
+    >
       <Stack.Screen
         options={{
           title: "Suggestions",
@@ -153,7 +153,11 @@ export default function SuggestHabitsScreen() {
         {state === "loading" ? (
           <Card>
             <TypingDots accent={color.purple} />
-            <Txt variant="small" c={color.textFaint} style={{ marginTop: space.md }}>
+            <Txt
+              variant="small"
+              c={color.textFaint}
+              style={{ marginTop: space.md }}
+            >
               Reading what you&apos;ve been doing…
             </Txt>
           </Card>
@@ -197,7 +201,9 @@ export default function SuggestHabitsScreen() {
                       icon={accepted.has(i) ? "checkmark" : "add"}
                       variant={accepted.has(i) ? "secondary" : "primary"}
                       accent={
-                        accepted.has(i) ? color.green : categoryColor[draft.category as Category]
+                        accepted.has(i)
+                          ? color.green
+                          : categoryColor[draft.category as Category]
                       }
                       loading={saving === i}
                       disabled={accepted.has(i)}
@@ -232,10 +238,19 @@ export default function SuggestHabitsScreen() {
                 marginTop: space.xl,
               }}
             >
-              <Ionicons name="information-circle-outline" size={14} color={color.textFaint} />
-              <Txt variant="small" c={color.textFaint} style={{ flex: 1, fontSize: 12 }}>
-                Suggestions only cite data you&apos;ve actually logged or connected. Nothing here is
-                invented — if the basis above is short, the ideas are general.
+              <Ionicons
+                name="information-circle-outline"
+                size={14}
+                color={color.textFaint}
+              />
+              <Txt
+                variant="small"
+                c={color.textFaint}
+                style={{ flex: 1, fontSize: 12 }}
+              >
+                Suggestions only cite data you&apos;ve actually logged or
+                connected. Nothing here is invented — if the basis above is
+                short, the ideas are general.
               </Txt>
             </View>
           </>

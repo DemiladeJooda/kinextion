@@ -13,7 +13,14 @@ import type { HabitDraft } from "@kinextion/shared";
 import { WELLNESS_LABELS } from "@kinextion/shared";
 
 import { Card, Txt } from "./ui";
-import { categoryColor, color, radius, space, tint, type Category } from "../theme";
+import {
+  categoryColor,
+  color,
+  radius,
+  space,
+  tint,
+  type Category,
+} from "../theme";
 
 const FREQUENCY_LABEL: Record<string, string> = {
   daily: "Every day",
@@ -35,24 +42,52 @@ export function HabitDraftCard({
 
   return (
     <Card accent={accepted ? color.green : accent}>
-      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: space.md }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "flex-start",
+          gap: space.md,
+        }}
+      >
         <View style={{ flex: 1 }}>
           <Txt variant="heading">{draft.name}</Txt>
-          <View style={{ flexDirection: "row", gap: space.sm, marginTop: space.sm }}>
+          <View
+            style={{ flexDirection: "row", gap: space.sm, marginTop: space.sm }}
+          >
             <Pill label={WELLNESS_LABELS[draft.category]} accent={accent} />
-            <Pill label={FREQUENCY_LABEL[draft.frequency] ?? draft.frequency} accent={color.textMuted} />
+            <Pill
+              label={FREQUENCY_LABEL[draft.frequency] ?? draft.frequency}
+              accent={color.textMuted}
+            />
           </View>
         </View>
-        {accepted ? <Ionicons name="checkmark-circle" size={22} color={color.green} /> : null}
+        {accepted ? (
+          <Ionicons name="checkmark-circle" size={22} color={color.green} />
+        ) : null}
       </View>
 
       {draft.cue || draft.response ? (
         <View style={{ gap: 6, marginTop: space.lg }}>
-          {draft.cue ? <LoopLine icon="time-outline" label="When" value={draft.cue} /> : null}
-          {draft.response ? (
-            <LoopLine icon="footsteps-outline" label="Do" value={draft.response} />
+          {draft.cue ? (
+            <LoopLine icon="time-outline" label="When" value={draft.cue} />
           ) : null}
-          {draft.reward ? <LoopLine icon="gift-outline" label="Then" value={draft.reward} /> : null}
+          {draft.response ? (
+            <LoopLine
+              icon="footsteps-outline"
+              label="Do"
+              value={draft.response}
+            />
+          ) : null}
+          {draft.reward ? (
+            <LoopLine icon="gift-outline" label="Then" value={draft.reward} />
+          ) : null}
+          {draft.backupPlan ? (
+            <LoopLine
+              icon="shield-checkmark-outline"
+              label="If"
+              value={draft.backupPlan}
+            />
+          ) : null}
         </View>
       ) : null}
 
@@ -67,13 +102,20 @@ export function HabitDraftCard({
           borderTopColor: color.border,
         }}
       >
-        <Ionicons name="git-branch-outline" size={14} color={accent} style={{ marginTop: 3 }} />
+        <Ionicons
+          name="git-branch-outline"
+          size={14}
+          color={accent}
+          style={{ marginTop: 3 }}
+        />
         <Txt variant="small" c={color.textMuted} style={{ flex: 1 }}>
           {draft.rationale}
         </Txt>
       </View>
 
-      {children ? <View style={{ marginTop: space.lg }}>{children}</View> : null}
+      {children ? (
+        <View style={{ marginTop: space.lg }}>{children}</View>
+      ) : null}
     </Card>
   );
 }
@@ -88,8 +130,15 @@ function LoopLine({
   value: string;
 }) {
   return (
-    <View style={{ flexDirection: "row", alignItems: "flex-start", gap: space.sm }}>
-      <Ionicons name={icon} size={13} color={color.textFaint} style={{ marginTop: 3 }} />
+    <View
+      style={{ flexDirection: "row", alignItems: "flex-start", gap: space.sm }}
+    >
+      <Ionicons
+        name={icon}
+        size={13}
+        color={color.textFaint}
+        style={{ marginTop: 3 }}
+      />
       <Txt variant="small" c={color.textFaint} style={{ width: 38 }}>
         {label}
       </Txt>

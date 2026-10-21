@@ -33,24 +33,51 @@ const HABIT_DRAFT_PROPERTIES = {
     type: "string",
     maxLength: 200,
     description:
-      "The existing moment this attaches to, e.g. 'After I put the kettle on'. Use a real anchor from the context — a calendar time, an existing habit, a part of their day they actually described.",
+      "The anchor, written as 'After I …' or 'When I …' — an existing moment this attaches to, e.g. 'After I put the kettle on'. Use a real anchor from the context — a calendar time, an existing habit, a part of their day they actually described.",
   },
   craving: {
     type: "string",
     maxLength: 200,
-    description: "Why they'd want it, in their own terms rather than health-speak.",
+    description:
+      "Why it matters to them, as a concrete benefit felt today ('You'll sleep better tonight'), in their own words where they gave any. Never long-term health-speak.",
   },
   response: {
     type: "string",
     maxLength: 200,
-    description: "The two-minute version. Small enough to be embarrassing to skip.",
+    description: "The tiny version: the two-minute form, small enough to do on their worst day.",
+  },
+  fullVersion: {
+    type: "string",
+    maxLength: 200,
+    description: "Optional: the full version for days with room to spare.",
   },
   reward: {
     type: "string",
     maxLength: 200,
     description: "The immediate payoff, felt the same day.",
   },
-  frequency: { type: "string", enum: ["daily", "weekly", "custom"] },
+  backupPlan: {
+    type: "string",
+    maxLength: 300,
+    description:
+      "Optional: an if-then plan for the obstacle they named, e.g. 'If I get home late, I'll do the tiny version before dinner.' Only if they actually named an obstacle.",
+  },
+  timeWindow: {
+    type: "string",
+    enum: ["morning", "midday", "evening", "anytime"],
+    description: "The part of the day the anchor falls in.",
+  },
+  frequency: {
+    type: "string",
+    enum: ["daily", "weekly", "custom"],
+    description: "'weekly' means a number of times per week (set perWeekTarget); 'custom' means certain weekdays.",
+  },
+  perWeekTarget: {
+    type: "integer",
+    minimum: 1,
+    maximum: 7,
+    description: "Only for 'weekly': how many times a week.",
+  },
   targetDays: {
     type: "array",
     items: { type: "integer", minimum: 0, maximum: 6 },
@@ -64,7 +91,7 @@ const HABIT_DRAFT_PROPERTIES = {
   },
 } as const;
 
-const DRAFT_REQUIRED = ["name", "category", "frequency", "rationale"];
+const DRAFT_REQUIRED = ["name", "category", "cue", "response", "frequency", "rationale"];
 
 /**
  * Shared rules for both entry points.
@@ -78,13 +105,19 @@ function assistantSystemPrompt(context: HabitContext, extra: string): string {
   const hasContext = context.contextBlock.trim().length > 0;
 
   return [
-    "You help someone design habits inside Kinextion, using the Atomic Habits loop: cue, craving, response, reward.",
+    "You help someone design habits inside Kinextion. Each habit has an anchor (an existing moment: 'After I…'), a tiny version, a reason that pays off today, and a payoff. Never name a book or framework to the user.",
     "",
     "## How to think about a habit",
-    "- The response is the two-minute version. If it can't be done on the worst day of the month, it's too big.",
-    "- The cue must be an anchor that already exists in their day. Never invent a routine they haven't mentioned.",
+    "- The tiny version is the two-minute form. If it can't be done on the worst day of the month, it's too big.",
+    "- The anchor must be a moment that already exists in their day. Never invent a routine they haven't mentioned.",
     "- Prefer fixing or shrinking a habit that's slipping over adding a new one.",
-    "- Four or five active habits is plenty. If they already have that many, say so.",
+    "- Three habits being built at once is plenty. If they already have that many, say so kindly and offer to shrink one instead.",
+    "- Gym or training habits hold best at around four sessions a week; mention it if they pick fewer.",
+    "",
+    "## How to talk",
+    "- Offer, don't instruct: 'Want to try…?' rather than 'You should…'.",
+    "- Reflect back what they actually said before suggesting anything.",
+    "- Benefits are concrete and felt today, never long-term health claims.",
     "",
     "## Honesty (this matters more than being helpful)",
     "- Only cite a signal that appears in the context below. Never invent a number, a trend, a step count, or a calendar event.",
@@ -213,6 +246,7 @@ export async function discoverHabits(
       "- Ask ONE question at a time, in two sentences at most. Never a list of questions.",
       "- Ask about the shape of their real day — when they wake, what's already fixed, where the dead time is — not about goals in the abstract.",
       "- After two or three exchanges you should have enough. Don't interrogate.",
+      "- Before handing over drafts, ask once what's most likely to get in the way, and turn their answer into the habit's backupPlan as an if-then ('If …, I'll …').",
       "- When you have enough, return the drafts, set complete to true, and let the reply be a short handover like 'Here's what I'd start with.'",
       "- While you're still asking, return an empty drafts array.",
       "- Plain sentences. No markdown, no bullet points, no bold.",

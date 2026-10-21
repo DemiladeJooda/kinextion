@@ -59,6 +59,8 @@ export interface RemoteProfile {
   primaryGoals: string[] | null;
   weeklyAvailability: number | null;
   equipment: string[] | null;
+  /** "someone who moves every day" — set at onboarding, editable. */
+  identityGoal?: string | null;
   /** Notification and guide settings — including Kairo's spiritual dial. */
   preferences: {
     notificationsEnabled?: boolean;
@@ -159,6 +161,8 @@ export interface RemoteHabit {
   status?: "building" | "established" | "paused";
   sortOrder?: number;
   reminderEnabled?: boolean;
+  /** "YYYY-MM-DD…" when it starts later than the day it was made. */
+  startsOn?: string | null;
 }
 
 export function listHabits(token: string | null, includeArchived = false) {

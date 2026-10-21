@@ -212,7 +212,7 @@ model Habit {
   /**
    * "morning" | "midday" | "evening" | "anytime" — a window, never a minute.
    */
-  timeWindow      String  @default("anytime")
+  timeWindow      String    @default("anytime")
   /**
    * For "weekly": how many times a week. Null means once.
    */
@@ -221,9 +221,13 @@ model Habit {
    * "building" | "established" | "paused". Established habits have
    * graduated and stop counting toward the limit on habits in progress.
    */
-  status          String  @default("building")
-  sortOrder       Int     @default(0)
-  reminderEnabled Boolean @default(true)
+  status          String    @default("building")
+  sortOrder       Int       @default(0)
+  reminderEnabled Boolean   @default(true)
+  /**
+   * First day it is due, when later than the day it was made ("start Monday").
+   */
+  startsOn        DateTime? @db.Date
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

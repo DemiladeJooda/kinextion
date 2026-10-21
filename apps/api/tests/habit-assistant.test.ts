@@ -104,3 +104,48 @@ describe("discoverHabits transcript handling", () => {
     expect(result.reply.trim().length).toBeGreaterThan(0);
   });
 });
+
+describe("what the assistant is told", () => {
+  const systemPrompt = () => generateStructured.mock.calls.at(-1)?.[0].system as string;
+
+  it("asks about obstacles and turns them into a backup plan", async () => {
+    await discoverHabits(CONTEXT, [{ role: "user", content: "I want to stretch more." }]);
+    expect(systemPrompt()).toMatch(/get in the way/);
+    expect(systemPrompt()).toMatch(/backupPlan/);
+  });
+
+  it("offers rather than instructs, and never names the book", async () => {
+    await discoverHabits(CONTEXT, [{ role: "user", content: "I want to stretch more." }]);
+    expect(systemPrompt()).toMatch(/Offer, don't instruct/);
+    expect(systemPrompt()).not.toMatch(/Atomic Habits/);
+  });
+
+  it("requires an anchor and a tiny version on every draft", async () => {
+    await discoverHabits(CONTEXT, [{ role: "user", content: "I want to stretch more." }]);
+    const schema = generateStructured.mock.calls.at(-1)?.[0].inputSchema;
+    expect(schema.properties.drafts.items.required).toEqual(
+      expect.arrayContaining(["cue", "response"])
+    );
+  });
+
+  it("keeps the new fields when the model returns them", async () => {
+    generateStructured.mockResolvedValueOnce({
+      reply: "Here's what I'd start with.",
+      complete: true,
+      drafts: [
+        {
+          name: "Stretch",
+          category: "physical",
+          cue: "After I get out of bed",
+          response: "One minute of stretching",
+          frequency: "daily",
+          timeWindow: "morning",
+          backupPlan: "If I oversleep, I'll stretch before my shower.",
+          rationale: "You said mornings are the only quiet time.",
+        },
+      ],
+    });
+    const result = await discoverHabits(CONTEXT, [{ role: "user", content: "Mornings are quiet." }]);
+    expect(result.drafts[0]).toMatchObject({ timeWindow: "morning", backupPlan: expect.any(String) });
+  });
+});

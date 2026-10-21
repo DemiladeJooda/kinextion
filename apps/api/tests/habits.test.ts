@@ -24,6 +24,7 @@ interface StoredHabit {
   targetDays: number[] | null;
   isActive: boolean;
   createdAt: Date;
+  startsOn?: Date | null;
 }
 interface StoredLog {
   id: string;
@@ -72,6 +73,17 @@ vi.mock("@kinextion/database", () => {
           ),
         findUnique: async ({ where }: { where: { id: string } }) =>
           state.habits.find((h) => h.id === where.id) ?? null,
+        create: async ({ data }: { data: Omit<StoredHabit, "id" | "createdAt" | "isActive"> }) => {
+          const row = {
+            id: `ckhabit${state.habits.length}`.padEnd(25, "0"),
+            isActive: true,
+            createdAt: new Date(),
+            targetDays: null,
+            ...data,
+          } as StoredHabit;
+          state.habits.push(row);
+          return row;
+        },
       },
       habitLog: {
         findMany: async ({
@@ -358,5 +370,37 @@ describe("backfill and rest rules", () => {
     const res = await app.inject({ method: "GET", url: "/api/score/today", headers: DALLAS });
     // Sunday kept, Monday rested: the showing-up streak runs through Monday.
     expect(res.json().data.breakdown.streakDays).toBe(1);
+  });
+});
+
+describe("starting on a later day", () => {
+  const create = (startsOn?: string) =>
+    app.inject({
+      method: "POST",
+      url: "/api/habits",
+      headers: DALLAS,
+      payload: { name: "Push-ups", category: "physical", frequency: "daily", startsOn },
+    });
+
+  it("stores next Monday as the start date", async () => {
+    const res = await create("2026-10-26");
+    expect(res.statusCode).toBe(201);
+    expect(state.habits.at(-1)?.startsOn?.toISOString().slice(0, 10)).toBe("2026-10-26");
+  });
+
+  it("treats today as no special start date", async () => {
+    await create("2026-10-20");
+    expect(state.habits.at(-1)?.startsOn).toBeNull();
+  });
+
+  it("refuses a start date in the past or more than a month out", async () => {
+    expect((await create("2026-10-19")).statusCode).toBe(400);
+    expect((await create("2026-12-25")).statusCode).toBe(400);
+  });
+
+  it("keeps a habit that hasn't started out of today's score", async () => {
+    state.habits = [{ ...habit("ckmonday000000000000000", "daily"), startsOn: new Date("2026-10-26T00:00:00Z") }];
+    const res = await app.inject({ method: "GET", url: "/api/score/today", headers: DALLAS });
+    expect(res.json().data.breakdown).toMatchObject({ habitsTotal: 0 });
   });
 });

@@ -83,6 +83,15 @@ export interface Habit {
   reward: string | null;
   frequency: string;
   targetDays: number[] | null;
+  /** v2 fields, carried so the edit screen prefills without a second fetch. */
+  fullVersion: string | null;
+  backupPlan: string | null;
+  pairWith: string | null;
+  timeWindow: "morning" | "midday" | "evening" | "anytime";
+  perWeekTarget: number | null;
+  status: "building" | "established" | "paused";
+  /** First due day, when it was set to start later ("start Monday"). */
+  startsOn: DateKey | null;
 }
 
 interface AppState {
@@ -352,9 +361,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     return remoteHabits.map((h) => {
       const done = maps.completed.get(h.id) ?? none;
       const rest = maps.rest.get(h.id) ?? none;
+      const created = localDateKey(new Date(h.createdAt));
+      const startsOn = h.startsOn ? dateKeyOf(h.startsOn) : null;
       const scheduled = {
         ...h,
-        startDate: localDateKey(new Date(h.createdAt)),
+        startDate: startsOn && startsOn > created ? startsOn : created,
       };
       const progress = habitProgress(scheduled, done, todayStr, rest);
       const log = todayLog.get(h.id);
@@ -393,6 +404,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         reward: h.reward,
         frequency: h.frequency,
         targetDays: h.targetDays,
+        fullVersion: h.fullVersion ?? null,
+        backupPlan: h.backupPlan ?? null,
+        pairWith: h.pairWith ?? null,
+        timeWindow: h.timeWindow ?? "anytime",
+        perWeekTarget: h.perWeekTarget ?? null,
+        status: h.status ?? "building",
+        startsOn,
       };
     });
   }, [remoteHabits, logs]);

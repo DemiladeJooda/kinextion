@@ -27,10 +27,16 @@ import { Stack, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
-import type { HabitDraft } from "@kinextion/shared";
+import { draftToCreateInput, type HabitDraft } from "@kinextion/shared";
 
 import { BasisChips, HabitDraftCard } from "../../components/HabitDraftCard";
-import { AuroraBackdrop, Button, Card, Txt, TypingDots } from "../../components/ui";
+import {
+  AuroraBackdrop,
+  Button,
+  Card,
+  Txt,
+  TypingDots,
+} from "../../components/ui";
 import { useApi } from "../../hooks/useApi";
 import { useAppState } from "../../lib/store";
 import { color, radius, space, tint } from "../../theme";
@@ -50,7 +56,9 @@ export default function DiscoverHabitsScreen() {
   const router = useRouter();
   const { addHabits } = useAppState();
 
-  const [turns, setTurns] = useState<Turn[]>([{ role: "assistant", content: OPENER }]);
+  const [turns, setTurns] = useState<Turn[]>([
+    { role: "assistant", content: OPENER },
+  ]);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
   const [drafts, setDrafts] = useState<HabitDraft[]>([]);
@@ -63,7 +71,10 @@ export default function DiscoverHabitsScreen() {
 
   useEffect(() => {
     // Keep the newest turn in view as the conversation grows.
-    const id = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
+    const id = setTimeout(
+      () => scrollRef.current?.scrollToEnd({ animated: true }),
+      80,
+    );
     return () => clearTimeout(id);
   }, [turns, drafts, thinking]);
 
@@ -88,7 +99,9 @@ export default function DiscoverHabitsScreen() {
         setSelected(new Set(result.drafts.map((_, i) => i)));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
+      setError(
+        err instanceof Error ? err.message : "Something went wrong. Try again.",
+      );
       // Put their words back so a failed send doesn't lose what they said.
       setTurns(turns);
       setInput(content);
@@ -104,18 +117,7 @@ export default function DiscoverHabitsScreen() {
     setSaving(true);
     setError(null);
     try {
-      await addHabits(
-        chosen.map((d) => ({
-          name: d.name,
-          category: d.category,
-          cue: d.cue,
-          craving: d.craving,
-          response: d.response,
-          reward: d.reward,
-          frequency: d.frequency,
-          targetDays: d.targetDays,
-        }))
-      );
+      await addHabits(chosen.map(draftToCreateInput));
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
     } catch {
@@ -125,7 +127,10 @@ export default function DiscoverHabitsScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: color.bg }} edges={["bottom"]}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: color.bg }}
+      edges={["bottom"]}
+    >
       <Stack.Screen
         options={{
           title: "Talk it through",
@@ -185,8 +190,13 @@ export default function DiscoverHabitsScreen() {
                     }}
                   >
                     <HabitDraftCard draft={draft} accepted={selected.has(i)}>
-                      <Txt variant="small" c={selected.has(i) ? color.green : color.textFaint}>
-                        {selected.has(i) ? "Selected — tap to remove" : "Tap to include"}
+                      <Txt
+                        variant="small"
+                        c={selected.has(i) ? color.green : color.textFaint}
+                      >
+                        {selected.has(i)
+                          ? "Selected — tap to remove"
+                          : "Tap to include"}
                       </Txt>
                     </HabitDraftCard>
                   </Pressable>
@@ -263,7 +273,8 @@ export default function DiscoverHabitsScreen() {
               borderRadius: 22,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: input.trim() && !thinking ? color.teal : tint(color.teal, 0.14),
+              backgroundColor:
+                input.trim() && !thinking ? color.teal : tint(color.teal, 0.14),
             }}
           >
             <Ionicons
@@ -302,7 +313,9 @@ function Bubble({ turn }: { turn: Turn }) {
 
   return (
     <View style={{ alignItems: "flex-start" }}>
-      <Card style={{ maxWidth: "92%", padding: space.lg, borderTopLeftRadius: 6 }}>
+      <Card
+        style={{ maxWidth: "92%", padding: space.lg, borderTopLeftRadius: 6 }}
+      >
         <Txt variant="body" c={color.textMuted}>
           {turn.content}
         </Txt>

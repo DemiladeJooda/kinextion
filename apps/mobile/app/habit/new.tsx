@@ -11,7 +11,13 @@
  */
 
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -23,13 +29,21 @@ import {
   toCreateInput,
   type HabitFormValues,
 } from "../../components/HabitForm";
-import { AuroraBackdrop, PressCard, ScreenHeader, Txt } from "../../components/ui";
+import { BUILDING_SOFT_LIMIT } from "@kinextion/shared";
+import {
+  AuroraBackdrop,
+  Card,
+  PressCard,
+  ScreenHeader,
+  Txt,
+} from "../../components/ui";
 import { useAppState } from "../../lib/store";
 import { color, radius, space, tint } from "../../theme";
 
 export default function NewHabitScreen() {
   const router = useRouter();
   const { addHabit, habits } = useAppState();
+  const building = habits.filter((h) => h.status === "building").length;
 
   const [mode, setMode] = useState<"choose" | "build">("choose");
   const [values, setValues] = useState<HabitFormValues>(emptyHabitForm);
@@ -49,7 +63,10 @@ export default function NewHabitScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: color.bg }} edges={["bottom"]}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: color.bg }}
+      edges={["bottom"]}
+    >
       <Stack.Screen
         options={{
           title: mode === "build" ? "New habit" : "Add a habit",
@@ -80,12 +97,54 @@ export default function NewHabitScreen() {
                 subtitle={
                   habits.length === 0
                     ? "Start with one. One kept beats five abandoned."
-                    : `You're running ${habits.length}. Four or five is usually plenty.`
+                    : "Pick the easiest way in."
                 }
               />
 
+              {/* A nudge, never a block: three in progress is plenty to
+                  build at once. Our own call, so the copy doesn't cite a study. */}
+              {building >= BUILDING_SOFT_LIMIT ? (
+                <Card accent={color.blue} style={{ marginBottom: space.lg }}>
+                  <Txt variant="bodyStrong" c={color.blue}>
+                    You&apos;re building {building} already
+                  </Txt>
+                  <Txt
+                    variant="small"
+                    c={color.textMuted}
+                    style={{ marginTop: 3 }}
+                  >
+                    That&apos;s plenty to build at once. Want to make one of
+                    them smaller instead? You can still add another below.
+                  </Txt>
+                  <Pressable
+                    onPress={() => router.back()}
+                    accessibilityRole="button"
+                    hitSlop={8}
+                    style={{ marginTop: space.sm }}
+                  >
+                    <Txt
+                      variant="small"
+                      c={color.blue}
+                      style={{ fontWeight: "700" }}
+                    >
+                      Back to my habits →
+                    </Txt>
+                  </Pressable>
+                </Card>
+              ) : null}
+
               <View style={{ gap: space.md }}>
                 <Animated.View entering={FadeInDown.duration(400)}>
+                  <RouteCard
+                    icon="list"
+                    accent={color.green}
+                    title="Pick from a short list"
+                    body="A few ready-made habits for your goal, each already small and attached to part of your day."
+                    onPress={() => router.push("/habit/starter" as never)}
+                  />
+                </Animated.View>
+
+                <Animated.View entering={FadeInDown.duration(400).delay(35)}>
                   <RouteCard
                     icon="sparkles"
                     accent={color.purple}
@@ -110,7 +169,7 @@ export default function NewHabitScreen() {
                     icon="create-outline"
                     accent={color.amber}
                     title="I know what I want"
-                    body="Straight to the form. Name it, pick how often, and add the cue and reward if you want it to stick."
+                    body="Straight to the builder: when it happens, the tiny version, how often."
                     onPress={() => setMode("build")}
                   />
                 </Animated.View>
@@ -120,9 +179,10 @@ export default function NewHabitScreen() {
             <>
               <ScreenHeader
                 title="New habit"
-                subtitle="Only the name is required. Everything else makes it more likely to hold."
+                subtitle="Five short steps. Each one makes it more likely to hold."
               />
               <HabitForm
+                isNew
                 values={values}
                 onChange={setValues}
                 onSubmit={() => void onSave()}

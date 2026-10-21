@@ -37,8 +37,13 @@ export function startOfToday(timeZone = "UTC"): Date {
 
 /** Habits as the shared schedule module wants them: with a start date in the
  *  user's own zone, so the day a habit was created is its first due day. */
-export function toScheduled<T extends { createdAt: Date }>(habit: T, timeZone: string) {
-  return { ...habit, startDate: localDateKey(habit.createdAt, timeZone) };
+export function toScheduled<T extends { createdAt: Date; startsOn?: Date | null }>(
+  habit: T,
+  timeZone: string
+) {
+  const created = localDateKey(habit.createdAt, timeZone);
+  const starts = habit.startsOn ? dateKeyOf(habit.startsOn) : null;
+  return { ...habit, startDate: starts && starts > created ? starts : created };
 }
 
 type LogRow = { habitId: string; date: Date; completed: boolean; state?: string | null };

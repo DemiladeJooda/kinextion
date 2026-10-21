@@ -164,6 +164,8 @@ export const createHabitSchema = z.object({
   perWeekTarget: z.number().int().min(1).max(7).optional(),
   sortOrder: z.number().int().min(0).max(10_000).optional(),
   reminderEnabled: z.boolean().optional(),
+  /** First day it's due, when that's later than today ("start Monday"). */
+  startsOn: z.string().date().optional(),
 });
 
 export type CreateHabitInput = z.infer<typeof createHabitSchema>;
@@ -214,6 +216,10 @@ export const habitDraftSchema = z.object({
   reward: z.string().max(200).optional(),
   frequency: habitFrequencySchema,
   targetDays: z.array(z.number().int().min(0).max(6)).optional(),
+  fullVersion: z.string().max(200).optional(),
+  backupPlan: z.string().max(300).optional(),
+  timeWindow: habitTimeWindowSchema.optional(),
+  perWeekTarget: z.number().int().min(1).max(7).optional(),
   /** Why this one — must refer to signals that were actually supplied. */
   rationale: z.string().min(1).max(300),
 });

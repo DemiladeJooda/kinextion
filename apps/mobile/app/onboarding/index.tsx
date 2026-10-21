@@ -12,12 +12,35 @@ import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import Animated, { FadeIn, FadeInDown, FadeInLeft, FadeInRight } from "react-native-reanimated";
-import { GOAL_OPTIONS, EQUIPMENT_OPTIONS } from "@kinextion/shared";
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeInLeft,
+  FadeInRight,
+} from "react-native-reanimated";
+import {
+  GOAL_OPTIONS,
+  EQUIPMENT_OPTIONS,
+  identitySuggestions,
+  nextMondayKey,
+  starterHabitsFor,
+  starterToCreateInput,
+  today,
+} from "@kinextion/shared";
 import type { FitnessLevel } from "@kinextion/shared";
 
-import { AuroraBackdrop, Button, Chip, Label, Notice, PressCard, Txt } from "../../components/ui";
+import {
+  AuroraBackdrop,
+  Button,
+  Chip,
+  Label,
+  Notice,
+  PressCard,
+  Txt,
+} from "../../components/ui";
+import { StartChoice, StarterPicker } from "../../components/StarterPicker";
 import { useApi } from "../../hooks/useApi";
+import { useAppState } from "../../lib/store";
 import { color, radius, space, tint, type } from "../../theme";
 
 const FITNESS_LEVELS: readonly [string, FitnessLevel][] = [
@@ -38,10 +61,16 @@ const DAYS_TO_COUNT: Record<(typeof DAYS_OPTIONS)[number], number> = {
 /**
  * Onboarding.
  *
- * Four short steps, one question per screen. Deliberately does not ask for
+ * Short steps, one question per screen. Deliberately does not ask for
  * anything sensitive up front — health conditions, medications, and history
  * are volunteered later in conversation, where the context makes it obvious
  * why the system is asking.
+ *
+ * Two steps exist for the habits that follow. "Who are you becoming?" gives
+ * habits an identity to attach to (Person, in Zoe Chance's 4Ps). The last
+ * step offers a short starter menu for the chosen goal, so nobody leaves
+ * onboarding facing an empty list and a blank form (Possibilities). Both are
+ * optional.
  */
 type Step =
   | {
@@ -85,7 +114,9 @@ type Step =
       question: string;
       hint: string;
       options: readonly string[];
-    };
+    }
+  | { key: "identity"; kind: "identity"; question: string; hint: string }
+  | { key: "starter"; kind: "starter"; question: string; hint: string };
 
 /** Lifestyle chip labels, in the order shown — mapped to preference flags at submit time. */
 const LIFESTYLE_OPTIONS = [
@@ -108,6 +139,12 @@ const STEPS: Step[] = [
     question: "What matters most right now?",
     hint: "You can change this whenever it changes.",
     options: GOAL_OPTIONS,
+  },
+  {
+    key: "identity",
+    kind: "identity",
+    question: "Who are you becoming?",
+    hint: "One line, in your words. Your habits will be built around it. Optional.",
   },
   {
     key: "fitness",
@@ -137,6 +174,12 @@ const STEPS: Step[] = [
     hint: "Optional — this just tells the guides what's already in motion, so they don't suggest what you're already doing.",
     options: LIFESTYLE_OPTIONS,
   },
+  {
+    key: "starter",
+    kind: "starter",
+    question: "Pick your first habits",
+    hint: "Each one is already tiny and attached to part of your day. Optional — you can add your own later.",
+  },
 ];
 
 export default function OnboardingScreen() {
@@ -155,6 +198,11 @@ export default function OnboardingScreen() {
   const [showEquipmentOther, setShowEquipmentOther] = useState(false);
   const [equipmentOther, setEquipmentOther] = useState("");
   const [lifestyle, setLifestyle] = useState<string[]>([]);
+  const [identity, setIdentity] = useState("");
+  const [starterIds, setStarterIds] = useState<string[]>([]);
+  const [start, setStart] = useState<"today" | "monday">("today");
+  const { addHabits } = useAppState();
+  const todayKey = today();
 
   const step = STEPS[index];
   const isLast = index === STEPS.length - 1;
@@ -166,9 +214,16 @@ export default function OnboardingScreen() {
         ? step.key === "goal" && showGoalOther
           ? goalOther.trim().length > 0
           : !!single[step.key]
-        : step.kind === "lifestyle"
+        : step.kind === "lifestyle" ||
+            step.kind === "identity" ||
+            step.kind === "starter"
           ? true // optional — context, never a gate
           : multi.length > 0;
+
+  const resolvedGoal = showGoalOther ? goalOther.trim() : single.goal;
+  const starters = starterHabitsFor(resolvedGoal, multi);
+  const identityGoal =
+    identity.trim().length >= 3 ? identity.trim() : undefined;
 
   const next = async () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -177,12 +232,12 @@ export default function OnboardingScreen() {
       return;
     }
 
-    const fitnessLevel = FITNESS_LEVELS.find(([label]) => label === single.fitness)?.[1];
+    const fitnessLevel = FITNESS_LEVELS.find(
+      ([label]) => label === single.fitness,
+    )?.[1];
     const daysLabel = single.days as (typeof DAYS_OPTIONS)[number] | undefined;
 
     if (!fitnessLevel || !daysLabel) return;
-
-    const resolvedGoal = showGoalOther ? goalOther.trim() : single.goal;
 
     setError(null);
     setSubmitting(true);
@@ -193,12 +248,22 @@ export default function OnboardingScreen() {
         primaryGoals: resolvedGoal ? [resolvedGoal] : [],
         weeklyAvailability: DAYS_TO_COUNT[daysLabel],
         equipment: multi,
+        identityGoal,
         preferences: {
           doesTherapy: lifestyle.includes("I see a therapist"),
           doesJournal: lifestyle.includes("I journal regularly"),
           currentlyWorkingOut: lifestyle.includes("I already work out"),
         },
       });
+      // The profile is saved first, so a failure here never loses onboarding.
+      const picked = starters.filter((h) => starterIds.includes(h.id));
+      if (picked.length) {
+        const startsOn =
+          start === "monday" ? nextMondayKey(todayKey) : undefined;
+        await addHabits(
+          picked.map((h) => starterToCreateInput(h, startsOn)),
+        ).catch(() => {});
+      }
       router.replace("/(tabs)" as never);
     } catch {
       setError("Couldn't save that. Check your connection and try again.");
@@ -246,7 +311,10 @@ export default function OnboardingScreen() {
               }}
             >
               {i <= index ? (
-                <Animated.View entering={FadeInLeft.duration(360)} style={{ flex: 1 }}>
+                <Animated.View
+                  entering={FadeInLeft.duration(360)}
+                  style={{ flex: 1 }}
+                >
                   <LinearGradient
                     colors={[color.green, color.teal]}
                     start={{ x: 0, y: 0 }}
@@ -282,7 +350,11 @@ export default function OnboardingScreen() {
             <Txt variant="title" style={{ marginTop: space.md }}>
               {step.question}
             </Txt>
-            <Txt variant="small" c={color.textMuted} style={{ marginTop: space.sm }}>
+            <Txt
+              variant="small"
+              c={color.textMuted}
+              style={{ marginTop: space.sm }}
+            >
               {step.hint}
             </Txt>
 
@@ -329,7 +401,9 @@ export default function OnboardingScreen() {
                           haptic="none"
                           style={{
                             paddingVertical: space.lg,
-                            borderColor: selected ? tint(color.green, 0.55) : color.border,
+                            borderColor: selected
+                              ? tint(color.green, 0.55)
+                              : color.border,
                           }}
                         >
                           <View
@@ -343,7 +417,11 @@ export default function OnboardingScreen() {
                               {opt}
                             </Txt>
                             <Ionicons
-                              name={selected ? "checkmark-circle" : "ellipse-outline"}
+                              name={
+                                selected
+                                  ? "checkmark-circle"
+                                  : "ellipse-outline"
+                              }
                               size={22}
                               color={selected ? color.green : color.textFaint}
                             />
@@ -357,7 +435,9 @@ export default function OnboardingScreen() {
                       fitness level and weekly days are closed, calibrated scales. */}
                   {step.key === "goal" ? (
                     <Animated.View
-                      entering={FadeInDown.duration(300).delay(60 + step.options.length * 40)}
+                      entering={FadeInDown.duration(300).delay(
+                        60 + step.options.length * 40,
+                      )}
                     >
                       <PressCard
                         accent={showGoalOther ? color.green : undefined}
@@ -369,7 +449,9 @@ export default function OnboardingScreen() {
                         haptic="none"
                         style={{
                           paddingVertical: space.lg,
-                          borderColor: showGoalOther ? tint(color.green, 0.55) : color.border,
+                          borderColor: showGoalOther
+                            ? tint(color.green, 0.55)
+                            : color.border,
                         }}
                       >
                         <View
@@ -383,9 +465,15 @@ export default function OnboardingScreen() {
                             Something else
                           </Txt>
                           <Ionicons
-                            name={showGoalOther ? "checkmark-circle" : "ellipse-outline"}
+                            name={
+                              showGoalOther
+                                ? "checkmark-circle"
+                                : "ellipse-outline"
+                            }
                             size={22}
-                            color={showGoalOther ? color.green : color.textFaint}
+                            color={
+                              showGoalOther ? color.green : color.textFaint
+                            }
                           />
                         </View>
                       </PressCard>
@@ -416,32 +504,107 @@ export default function OnboardingScreen() {
                     </Animated.View>
                   ) : null}
                 </View>
+              ) : step.kind === "identity" ? (
+                <View style={{ gap: space.md }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      backgroundColor: color.surface,
+                      borderWidth: 1,
+                      borderColor: identity
+                        ? tint(color.green, 0.4)
+                        : color.border,
+                      borderRadius: radius.lg,
+                      paddingHorizontal: space.lg,
+                    }}
+                  >
+                    <Txt variant="body" c={color.textMuted}>
+                      I&apos;m{" "}
+                    </Txt>
+                    <TextInput
+                      value={identity}
+                      onChangeText={setIdentity}
+                      placeholder="someone who moves every day"
+                      placeholderTextColor={color.textFaint}
+                      maxLength={120}
+                      returnKeyType="done"
+                      style={[
+                        type.body,
+                        {
+                          flex: 1,
+                          paddingVertical: space.lg,
+                          color: color.text,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <View style={{ gap: space.sm }}>
+                    {identitySuggestions(resolvedGoal).map((phrase) => (
+                      <Chip
+                        key={phrase}
+                        label={phrase}
+                        accent={color.green}
+                        selected={identity === phrase}
+                        onPress={() => setIdentity(phrase)}
+                      />
+                    ))}
+                  </View>
+                </View>
+              ) : step.kind === "starter" ? (
+                <View style={{ gap: space.xl }}>
+                  <StarterPicker
+                    starters={starters}
+                    selected={starterIds}
+                    onChange={setStarterIds}
+                  />
+                  <StartChoice
+                    value={start}
+                    onChange={setStart}
+                    isMonday={nextMondayKey(todayKey) === todayKey}
+                  />
+                </View>
               ) : step.kind === "lifestyle" ? (
                 <View style={{ gap: space.sm }}>
                   {step.options.map((opt, i) => {
                     const selected = lifestyle.includes(opt);
                     return (
-                      <Animated.View key={opt} entering={FadeInDown.duration(300).delay(60 + i * 40)}>
+                      <Animated.View
+                        key={opt}
+                        entering={FadeInDown.duration(300).delay(60 + i * 40)}
+                      >
                         <PressCard
                           accent={selected ? color.green : undefined}
                           onPress={() => {
                             void Haptics.selectionAsync();
                             setLifestyle((p) =>
-                              p.includes(opt) ? p.filter((x) => x !== opt) : [...p, opt]
+                              p.includes(opt)
+                                ? p.filter((x) => x !== opt)
+                                : [...p, opt],
                             );
                           }}
                           haptic="none"
                           style={{
                             paddingVertical: space.lg,
-                            borderColor: selected ? tint(color.green, 0.55) : color.border,
+                            borderColor: selected
+                              ? tint(color.green, 0.55)
+                              : color.border,
                           }}
                         >
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: space.md,
+                            }}
+                          >
                             <Txt variant="bodyStrong" style={{ flex: 1 }}>
                               {opt}
                             </Txt>
                             <Ionicons
-                              name={selected ? "checkmark-circle" : "square-outline"}
+                              name={
+                                selected ? "checkmark-circle" : "square-outline"
+                              }
                               size={22}
                               color={selected ? color.green : color.textFaint}
                             />
@@ -471,7 +634,9 @@ export default function OnboardingScreen() {
                           selected={selected}
                           onPress={() =>
                             setMulti((p) =>
-                              p.includes(opt) ? p.filter((x) => x !== opt) : [...p, opt]
+                              p.includes(opt)
+                                ? p.filter((x) => x !== opt)
+                                : [...p, opt],
                             )
                           }
                         />
@@ -488,7 +653,9 @@ export default function OnboardingScreen() {
                           icon="close"
                           accent={color.green}
                           selected
-                          onPress={() => setMulti((p) => p.filter((x) => x !== opt))}
+                          onPress={() =>
+                            setMulti((p) => p.filter((x) => x !== opt))
+                          }
                         />
                       ))}
 
@@ -503,7 +670,11 @@ export default function OnboardingScreen() {
 
                   {showEquipmentOther ? (
                     <View
-                      style={{ flexDirection: "row", gap: space.sm, marginTop: space.md }}
+                      style={{
+                        flexDirection: "row",
+                        gap: space.sm,
+                        marginTop: space.md,
+                      }}
                     >
                       <TextInput
                         value={equipmentOther}
@@ -514,7 +685,8 @@ export default function OnboardingScreen() {
                         returnKeyType="done"
                         onSubmitEditing={() => {
                           const val = equipmentOther.trim();
-                          if (val && !multi.includes(val)) setMulti((p) => [...p, val]);
+                          if (val && !multi.includes(val))
+                            setMulti((p) => [...p, val]);
                           setEquipmentOther("");
                         }}
                         style={[
@@ -534,7 +706,8 @@ export default function OnboardingScreen() {
                       <Pressable
                         onPress={() => {
                           const val = equipmentOther.trim();
-                          if (val && !multi.includes(val)) setMulti((p) => [...p, val]);
+                          if (val && !multi.includes(val))
+                            setMulti((p) => [...p, val]);
                           setEquipmentOther("");
                         }}
                         disabled={!equipmentOther.trim()}
@@ -555,7 +728,11 @@ export default function OnboardingScreen() {
                         <Ionicons
                           name="add"
                           size={20}
-                          color={equipmentOther.trim() ? color.green : color.textFaint}
+                          color={
+                            equipmentOther.trim()
+                              ? color.green
+                              : color.textFaint
+                          }
                         />
                       </Pressable>
                     </View>
@@ -574,7 +751,11 @@ export default function OnboardingScreen() {
             style={{ gap: space.md, marginTop: space.xxl }}
           >
             <Button
-              label={isLast ? `Let's go${name.trim() ? `, ${name.trim()}` : ""}` : "Continue"}
+              label={
+                isLast
+                  ? `Let's go${name.trim() ? `, ${name.trim()}` : ""}`
+                  : "Continue"
+              }
               onPress={next}
               loading={submitting}
               disabled={!canAdvance || submitting}

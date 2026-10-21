@@ -10,13 +10,30 @@
  */
 
 import { useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
-import { HabitForm, toCreateInput, type HabitFormValues } from "../../components/HabitForm";
-import { AuroraBackdrop, Button, Card, EmptyState, ScreenHeader, Txt } from "../../components/ui";
+import {
+  HabitForm,
+  toCreateInput,
+  type HabitFormValues,
+} from "../../components/HabitForm";
+import {
+  AuroraBackdrop,
+  Button,
+  Card,
+  EmptyState,
+  ScreenHeader,
+  Txt,
+} from "../../components/ui";
 import { useAppState } from "../../lib/store";
 import { categoryColor, color, space } from "../../theme";
 
@@ -36,10 +53,17 @@ export default function EditHabitScreen() {
           craving: habit.craving ?? "",
           response: habit.response ?? "",
           reward: habit.reward ?? "",
-          frequency: (habit.frequency as HabitFormValues["frequency"]) ?? "daily",
+          frequency:
+            (habit.frequency as HabitFormValues["frequency"]) ?? "daily",
           targetDays: habit.targetDays ?? [],
+          perWeekTarget: habit.perWeekTarget ?? 1,
+          timeWindow: habit.timeWindow,
+          fullVersion: habit.fullVersion ?? "",
+          backupPlan: habit.backupPlan ?? "",
+          pairWith: habit.pairWith ?? "",
+          start: "today",
         }
-      : null
+      : null,
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +82,10 @@ export default function EditHabitScreen() {
 
   if (!habit || !values) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: color.bg }} edges={["bottom"]}>
+      <SafeAreaView
+        style={{ flex: 1, backgroundColor: color.bg }}
+        edges={["bottom"]}
+      >
         {header}
         <View style={{ padding: space.xl }}>
           <EmptyState
@@ -103,12 +130,15 @@ export default function EditHabitScreen() {
             })();
           },
         },
-      ]
+      ],
     );
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: color.bg }} edges={["bottom"]}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: color.bg }}
+      edges={["bottom"]}
+    >
       {header}
       <AuroraBackdrop accent={categoryColor[habit.category]} />
 
@@ -124,10 +154,7 @@ export default function EditHabitScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <ScreenHeader
-            title={habit.name}
-            subtitle={habitSummary(habit)}
-          />
+          <ScreenHeader title={habit.name} subtitle={habitSummary(habit)} />
 
           <HabitForm
             values={values}
@@ -146,11 +173,20 @@ export default function EditHabitScreen() {
                 marginBottom: space.lg,
               }}
             >
-              <Ionicons name="archive-outline" size={18} color={color.textMuted} />
+              <Ionicons
+                name="archive-outline"
+                size={18}
+                color={color.textMuted}
+              />
               <View style={{ flex: 1 }}>
                 <Txt variant="bodyStrong">Done with this one?</Txt>
-                <Txt variant="small" c={color.textMuted} style={{ marginTop: 3 }}>
-                  Retiring keeps every log you&apos;ve made — it just stops asking you about it.
+                <Txt
+                  variant="small"
+                  c={color.textMuted}
+                  style={{ marginTop: 3 }}
+                >
+                  Retiring keeps every log you&apos;ve made — it just stops
+                  asking you about it.
                 </Txt>
               </View>
             </View>
@@ -183,7 +219,8 @@ function habitSummary(habit: {
   const parts: string[] = [];
   if (habit.streak > 0) parts.push(`${habit.streak}-${unit} streak`);
   if (habit.bestStreak > habit.streak) parts.push(`best ${habit.bestStreak}`);
-  if (habit.month.due > 0) parts.push(`${habit.month.kept} of ${habit.month.due} this month`);
+  if (habit.month.due > 0)
+    parts.push(`${habit.month.kept} of ${habit.month.due} this month`);
   return parts.length
     ? `${parts.join(" · ")}. Changes won't reset it.`
     : "Shrink it until it's easy. That's usually the fix.";

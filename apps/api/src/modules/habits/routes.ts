@@ -20,6 +20,19 @@ import {
  *  habit done last night but never ticked, short enough that history stays
  *  history. */
 const BACKFILL_UNTIL_HOUR = 12;
+
+/** How far ahead a habit can be scheduled to start — far enough for "next
+ *  Monday" or "the 1st", not so far it's forgotten. */
+const MAX_START_AHEAD_DAYS = 31;
+const START_RANGE_ERROR = "A habit can start today or within the next month.";
+
+/** `startsOn` as a Date for Prisma, null when it isn't later than today,
+ *  or "invalid" when it's in the past or too far out. */
+function checkStartsOn(startsOn: string | undefined, today: string): Date | null | "invalid" {
+  if (!startsOn || startsOn === today) return null;
+  if (startsOn < today || startsOn > addDays(today, MAX_START_AHEAD_DAYS)) return "invalid";
+  return dateFromKey(startsOn);
+}
 import { buildHabitContext } from "../../lib/habit-context.js";
 import { recomputeTodayScore } from "../../lib/score.js";
 import { discoverHabits, suggestHabits } from "./assistant.js";
@@ -56,8 +69,13 @@ export async function habitRoutes(app: FastifyInstance) {
       });
     }
 
+    const startsOn = checkStartsOn(parsed.data.startsOn, request.localToday());
+    if (startsOn === "invalid") {
+      return reply.status(400).send({ success: false, error: START_RANGE_ERROR });
+    }
+
     const habit = await prisma.habit.create({
-      data: { userId: request.userId, ...parsed.data },
+      data: { userId: request.userId, ...parsed.data, startsOn },
     });
 
     request.log.info(
@@ -88,9 +106,17 @@ export async function habitRoutes(app: FastifyInstance) {
       });
     }
 
+    const startsOn =
+      "startsOn" in parsed.data
+        ? checkStartsOn(parsed.data.startsOn, request.localToday())
+        : undefined;
+    if (startsOn === "invalid") {
+      return reply.status(400).send({ success: false, error: START_RANGE_ERROR });
+    }
+
     const result = await prisma.habit.updateMany({
       where: { id: request.params.id, userId: request.userId },
-      data: parsed.data,
+      data: { ...parsed.data, ...(startsOn !== undefined ? { startsOn } : {}) },
     });
 
     if (result.count === 0) {

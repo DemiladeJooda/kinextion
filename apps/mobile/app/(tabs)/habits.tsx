@@ -324,9 +324,7 @@ export default function TodayScreen() {
             <DoneRow
               key={h.id}
               title={h.name}
-              detail={
-                h.frequency === "weekly" ? "Done this week" : h.scheduleLabel
-              }
+              detail={notTodayDetail(h)}
               accent={categoryColor[h.category]}
               faded
               onPress={() => openHabit(h.id)}
@@ -1231,4 +1229,19 @@ function NoHabitsYet({ onStart }: { onStart: () => void }) {
       </Card>
     </Animated.View>
   );
+}
+
+/** Why a habit isn't on today's list, in a few words. */
+function notTodayDetail(h: Habit): string {
+  if (h.startsOn && h.startsOn > today()) {
+    const day = new Date(`${h.startsOn}T12:00:00Z`).toLocaleDateString(
+      undefined,
+      {
+        weekday: "long",
+        timeZone: "UTC",
+      },
+    );
+    return `Starts ${day}`;
+  }
+  return h.frequency === "weekly" ? "Done this week" : h.scheduleLabel;
 }
