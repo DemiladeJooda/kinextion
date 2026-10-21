@@ -29,6 +29,14 @@ describe("reminderBody", () => {
     expect(reminderBody(habit())).toBe("After I pour my coffee: 2 push-ups. To start the day ahead.");
   });
 
+  it("leads with their own promise on the day they made it for", () => {
+    const h = habit({ promises: new Map([[TUE, "After I pour my coffee, I'll do 2 push-ups."]]) });
+    expect(reminderBody(h, TUE)).toBe(
+      `You said: "After I pour my coffee, I'll do 2 push-ups." To start the day ahead.`
+    );
+    expect(reminderBody(h, "2026-10-21")).toBe("After I pour my coffee: 2 push-ups. To start the day ahead.");
+  });
+
   it("copes with missing pieces", () => {
     expect(reminderBody(habit({ display: { cue: "", response: "", craving: "" } }))).toBe("Push-ups.");
   });

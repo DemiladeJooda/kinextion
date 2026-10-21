@@ -108,7 +108,9 @@ function occurrences(
   completed: ReadonlySet<DateKey>,
   from: DateKey,
   today: DateKey,
-  rest: ReadonlySet<DateKey> = EMPTY
+  rest: ReadonlySet<DateKey> = EMPTY,
+  /** True when `today` is already over (a past week), so its misses count. */
+  closed = false
 ): Occurrence[] {
   const start = habit.startDate && habit.startDate > from ? habit.startDate : from;
   const out: Occurrence[] = [];
@@ -124,7 +126,7 @@ function occurrences(
         if (completed.has(d)) count++;
       }
       const done = count >= target;
-      if (week === thisWeek && !done) continue;
+      if (week === thisWeek && !done && !closed) continue;
       out.push({ key: week, done });
     }
     return out;
@@ -134,7 +136,7 @@ function occurrences(
     if (!isPlannedOn(habit, d)) continue;
     const done = completed.has(d);
     if (!done && rest.has(d)) continue;
-    if (d === today && !done) continue;
+    if (d === today && !done && !closed) continue;
     out.push({ key: d, done });
   }
   return out;
@@ -251,9 +253,10 @@ export function tallyBetween(
   completed: ReadonlySet<DateKey>,
   from: DateKey,
   to: DateKey,
-  rest: ReadonlySet<DateKey> = EMPTY
+  rest: ReadonlySet<DateKey> = EMPTY,
+  closed = false
 ): { kept: number; due: number } {
-  const occ = occurrences(habit, completed, from, to, rest);
+  const occ = occurrences(habit, completed, from, to, rest, closed);
   return { kept: occ.filter((o) => o.done).length, due: occ.length };
 }
 
@@ -394,4 +397,84 @@ export function orderForToday<
       ease(b) - ease(a) ||
       (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
   );
+}
+
+/**
+ * The most recent occasion that was missed, if nothing has been kept since —
+ * the moment to ask "What would it take to make this easier tomorrow?".
+ * Null when the latest occasion was kept, or nothing has been due yet.
+ */
+export function lastMissedOccasion(
+  habit: ScheduledHabit,
+  completed: ReadonlySet<DateKey>,
+  today: DateKey,
+  rest: ReadonlySet<DateKey> = EMPTY
+): DateKey | null {
+  const from = addDays(today, -21);
+  const occ = occurrences(habit, completed, from, today, rest);
+  const last = occ[occ.length - 1];
+  return last && !last.done ? last.key : null;
+}
+
+export interface ReviewHabit extends ScheduledHabit {
+  id: string;
+  name: string;
+  completed: ReadonlySet<DateKey>;
+  rest: ReadonlySet<DateKey>;
+}
+
+export interface WeekReview {
+  from: DateKey;
+  to: DateKey;
+  kept: number;
+  due: number;
+  /** The habit kept most reliably, if any was kept at all. */
+  best: { id: string; name: string } | null;
+  /** The one worth adjusting: kept under half the time, with enough due to tell. */
+  slipping: { id: string; name: string; kept: number; due: number } | null;
+}
+
+/**
+ * Which week a review covers, or null when it isn't review time. Sunday
+ * evening looks at the week ending today; Monday looks back at last week.
+ * Both are fresh-start moments (Dai, Milkman & Riis 2014).
+ */
+export function reviewWindow(today: DateKey, hour: number): { from: DateKey; to: DateKey } | null {
+  const day = new Date(`${today}T00:00:00.000Z`).getUTCDay();
+  if (day === 0 && hour >= 17) return { from: addDays(today, -6), to: today };
+  if (day === 1) return { from: addDays(today, -7), to: addDays(today, -1) };
+  return null;
+}
+
+export function weekInReview(
+  habits: readonly ReviewHabit[],
+  window: { from: DateKey; to: DateKey },
+  today: DateKey
+): WeekReview {
+  // A week that ended before today is closed: its last day's miss counts.
+  const closed = window.to < today;
+  let kept = 0;
+  let due = 0;
+  let best: WeekReview["best"] = null;
+  let bestRate = 0;
+  let slipping: WeekReview["slipping"] = null;
+  let worstRate = 1;
+
+  for (const h of habits) {
+    const t = tallyBetween(h, h.completed, window.from, window.to, h.rest, closed);
+    kept += t.kept;
+    due += t.due;
+    if (!t.due) continue;
+    const rate = t.kept / t.due;
+    if (t.kept > 0 && rate > bestRate) {
+      bestRate = rate;
+      best = { id: h.id, name: h.name };
+    }
+    if (t.due >= 2 && rate < 0.5 && rate < worstRate) {
+      worstRate = rate;
+      slipping = { id: h.id, name: h.name, kept: t.kept, due: t.due };
+    }
+  }
+
+  return { ...window, kept, due, best, slipping };
 }

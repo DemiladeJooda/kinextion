@@ -64,6 +64,9 @@ import {
   plannedReminders,
   shouldOfferToFade,
   today,
+  isDueOn,
+  reviewWindow,
+  weekInReview,
   type ReminderHabit,
 } from "@kinextion/shared";
 import {
@@ -71,6 +74,13 @@ import {
   syncHabitReminders,
 } from "../../lib/habit-reminders";
 import { requestNotificationPermission } from "../../lib/notifications";
+import {
+  ConcernCard,
+  PromiseCard,
+  RestartCard,
+  WeekReviewCard,
+  WhatWouldItTakeCard,
+} from "../../components/CoachCards";
 import { useAppState, type Habit } from "../../lib/store";
 import { categoryColor, color, radius, space, tint } from "../../theme";
 
@@ -113,6 +123,9 @@ export default function TodayScreen() {
     setHabitDay,
     editHabit,
     reminderHabits,
+    answerMiss,
+    applyReflection,
+    promise,
     score,
     periodScore,
     checkIn,
@@ -145,6 +158,40 @@ export default function TodayScreen() {
     (h) => h.comeback && h.todayState !== null && h.todayState !== "rest",
   );
   const [sheetFor, setSheetFor] = useState<Habit | null>(null);
+
+  // ── Coach loop ────────────────────────────────────────────────────────
+  // One "What would it take?" at a time, for the habit at the top of the
+  // list that was missed and hasn't been asked about yet.
+  const askAbout = habitsLeft.find((h) => h.askAboutMiss) ?? null;
+  const hourNow = localHour();
+  const todayKey = today();
+  const tomorrowKey = addDays(todayKey, 1);
+  const dueTomorrow =
+    hourNow >= 17
+      ? allHabits.filter((h) => {
+          const r = reminderHabits.find((x) => x.id === h.id);
+          return (
+            r &&
+            h.status !== "paused" &&
+            !h.promiseTomorrow &&
+            isDueOn(r, tomorrowKey, r.completed)
+          );
+        })
+      : [];
+  const alreadyPromised = allHabits.some((h) => h.promiseTomorrow);
+  const reviewSpan = reviewWindow(todayKey, hourNow);
+  const review = reviewSpan
+    ? weekInReview(
+        reminderHabits.filter((h) => h.status !== "paused"),
+        reviewSpan,
+        todayKey,
+      )
+    : null;
+  const paused =
+    Number(todayKey.slice(8, 10)) <= 3
+      ? allHabits.filter((h) => h.status === "paused")
+      : [];
+  const worrying = allHabits.some((h) => h.display.concern);
 
   // The check-in counts as a to-do; the workout is offered, not required,
   // so it never sits in the count as something you're behind on. A rested
@@ -297,6 +344,20 @@ export default function TodayScreen() {
           ) : null}
         </View>
 
+        {askAbout && askAbout.missedOn ? (
+          <View style={{ marginTop: space.md }}>
+            <WhatWouldItTakeCard
+              key={`${askAbout.id}-${askAbout.missedOn}`}
+              habit={askAbout}
+              onAnswer={(answer) =>
+                answerMiss(askAbout.id, askAbout.missedOn!, answer)
+              }
+              onApply={applyReflection}
+              onTalkToKairo={() => router.push("/chat/kairo" as never)}
+            />
+          </View>
+        ) : null}
+
         {remaining === 0 && due.length > 0 ? (
           <Animated.View entering={ZoomIn.springify().damping(14)}>
             <Card accent={color.green} style={{ marginTop: space.md }}>
@@ -389,6 +450,28 @@ export default function TodayScreen() {
           }}
         >
           <Label c={color.textFaint}>For you</Label>
+
+          {worrying ? (
+            <ConcernCard onTalk={() => router.push("/chat/kairo" as never)} />
+          ) : null}
+
+          {dueTomorrow.length > 0 && !alreadyPromised ? (
+            <PromiseCard
+              habits={dueTomorrow}
+              onPromise={(ids) => promise(ids, tomorrowKey)}
+            />
+          ) : null}
+
+          {review ? (
+            <WeekReviewCard review={review} onAdjust={openHabit} />
+          ) : null}
+
+          {paused.length > 0 ? (
+            <RestartCard
+              habits={paused}
+              onRestart={(id) => editHabit(id, { status: "building" })}
+            />
+          ) : null}
 
           <RemindersPrompt reminderHabits={reminderHabits} />
 
@@ -591,6 +674,15 @@ function HabitRow({
               {habit.display.response
                 ? `Save your streak · even "${habit.display.response}" counts`
                 : "Save your streak today"}
+            </Txt>
+          ) : habit.promiseToday ? (
+            <Txt
+              variant="small"
+              c={color.blue}
+              style={{ marginTop: 1 }}
+              numberOfLines={1}
+            >
+              You promised this for today
             </Txt>
           ) : habit.display.cue ? (
             <Txt
@@ -1425,6 +1517,7 @@ function NoHabitsYet({ onStart }: { onStart: () => void }) {
 
 /** Why a habit isn't on today's list, in a few words. */
 function notTodayDetail(h: Habit): string {
+  if (h.status === "paused") return "Paused";
   if (h.startsOn && h.startsOn > today()) {
     const day = new Date(`${h.startsOn}T12:00:00Z`).toLocaleDateString(
       undefined,

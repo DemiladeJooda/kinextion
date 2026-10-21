@@ -47,6 +47,16 @@ function useLiveApi() {
         withToken((token) => api.restoreHabit(token, id)),
       logHabit: (input: api.LogHabitInput) =>
         withToken((token) => api.logHabit(token, input)),
+      reflectOnMiss: (
+        habitId: string,
+        input: { missedOn: string; answer?: string; skipped?: boolean },
+      ) => withToken((token) => api.reflectOnMiss(token, habitId, input)),
+      applyReflection: (id: string) =>
+        withToken((token) => api.applyReflection(token, id)),
+      listReflections: () => withToken(api.listReflections),
+      precommit: (habitId: string, input: { forDate: string; text: string }) =>
+        withToken((token) => api.precommit(token, habitId, input)),
+      listPrecommitments: () => withToken(api.listPrecommitments),
       listHabitLogs: (range?: { from?: string; to?: string }) =>
         withToken((token) => api.listHabitLogs(token, range)),
 

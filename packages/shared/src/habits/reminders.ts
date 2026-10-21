@@ -45,6 +45,8 @@ export interface ReminderHabit extends ScheduledHabit {
   display: { cue: string; response: string; craving: string };
   completed: ReadonlySet<DateKey>;
   rest: ReadonlySet<DateKey>;
+  /** "Tomorrow, I'll …" promises by day — quoted back on that morning. */
+  promises?: ReadonlyMap<DateKey, string>;
 }
 
 export interface PlannedReminder {
@@ -69,8 +71,17 @@ function sentence(s: string) {
   return !t ? "" : /[.!?]$/.test(t) ? t : `${t}.`;
 }
 
-/** "After I pour my coffee: 2 push-ups. To start the day ahead." */
-export function reminderBody(h: Pick<ReminderHabit, "name" | "display">): string {
+/**
+ * "After I pour my coffee: 2 push-ups. To start the day ahead."
+ * On a day they promised, their own promise leads instead — a commitment
+ * someone made themselves carries further than one the app makes for them.
+ */
+export function reminderBody(
+  h: Pick<ReminderHabit, "name" | "display" | "promises">,
+  day?: DateKey
+): string {
+  const promise = day ? h.promises?.get(day) : undefined;
+  if (promise) return [`You said: "${promise.trim()}"`, sentence(h.display.craving)].filter(Boolean).join(" ");
   const action = h.display.response || h.name;
   const lead = h.display.cue ? `${h.display.cue.replace(/[,.]$/, "")}: ${action}` : action;
   return [sentence(lead), sentence(h.display.craving)].filter(Boolean).join(" ");
@@ -109,7 +120,7 @@ export function plannedReminders(
         day,
         ...at,
         title: h.name,
-        body: reminderBody(h),
+        body: reminderBody(h, day),
         habitId: h.id,
       });
     }

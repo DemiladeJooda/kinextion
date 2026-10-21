@@ -408,6 +408,8 @@ function seedLogs(): RemoteHabitLog[] {
 }
 
 let logs = seedLogs();
+let demoReflections: Awaited<ReturnType<Api["listReflections"]>> = [];
+let demoPromises: Awaited<ReturnType<Api["listPrecommitments"]>> = [];
 
 // ─── Check-in & score ─────────────────────────────────────────────────────────
 
@@ -1356,6 +1358,49 @@ export const demoApi: Api = {
       ),
     ];
     return { log, score: computeScore() };
+  },
+  reflectOnMiss: async (habitId, input) => {
+    await wait(input.skipped ? 100 : 900);
+    const reflection = {
+      id: uid("ref"),
+      habitId,
+      date: input.missedOn,
+      answer: input.answer ?? "",
+      createdAt: new Date().toISOString(),
+    };
+    demoReflections = [reflection, ...demoReflections];
+    if (input.skipped) return { reflection, skipped: true };
+    return {
+      reflection,
+      reply:
+        "Sounds like the morning gets away from you. Want to try a smaller version?",
+      change: { type: "shrink" as const, response: "1 minute" },
+      backupPlan: "If the morning gets away from me, I'll do it before lunch.",
+      concern: false,
+    };
+  },
+  applyReflection: async () => {
+    await wait();
+    return habits[0]!;
+  },
+  listReflections: async () => {
+    await wait();
+    return demoReflections;
+  },
+  precommit: async (habitId, input) => {
+    await wait();
+    const row = { id: uid("pc"), habitId, ...input };
+    demoPromises = [
+      row,
+      ...demoPromises.filter(
+        (p) => !(p.habitId === habitId && p.forDate === input.forDate),
+      ),
+    ];
+    return row;
+  },
+  listPrecommitments: async () => {
+    await wait();
+    return demoPromises;
   },
   listHabitLogs: async () => {
     await wait(200);

@@ -38,6 +38,8 @@ import { buildHabitContext } from "../../lib/habit-context.js";
 import { recomputeTodayScore } from "../../lib/score.js";
 import { discoverHabits, suggestHabits } from "./assistant.js";
 import { schedulePolish } from "./polish.js";
+import { registerCoachRoutes } from "./coach-routes.js";
+import { statusSideEffects } from "../../lib/habit-status.js";
 
 /** Background polishes started per list load, so one open never fans out. */
 const POLISH_PER_LOAD = 3;
@@ -128,9 +130,18 @@ export async function habitRoutes(app: FastifyInstance) {
       return reply.status(400).send({ success: false, error: START_RANGE_ERROR });
     }
 
+    // Pausing records the day; restarting turns the paused days into rest.
+    let statusExtra = {};
+    if (parsed.data.status) {
+      const current = await prisma.habit.findUnique({ where: { id: request.params.id } });
+      if (current && current.userId === request.userId) {
+        statusExtra = await statusSideEffects(current, parsed.data.status, request.localToday());
+      }
+    }
+
     const result = await prisma.habit.updateMany({
       where: { id: request.params.id, userId: request.userId },
-      data: { ...parsed.data, ...(startsOn !== undefined ? { startsOn } : {}) },
+      data: { ...parsed.data, ...(startsOn !== undefined ? { startsOn } : {}), ...statusExtra },
     });
 
     if (result.count === 0) {
@@ -226,6 +237,9 @@ export async function habitRoutes(app: FastifyInstance) {
       });
     }
   });
+
+  // "What would it take?", applying its suggestion, and precommitments.
+  registerCoachRoutes(app);
 
   // Log habit completion — ownership is enforced via the habit lookup below,
   // not the request body, so no one can log entries against another user's habit.

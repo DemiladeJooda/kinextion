@@ -6,6 +6,7 @@
  */
 
 import { apiRequest, apiRequestWithMeta } from "./client";
+import type { HabitChange } from "@kinextion/shared";
 import type {
   OnboardingInput,
   UpdateProfileInput,
@@ -296,6 +297,78 @@ export function listWorkouts(token: string | null, limit = 20) {
   return apiRequest<RemoteWorkout[]>("/api/workouts", {
     token,
     query: { limit: String(limit) },
+  });
+}
+
+// ─── Coach loop ─────────────────────────────────────────────────────────────
+
+export interface RemoteReflection {
+  id: string;
+  habitId: string;
+  /** The missed occasion this answers. */
+  date: string;
+  answer: string;
+  createdAt: string;
+}
+
+export interface ReflectResult {
+  reflection: RemoteReflection;
+  skipped?: boolean;
+  reply?: string;
+  change?: HabitChange;
+  backupPlan?: string | null;
+  concern?: boolean;
+}
+
+export function reflectOnMiss(
+  token: string | null,
+  habitId: string,
+  input: { missedOn: string; answer?: string; skipped?: boolean },
+) {
+  return apiRequest<ReflectResult>(`/api/habits/${habitId}/reflect`, {
+    method: "POST",
+    body: input,
+    token,
+  });
+}
+
+export function applyReflection(token: string | null, reflectionId: string) {
+  return apiRequest<RemoteHabit>(
+    `/api/habits/reflections/${reflectionId}/apply`,
+    {
+      method: "POST",
+      body: {},
+      token,
+    },
+  );
+}
+
+export function listReflections(token: string | null) {
+  return apiRequest<RemoteReflection[]>("/api/habits/reflections", { token });
+}
+
+export interface RemotePrecommitment {
+  id: string;
+  habitId: string;
+  forDate: string;
+  text: string;
+}
+
+export function precommit(
+  token: string | null,
+  habitId: string,
+  input: { forDate: string; text: string },
+) {
+  return apiRequest<RemotePrecommitment>(`/api/habits/${habitId}/precommit`, {
+    method: "POST",
+    body: input,
+    token,
+  });
+}
+
+export function listPrecommitments(token: string | null) {
+  return apiRequest<RemotePrecommitment[]>("/api/habits/precommitments", {
+    token,
   });
 }
 

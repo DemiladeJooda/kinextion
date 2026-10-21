@@ -112,7 +112,8 @@ export async function recomputeTodayScore(userId: string, timeZone = "UTC") {
     prisma.moodEntry.findMany({ where: { userId, createdAt: { gte: dayStart } } }),
   ]);
 
-  const scheduled = habits.map((h) => toScheduled(h, timeZone));
+  // A paused habit isn't owed today: out of the score, not a miss.
+  const scheduled = habits.filter((h) => h.status !== "paused").map((h) => toScheduled(h, timeZone));
   const maps = habitLogMaps(recentLogs);
   const activeDays = new Set(recentLogs.filter((l) => l.completed).map((l) => dateKeyOf(l.date)));
   const restDays = new Set(recentLogs.filter((l) => !l.completed).map((l) => dateKeyOf(l.date)));

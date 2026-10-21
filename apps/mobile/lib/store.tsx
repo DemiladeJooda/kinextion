@@ -16,6 +16,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -31,6 +32,8 @@ import {
   tallyBetween,
   today,
   displayFields,
+  describeHabitPlan,
+  lastMissedOccasion,
   type DateKey,
   type ReminderHabit,
   type DisplayFields,
@@ -46,6 +49,9 @@ import type {
   RemoteHabit,
   RemoteHabitLog,
   RemoteMoodEntry,
+  RemotePrecommitment,
+  RemoteReflection,
+  ReflectResult,
 } from "../services";
 import type { Category } from "../theme";
 
@@ -102,6 +108,13 @@ export interface Habit {
   display: DisplayFields;
   /** Reminders for this habit, at the start of its part of the day. */
   reminderEnabled: boolean;
+  /** The latest occasion, if it was missed and nothing's been kept since. */
+  missedOn: DateKey | null;
+  /** Ask "What would it take?" — missed, not answered yet, not done today. */
+  askAboutMiss: boolean;
+  /** What they promised for today / tomorrow, if anything. */
+  promiseToday: string | null;
+  promiseTomorrow: string | null;
 }
 
 interface AppState {
@@ -150,6 +163,19 @@ interface AppState {
   refresh: () => Promise<void>;
   /** Everything the reminder planner needs, kept in step with every log. */
   reminderHabits: ReminderHabit[];
+  /**
+   * Answer "What would it take?" for a habit's missed occasion (or skip it).
+   * The answer is stored either way, so the question isn't asked twice.
+   */
+  answerMiss: (
+    habitId: string,
+    missedOn: DateKey,
+    answer: string | null,
+  ) => Promise<ReflectResult>;
+  /** Apply the one change a reflection suggested. */
+  applyReflection: (reflectionId: string) => Promise<void>;
+  /** "Tomorrow, I'll …" for one or more habits. */
+  promise: (habitIds: string[], forDate: DateKey) => Promise<void>;
 }
 
 const Ctx = createContext<AppState | null>(null);
@@ -193,6 +219,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   const [remoteHabits, setRemoteHabits] = useState<RemoteHabit[]>([]);
   const [logs, setLogs] = useState<RemoteHabitLog[]>([]);
+  const [reflections, setReflections] = useState<RemoteReflection[]>([]);
+  const [promises, setPromises] = useState<RemotePrecommitment[]>([]);
   const [checkIn, setCheckIn] = useState<RemoteMoodEntry | null>(null);
   const [moodLogged, setMoodLogged] = useState(false);
   const [reflectionLogged, setReflectionLogged] = useState(false);
@@ -235,6 +263,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         ]);
 
       setRemoteHabits(currentHabits);
+      // Coach-loop state is a nice-to-have; failing to load it must not
+      // stop the day from loading.
+      void api
+        .listReflections()
+        .then(setReflections)
+        .catch(() => {});
+      void api
+        .listPrecommitments()
+        .then(setPromises)
+        .catch(() => {});
       setLogs(dayLogs);
       setCheckIn(todayCheckIn.entry);
       applyScore(todayScore);
@@ -372,6 +410,64 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [api, applyScore],
   );
 
+  // promise() needs the latest display text without re-creating itself.
+  const habitsRef = useRef<Habit[]>([]);
+
+  const promiseFor = (habitId: string, day: DateKey): string | null =>
+    promises.find((p) => p.habitId === habitId && dateKeyOf(p.forDate) === day)
+      ?.text ?? null;
+
+  const answerMiss = useCallback<AppState["answerMiss"]>(
+    async (habitId, missedOn, answer) => {
+      const result = await api.reflectOnMiss(habitId, {
+        missedOn,
+        ...(answer === null ? { skipped: true } : { answer }),
+      });
+      setReflections((prev) => [result.reflection, ...prev]);
+      return result;
+    },
+    [api],
+  );
+
+  const applyReflection = useCallback(
+    async (reflectionId: string) => {
+      const updated = await api.applyReflection(reflectionId);
+      setRemoteHabits((prev) =>
+        prev.map((h) => (h.id === updated.id ? updated : h)),
+      );
+      applyScore(await api.getTodayScore());
+    },
+    [api, applyScore],
+  );
+
+  const promise = useCallback<AppState["promise"]>(
+    async (habitIds, forDate) => {
+      const saved = await Promise.all(
+        habitIds.map((id) => {
+          const h = habitsRef.current.find((x) => x.id === id);
+          const text = h
+            ? describeHabitPlan({
+                name: h.name,
+                cue: h.display.cue,
+                response: h.display.response,
+              }).plan
+            : "";
+          return api.precommit(id, { forDate, text });
+        }),
+      );
+      setPromises((prev) => [
+        ...saved,
+        ...prev.filter(
+          (p) =>
+            !saved.some(
+              (s) => s.habitId === p.habitId && s.forDate === p.forDate,
+            ),
+        ),
+      ]);
+    },
+    [api],
+  );
+
   const habits = useMemo<Habit[]>(() => {
     const todayStr = today();
     const yesterday = addDays(todayStr, -1);
@@ -394,6 +490,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         startDate: startsOn && startsOn > created ? startsOn : created,
       };
       const progress = habitProgress(scheduled, done, todayStr, rest);
+      const missedOn =
+        h.status === "paused"
+          ? null
+          : lastMissedOccasion(scheduled, done, todayStr, rest);
       const log = todayLog.get(h.id);
       const todayState = log?.completed
         ? log.state === "minimum"
@@ -404,6 +504,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           : null;
       return {
         todayState,
+        missedOn,
+        askAboutMiss:
+          missedOn !== null &&
+          h.status !== "paused" &&
+          todayState === null &&
+          !reflections.some(
+            (r) => r.habitId === h.id && dateKeyOf(r.date) === missedOn,
+          ),
+        promiseToday: promiseFor(h.id, todayStr),
+        promiseTomorrow: promiseFor(h.id, addDays(todayStr, 1)),
         atRisk: progress.atRisk,
         comeback: progress.comeback,
         yesterdayOpen:
@@ -419,7 +529,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         cue: h.cue ?? "",
         category: h.category as Category,
         done: done.has(todayStr),
-        due: isDueOn(scheduled, todayStr, done),
+        // Paused habits aren't owed anything: off the list, no misses.
+        due: h.status !== "paused" && isDueOn(scheduled, todayStr, done),
         scheduleLabel: describeSchedule(h),
         streak: progress.streak,
         bestStreak: progress.bestStreak,
@@ -441,7 +552,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         reminderEnabled: h.reminderEnabled ?? true,
       };
     });
-  }, [remoteHabits, logs]);
+  }, [remoteHabits, logs, reflections, promises]);
 
   const reminderHabits = useMemo<ReminderHabit[]>(() => {
     const maps = logMaps(logs);
@@ -459,8 +570,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       display: h.display,
       completed: maps.completed.get(h.id) ?? none,
       rest: maps.rest.get(h.id) ?? none,
+      promises: new Map(
+        promises
+          .filter((p) => p.habitId === h.id)
+          .map((p) => [dateKeyOf(p.forDate), p.text] as [DateKey, string]),
+      ),
     }));
-  }, [habits, logs, remoteHabits]);
+  }, [habits, logs, remoteHabits, promises]);
+
+  habitsRef.current = habits;
 
   const value = useMemo<AppState>(
     () => ({
@@ -483,6 +601,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setHabitDay,
       refresh,
       reminderHabits,
+      answerMiss,
+      applyReflection,
+      promise,
     }),
     [
       habits,
@@ -504,6 +625,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setHabitDay,
       refresh,
       reminderHabits,
+      answerMiss,
+      applyReflection,
+      promise,
     ],
   );
 

@@ -15,6 +15,9 @@ import {
   canRestOn,
   currentWindow,
   orderForToday,
+  lastMissedOccasion,
+  reviewWindow,
+  weekInReview,
   type DateKey,
   type TimeWindow,
   type ScheduledHabit,
@@ -324,5 +327,42 @@ describe("orderForToday", () => {
       "midday",
       "evening",
     ]);
+  });
+});
+
+describe("lastMissedOccasion", () => {
+  const h = { ...daily, startDate: "2026-10-01" };
+
+  it("is the missed day when nothing has been kept since", () => {
+    expect(lastMissedOccasion(h, set("2026-10-17", "2026-10-18"), "2026-10-20")).toBe("2026-10-19");
+  });
+
+  it("is null once the habit was kept again", () => {
+    expect(lastMissedOccasion(h, set("2026-10-18", "2026-10-19"), "2026-10-20")).toBeNull();
+  });
+
+  it("ignores rest days and today while it's still open", () => {
+    expect(lastMissedOccasion(h, set("2026-10-18"), "2026-10-20", set("2026-10-19"))).toBeNull();
+  });
+});
+
+describe("weekly review", () => {
+  it("runs on Sunday evening and on Monday", () => {
+    expect(reviewWindow("2026-10-25", 18)).toEqual({ from: "2026-10-19", to: "2026-10-25" });
+    expect(reviewWindow("2026-10-25", 10)).toBeNull();
+    expect(reviewWindow("2026-10-26", 8)).toEqual({ from: "2026-10-19", to: "2026-10-25" });
+    expect(reviewWindow("2026-10-21", 8)).toBeNull();
+  });
+
+  it("totals the week and picks the best habit and the one slipping", () => {
+    const week = { from: "2026-10-19", to: "2026-10-25" };
+    const strong = { id: "a", name: "Walk", ...daily, startDate: "2026-10-01",
+      completed: set("2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23", "2026-10-24", "2026-10-25"), rest: set() };
+    const weak = { id: "b", name: "Read", ...daily, startDate: "2026-10-01", completed: set("2026-10-19"), rest: set() };
+    // Monday, looking back: Sunday's miss counts.
+    const r = weekInReview([strong, weak], week, "2026-10-26");
+    expect(r).toMatchObject({ kept: 8, due: 14, best: { id: "a" }, slipping: { id: "b", kept: 1, due: 7 } });
+    // Sunday evening, the week still running: today isn't a miss yet.
+    expect(weekInReview([strong, weak], week, "2026-10-25")).toMatchObject({ due: 13 });
   });
 });
