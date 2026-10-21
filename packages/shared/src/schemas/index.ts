@@ -19,6 +19,21 @@ export const personaSchema = z.enum(["altheo", "kairo"]);
 
 export const habitFrequencySchema = z.enum(["daily", "weekly", "custom"]);
 
+/** A part of the day rather than a minute — flexible timing keeps habits
+ *  going better than a rigid slot (Beshears et al. 2021). */
+export const habitTimeWindowSchema = z.enum(["morning", "midday", "evening", "anytime"]);
+
+/** Building = in progress; established = graduated; paused = on hold, no misses. */
+export const habitStatusSchema = z.enum(["building", "established", "paused"]);
+
+/** What a log says about the day. Done and minimum count; rest is neutral. */
+export const habitLogStateSchema = z.enum(["done", "minimum", "rest"]);
+
+export const habitLogSourceSchema = z.enum(["tap", "notification", "backfill", "integration"]);
+
+/** "someone who moves every day" — the identity a user's habits attach to. */
+export const identityGoalSchema = z.string().trim().min(3).max(120);
+
 export const workoutTypeSchema = z.enum([
   "strength",
   "cardio",
@@ -41,6 +56,7 @@ export const onboardingSchema = z.object({
   primaryGoals: z.array(z.string()).min(1).max(5),
   weeklyAvailability: z.number().int().min(1).max(7),
   equipment: z.array(z.string()).optional(),
+  identityGoal: identityGoalSchema.optional(),
   /** Supplementary lifestyle context, volunteered once at onboarding. */
   preferences: z
     .object({
@@ -100,6 +116,8 @@ export const updateProfileSchema = z
     primaryGoals: z.array(z.string().max(60)).min(1).max(5).optional(),
     weeklyAvailability: z.number().int().min(1).max(7).optional(),
     equipment: z.array(z.string().max(60)).max(12).optional(),
+    /** Null clears it. */
+    identityGoal: identityGoalSchema.nullish(),
     preferences: userPreferencesSchema.optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: "Nothing to update" });
@@ -124,6 +142,11 @@ export type SendMessageInput = z.infer<typeof sendMessageSchema>;
 
 // ─── Habits ──────────────────────────────────────────────────────
 
+/**
+ * A habit. The four loop fields keep their database names; in the product
+ * they are: cue = the anchor ("After I…"), craving = why it matters,
+ * response = the tiny version, reward = today's payoff.
+ */
 export const createHabitSchema = z.object({
   name: z.string().min(1).max(100),
   category: wellnessCategorySchema,
@@ -133,29 +156,45 @@ export const createHabitSchema = z.object({
   reward: z.string().max(200).optional(),
   frequency: habitFrequencySchema,
   targetDays: z.array(z.number().int().min(0).max(6)).optional(),
+  fullVersion: z.string().max(200).optional(),
+  backupPlan: z.string().max(300).optional(),
+  pairWith: z.string().max(200).optional(),
+  timeWindow: habitTimeWindowSchema.optional(),
+  /** Only meaningful with frequency "weekly": times per week, 1–7. */
+  perWeekTarget: z.number().int().min(1).max(7).optional(),
+  sortOrder: z.number().int().min(0).max(10_000).optional(),
+  reminderEnabled: z.boolean().optional(),
 });
 
 export type CreateHabitInput = z.infer<typeof createHabitSchema>;
 
 /**
  * Editing a habit. Every field optional — a rename shouldn't require
- * resending the whole Atomic Habits loop. `isActive: false` archives it,
+ * resending the whole habit loop. `isActive: false` archives it,
  * which is deliberately not a delete: the logs stay, so streaks and history
  * survive a habit the user has finished with.
  */
 export const updateHabitSchema = createHabitSchema
   .partial()
-  .extend({ isActive: z.boolean().optional() })
+  .extend({ isActive: z.boolean().optional(), status: habitStatusSchema.optional() })
   .refine((v) => Object.keys(v).length > 0, {
     message: "Nothing to update",
   });
 
 export type UpdateHabitInput = z.infer<typeof updateHabitSchema>;
 
+/**
+ * Logging a day. `completed` stays required so older app builds keep
+ * working; newer ones also send `state`. A rest day is always stored as
+ * not completed, whatever `completed` says, so it can never inflate a score.
+ */
 export const logHabitSchema = z.object({
   habitId: z.string().cuid(),
   date: z.string().date(),
   completed: z.boolean(),
+  state: habitLogStateSchema.optional(),
+  value: z.number().min(0).max(100_000).optional(),
+  source: habitLogSourceSchema.optional(),
   notes: z.string().max(500).optional(),
 });
 
@@ -226,11 +265,16 @@ export const exerciseSchema = z.object({
   notes: z.string().optional(),
 });
 
+/**
+ * A workout log. Exercises are optional: "30 minutes of cardio" is a
+ * complete log, and requiring sets and reps before anything saves is how a
+ * workout that happened never makes it into the app.
+ */
 export const logWorkoutSchema = z.object({
   name: z.string().min(1).max(100),
   type: workoutTypeSchema,
-  duration: z.number().int().min(1).optional(),
-  exercises: z.array(exerciseSchema).min(1),
+  duration: z.number().int().min(1).max(600).optional(),
+  exercises: z.array(exerciseSchema).max(50).default([]),
   difficulty: workoutDifficultySchema.optional(),
   aiGenerated: z.boolean().optional(),
 });

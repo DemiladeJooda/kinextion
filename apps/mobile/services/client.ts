@@ -26,6 +26,19 @@ export function dataApiBaseUrl(): string {
   return "http://localhost:3001";
 }
 
+/**
+ * The device's IANA zone, sent with every request so "today" on the server
+ * is the user's today. Without it the day rolled over at UTC midnight —
+ * 7pm in Dallas — and evening logs landed on tomorrow.
+ */
+function deviceTimeZone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export class ApiRequestError extends Error {
   readonly status: number;
   constructor(message: string, status: number) {
@@ -83,6 +96,7 @@ export async function apiRequestWithMeta<T, M = unknown>(
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
+        ...(deviceTimeZone() ? { "X-Time-Zone": deviceTimeZone()! } : {}),
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });

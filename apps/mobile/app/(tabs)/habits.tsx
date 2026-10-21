@@ -1,10 +1,31 @@
-import { useCallback, useEffect, useState } from "react";
+/**
+ * Today — the screen the app opens on.
+ *
+ * Two parts, deliberately far apart:
+ *
+ *   To do    Everything that asks something of the user today, in one list:
+ *            the habits due today, "How are you feeling?", and an optional
+ *            workout. Finished items fold into a "Done" group, so the list
+ *            only ever shows what's left. One glance answers "what now?".
+ *
+ *   For you  Things to read, not things to do: today's recommendation, a
+ *            slim stats strip, measured patterns, and a tip that only shows
+ *            up when a habit is actually slipping.
+ *
+ * The earlier version stacked a progress card, the habit list, a static tip,
+ * the mood strip, a workout link, the recommendation and a stats table one
+ * after another. Every block asked to be read, so the screen asked for
+ * thinking before doing. Built for the tired, distracted user: the next
+ * action is always the top row.
+ */
+
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import Animated, { FadeInDown, Layout } from "react-native-reanimated";
+import Animated, { FadeIn, FadeInDown, Layout } from "react-native-reanimated";
 
 import { MicroRecommendation } from "../../components/MicroRecommendation";
 import {
@@ -15,71 +36,72 @@ import {
   Label,
   PressCard,
   ScreenHeader,
-  SectionTitle,
   Txt,
 } from "../../components/ui";
 import { useApi } from "../../hooks/useApi";
 import { useAppState, type Habit } from "../../lib/store";
 import { categoryColor, color, radius, space, tint } from "../../theme";
 
-const CATEGORY_LABEL: Record<string, string> = {
-  physical: "Body",
-  mental: "Mind",
-  emotional: "Heart",
-  spiritual: "Spirit",
+const PERIOD_LABEL: Record<"weekly" | "monthly" | "yearly", string> = {
+  weekly: "This week",
+  monthly: "This month",
+  yearly: "This year",
 };
 
-/** Real signals derived from what Kinextion actually tracks today — no
- * wearable data yet, so this shows habits/mood/streak rather than faking
- * steps or sleep. Once Integrations (Strava/Whoop/Oura) ship, connected
- * sources join this list instead of replacing it. */
-function liveSignals(habits: Habit[], moodLogged: boolean, score: number | null) {
-  const done = habits.filter((h) => h.done).length;
-  const longestStreak = habits.reduce((m, h) => Math.max(m, h.streak), 0);
+const MOODS = [
+  { emoji: "😞", label: "Rough", accent: color.red },
+  { emoji: "😐", label: "Flat", accent: color.amber },
+  { emoji: "🙂", label: "Okay", accent: color.blue },
+  { emoji: "😄", label: "Good", accent: color.green },
+  { emoji: "🤩", label: "Great", accent: color.purple },
+] as const;
 
-  return [
-    {
-      icon: "checkbox-outline" as const,
-      label: "Habits today",
-      value: `${done} / ${habits.length}`,
-      accent: color.green,
-    },
-    {
-      icon: "flame-outline" as const,
-      label: "Longest streak",
-      value: longestStreak > 0 ? `${longestStreak}d` : "Not started",
-      accent: color.amber,
-    },
-    {
-      icon: "heart-outline" as const,
-      label: "Mood today",
-      value: moodLogged ? "Logged" : "Not logged",
-      accent: color.purple,
-    },
-    {
-      icon: "pulse-outline" as const,
-      label: "Kinextion Score",
-      value: score === null ? "—" : String(score),
-      accent: color.teal,
-    },
-  ];
+/** 1-10 scale the mood API expects, evenly spaced across the five taps. */
+const MOOD_VALUES = [2, 4, 6, 8, 10] as const;
+
+function moodLabel(value: number | null | undefined): string | null {
+  if (value == null) return null;
+  const i = Math.min(4, Math.max(0, Math.round(value / 2) - 1));
+  return MOODS[i].label.toLowerCase();
 }
 
-const PERIOD_LABEL: Record<"weekly" | "monthly" | "yearly", string> = {
-  weekly: "Score (week)",
-  monthly: "Score (month)",
-  yearly: "Score (year)",
-};
+function todayLabel(): string {
+  return new Date().toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+}
 
-export default function HabitsScreen() {
+export default function TodayScreen() {
   const router = useRouter();
-  const { habits, toggleHabit, score, periodScore, moodLogged, reflectionLogged, refresh } =
-    useAppState();
+  const {
+    habits: allHabits,
+    toggleHabit,
+    score,
+    periodScore,
+    checkIn,
+    moodLogged,
+    reflectionLogged,
+    workoutLogged,
+    submitCheckIn,
+    refresh,
+    error,
+  } = useAppState();
   const [refreshing, setRefreshing] = useState(false);
-  const signals = liveSignals(habits, moodLogged, score);
 
-  const done = habits.filter((h) => h.done).length;
-  const pct = habits.length ? done / habits.length : 0;
+  // Only what's due today. A Mon/Wed/Fri habit on a Tuesday isn't a habit
+  // you're failing. It's a day off, and it waits out of the way.
+  const due = allHabits.filter((h) => h.due);
+  const notToday = allHabits.filter((h) => !h.due);
+  const habitsLeft = due.filter((h) => !h.done);
+  const habitsDone = due.filter((h) => h.done);
+
+  // The check-in counts as a to-do; the workout is offered, not required,
+  // so it never sits in the count as something you're behind on.
+  const required = due.length + 1;
+  const completed = habitsDone.length + (moodLogged ? 1 : 0);
+  const remaining = required - completed;
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -90,9 +112,16 @@ export default function HabitsScreen() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push("/habit/new" as never);
   };
+  const openHabit = (id: string) => router.push(`/habit/${id}` as never);
+
+  const doneCount =
+    habitsDone.length + (moodLogged ? 1 : 0) + (workoutLogged ? 1 : 0);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: color.bg }} edges={["top"]}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: color.bg }}
+      edges={["top"]}
+    >
       <AuroraBackdrop accent={color.amber} />
       <ScrollView
         contentContainerStyle={{
@@ -109,203 +138,688 @@ export default function HabitsScreen() {
         }
       >
         <ScreenHeader
-          title="Habits"
-          subtitle="Small enough to win. Every single day."
+          title="Today"
+          subtitle={todayLabel()}
           right={
-            habits.length > 0 ? (
-              <Pressable
-                onPress={openNew}
-                accessibilityRole="button"
-                accessibilityLabel="Add a habit"
-                hitSlop={10}
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: tint(color.amber, 0.14),
-                  borderWidth: 1,
-                  borderColor: tint(color.amber, 0.3),
-                }}
-              >
-                <Ionicons name="add" size={22} color={color.amber} />
-              </Pressable>
-            ) : undefined
+            <Pressable
+              onPress={openNew}
+              accessibilityRole="button"
+              accessibilityLabel="Add a habit"
+              hitSlop={10}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: tint(color.amber, 0.14),
+                borderWidth: 1,
+                borderColor: tint(color.amber, 0.3),
+              }}
+            >
+              <Ionicons name="add" size={22} color={color.amber} />
+            </Pressable>
           }
         />
 
-        {habits.length === 0 ? (
-          <NoHabitsYet onStart={openNew} />
-        ) : (
-          <>
-            {/* Progress summary */}
-            <Card accent={done === habits.length && done > 0 ? color.green : undefined}>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "flex-end",
-                  gap: space.sm,
-                }}
-              >
-                <Txt variant="display" c={color.green}>
-                  {done}
-                </Txt>
-                <Txt variant="heading" c={color.textFaint} style={{ marginBottom: 5 }}>
-                  / {habits.length}
-                </Txt>
-                <View style={{ flex: 1 }} />
-                {periodScore?.average !== null && periodScore !== null ? (
-                  <View style={{ alignItems: "flex-end" }}>
-                    <Label>{PERIOD_LABEL[periodScore.period]}</Label>
-                    <Txt variant="heading" c={color.teal}>
-                      {periodScore.average}
-                    </Txt>
-                  </View>
-                ) : null}
-              </View>
-
-              {/* Segmented progress — one block per habit, so a glance reads count
-                  and completion at the same time. */}
-              <View style={{ flexDirection: "row", gap: 4, marginTop: space.lg }}>
-                {habits.map((h) => (
-                  <Animated.View
-                    key={h.id}
-                    layout={Layout.springify().damping(18)}
-                    style={{
-                      flex: 1,
-                      height: 6,
-                      borderRadius: 3,
-                      backgroundColor: h.done
-                        ? categoryColor[h.category]
-                        : "rgba(255,255,255,0.07)",
-                    }}
-                  />
-                ))}
-              </View>
-
-              <Txt variant="small" c={color.textMuted} style={{ marginTop: space.md }}>
-                {done === 0
-                  ? "Never a zero day. Pick the easiest one and start there."
-                  : pct === 1
-                    ? "All of them. That's the whole system working."
-                    : `${habits.length - done} left — but you've already broken zero.`}
-              </Txt>
-            </Card>
-
-            <SectionTitle>Today</SectionTitle>
-            <View style={{ gap: space.md }}>
-              {habits.map((h, i) => (
-                <Animated.View
-                  key={h.id}
-                  entering={FadeInDown.duration(400).delay(i * 50)}
-                  layout={Layout.springify().damping(20)}
-                >
-                  <HabitRow
-                    habit={h}
-                    onToggle={() => toggleHabit(h.id)}
-                    onEdit={() => router.push(`/habit/${h.id}` as never)}
-                  />
-                </Animated.View>
-              ))}
-            </View>
-
-            <Button
-              label="Add a habit"
-              icon="add"
-              variant="secondary"
-              accent={color.amber}
-              style={{ marginTop: space.xl }}
-              onPress={openNew}
-            />
-
-            <Card style={{ marginTop: space.xl }} accent={color.blue}>
-              <View style={{ flexDirection: "row", gap: space.md }}>
-                <Ionicons name="bulb-outline" size={18} color={color.blue} />
-                <View style={{ flex: 1 }}>
-                  <Txt variant="bodyStrong" c={color.blue}>
-                    The two-minute rule
-                  </Txt>
-                  <Txt variant="small" c={color.textMuted} style={{ marginTop: 3 }}>
-                    If a habit keeps slipping, shrink it until it takes two minutes. A habit you
-                    actually do beats one you plan to do — tap any habit above to resize it.
-                  </Txt>
-                </View>
-              </View>
-            </Card>
-          </>
-        )}
-
-        {/* ── Daily check-in ────────────────────────────────────────────── */}
-        <SectionTitle accent={color.purple}>How are you, really?</SectionTitle>
-        <MoodStrip
-          loggedToday={moodLogged}
-          reflectionDone={reflectionLogged}
-          onLogged={refresh}
-          onOpenFull={() => router.push("/checkin" as never)}
+        {/* ── Progress: one line and one bar, nothing to read twice ─────── */}
+        <Progress
+          remaining={remaining}
+          completed={completed}
+          required={required}
         />
 
-        {/* ── Today's one thing ─────────────────────────────────────────── */}
-        <SectionTitle>Today&apos;s one thing</SectionTitle>
-        <MicroRecommendation />
+        {/* ── To do ───────────────────────────────────────────────────── */}
+        <View style={{ marginTop: space.xxl, marginBottom: space.md }}>
+          <Label c={color.textFaint}>To do</Label>
+        </View>
 
-        {/* ── What Kinextion is reading ─────────────────────────────────── */}
-        <SectionTitle>What Kinextion is reading</SectionTitle>
-        <Card padded={false} style={{ paddingVertical: space.xs }}>
-          {signals.map((s, i) => (
-            <View
-              key={s.label}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: space.md,
-                paddingHorizontal: space.lg,
-                paddingVertical: space.md,
-                borderTopWidth: i === 0 ? 0 : 1,
-                borderTopColor: color.border,
-              }}
+        {allHabits.length === 0 ? <NoHabitsYet onStart={openNew} /> : null}
+        {allHabits.length > 0 && due.length === 0 ? (
+          <Txt
+            variant="small"
+            c={color.textMuted}
+            style={{ marginBottom: space.md }}
+          >
+            No habits due today. Rest days are part of the plan, and your
+            streaks are safe.
+          </Txt>
+        ) : null}
+
+        <View style={{ gap: space.md }}>
+          {habitsLeft.map((h, i) => (
+            <Animated.View
+              key={h.id}
+              entering={FadeInDown.duration(350).delay(i * 40)}
+              layout={Layout.springify().damping(20)}
             >
-              <View
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: radius.sm,
-                  backgroundColor: tint(s.accent, 0.12),
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Ionicons name={s.icon} size={16} color={s.accent} />
-              </View>
-              <Txt variant="body" style={{ flex: 1 }}>
-                {s.label}
-              </Txt>
-              <Txt variant="bodyStrong" c={s.accent}>
-                {s.value}
-              </Txt>
-            </View>
+              <HabitRow
+                habit={h}
+                onToggle={() => toggleHabit(h.id)}
+                onEdit={() => openHabit(h.id)}
+              />
+            </Animated.View>
           ))}
-        </Card>
-        <Txt variant="small" c={color.textFaint} style={{ marginTop: space.sm }}>
-          From what you log today. Connect Apple Health or Oura in Profile to add real biometrics.
-        </Txt>
 
-        {/* ── Patterns ───────────────────────────────────────────────────── */}
-        <PatternsSection />
+          {!moodLogged ? (
+            <Animated.View layout={Layout.springify().damping(20)}>
+              <FeelingTask onSubmit={(mood) => submitCheckIn({ mood })} />
+            </Animated.View>
+          ) : null}
+
+          {!workoutLogged ? (
+            <Animated.View layout={Layout.springify().damping(20)}>
+              <TaskRow
+                icon="barbell-outline"
+                accent={color.green}
+                title="Log a workout"
+                subtitle="Optional · if you trained today"
+                onPress={() => router.push("/workout/log" as never)}
+              />
+            </Animated.View>
+          ) : null}
+        </View>
+
+        {remaining === 0 && due.length > 0 ? (
+          <Animated.View entering={FadeIn.duration(300)}>
+            <Card accent={color.green} style={{ marginTop: space.md }}>
+              <Txt variant="bodyStrong" c={color.green}>
+                That&apos;s everything for today.
+              </Txt>
+              <Txt variant="small" c={color.textMuted} style={{ marginTop: 3 }}>
+                Nothing left to do. Enjoy the rest of your day.
+              </Txt>
+            </Card>
+          </Animated.View>
+        ) : null}
+
+        {error ? (
+          <Txt variant="small" c={color.red} style={{ marginTop: space.md }}>
+            {error}
+          </Txt>
+        ) : null}
+
+        {/* Finished items fold away so the list only shows what's left. */}
+        <Folded
+          icon="checkmark-done-outline"
+          label={`Done · ${doneCount}`}
+          count={doneCount}
+          accent={color.green}
+        >
+          {habitsDone.map((h) => (
+            <DoneRow
+              key={h.id}
+              title={h.name}
+              detail="Tap to undo"
+              accent={categoryColor[h.category]}
+              onPress={() => toggleHabit(h.id)}
+            />
+          ))}
+          {moodLogged ? (
+            <DoneRow
+              title={
+                moodLabel(checkIn?.mood)
+                  ? `Feeling ${moodLabel(checkIn?.mood)}`
+                  : "Checked in"
+              }
+              detail={reflectionLogged ? "Full check-in done" : "Add more"}
+              accent={color.purple}
+              onPress={() => router.push("/checkin" as never)}
+            />
+          ) : null}
+          {workoutLogged ? (
+            <DoneRow
+              title="Workout logged"
+              detail="Log another"
+              accent={color.green}
+              onPress={() => router.push("/workout/log" as never)}
+            />
+          ) : null}
+        </Folded>
+
+        <Folded
+          icon="moon-outline"
+          label={`Not today · ${notToday.length}`}
+          count={notToday.length}
+        >
+          {notToday.map((h) => (
+            <DoneRow
+              key={h.id}
+              title={h.name}
+              detail={
+                h.frequency === "weekly" ? "Done this week" : h.scheduleLabel
+              }
+              accent={categoryColor[h.category]}
+              faded
+              onPress={() => openHabit(h.id)}
+            />
+          ))}
+        </Folded>
+
+        {/* ── For you: reading, not doing ─────────────────────────────── */}
+        <View
+          style={{
+            marginTop: space.xxxl + space.lg,
+            paddingTop: space.xxl,
+            borderTopWidth: 1,
+            borderTopColor: color.border,
+            gap: space.xxl,
+          }}
+        >
+          <Label c={color.textFaint}>For you</Label>
+
+          <SlippingTip habits={due} onResize={openHabit} />
+
+          <View style={{ gap: space.md }}>
+            <Txt variant="bodyStrong">Today&apos;s one thing</Txt>
+            <MicroRecommendation />
+          </View>
+
+          <View style={{ gap: space.md }}>
+            <Txt variant="bodyStrong">Your numbers</Txt>
+            <StatsStrip
+              bestStreak={allHabits.reduce(
+                (m, h) => Math.max(m, h.bestStreak),
+                0,
+              )}
+              periodAverage={periodScore?.average ?? null}
+              periodLabel={
+                periodScore ? PERIOD_LABEL[periodScore.period] : "This week"
+              }
+              todayScore={score}
+            />
+            <Txt variant="small" c={color.textFaint}>
+              From what you log. Connect Oura or Apple Health in Profile to add
+              biometrics.
+            </Txt>
+          </View>
+
+          <PatternsSection />
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// ─── Patterns ───────────────────────────────────────────────────────────────
+// ─── Progress ─────────────────────────────────────────────────────────────────
+function Progress({
+  remaining,
+  completed,
+  required,
+}: {
+  remaining: number;
+  completed: number;
+  required: number;
+}) {
+  const pct = required ? completed / required : 0;
+  return (
+    <View style={{ marginTop: space.lg, gap: space.sm }}>
+      <Txt variant="bodyStrong" c={remaining === 0 ? color.green : color.text}>
+        {remaining === 0
+          ? "All done for today"
+          : remaining === 1
+            ? "1 thing left today"
+            : `${remaining} things left today`}
+      </Txt>
+      <View
+        style={{
+          height: 6,
+          borderRadius: 3,
+          backgroundColor: "rgba(255,255,255,0.07)",
+          overflow: "hidden",
+        }}
+        accessibilityRole="progressbar"
+        accessibilityValue={{ min: 0, max: required, now: completed }}
+      >
+        <Animated.View
+          layout={Layout.springify().damping(18)}
+          style={{
+            width: `${Math.round(pct * 100)}%`,
+            height: "100%",
+            borderRadius: 3,
+            backgroundColor: color.green,
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+// ─── Rows ─────────────────────────────────────────────────────────────────────
+/** A to-do that isn't a habit: same height and shape, so the list reads as one. */
+function TaskRow({
+  icon,
+  accent,
+  title,
+  subtitle,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  accent: string;
+  title: string;
+  subtitle?: string;
+  onPress: () => void;
+}) {
+  return (
+    <PressCard haptic="light" onPress={onPress} style={{ padding: space.lg }}>
+      <View
+        style={{ flexDirection: "row", alignItems: "center", gap: space.md }}
+      >
+        <View
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 14,
+            backgroundColor: tint(accent, 0.14),
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Ionicons name={icon} size={15} color={accent} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Txt variant="bodyStrong">{title}</Txt>
+          {subtitle ? (
+            <Txt variant="small" c={color.textFaint} style={{ marginTop: 1 }}>
+              {subtitle}
+            </Txt>
+          ) : null}
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={color.textFaint} />
+      </View>
+    </PressCard>
+  );
+}
+
+function HabitRow({
+  habit,
+  onToggle,
+  onEdit,
+}: {
+  habit: Habit;
+  onToggle: () => void;
+  onEdit: () => void;
+}) {
+  const accent = categoryColor[habit.category];
+
+  return (
+    <PressCard haptic="medium" onPress={onToggle} style={{ padding: space.lg }}>
+      <View
+        style={{ flexDirection: "row", alignItems: "center", gap: space.md }}
+      >
+        {/* The ring's colour is the category, so no separate label is needed. */}
+        <View
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 14,
+            borderWidth: 2,
+            borderColor: accent,
+          }}
+        />
+
+        <View style={{ flex: 1 }}>
+          <Txt variant="bodyStrong">{habit.name}</Txt>
+          {habit.cue ? (
+            <Txt
+              variant="small"
+              c={color.textFaint}
+              style={{ marginTop: 1 }}
+              numberOfLines={1}
+            >
+              {habit.cue}
+            </Txt>
+          ) : null}
+        </View>
+
+        {habit.streak > 0 ? (
+          <View
+            style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
+            accessibilityLabel={`${habit.streak} ${habit.streakUnit} streak`}
+          >
+            <Ionicons name="flame" size={12} color={color.amber} />
+            <Txt variant="small" c={color.amber} style={{ fontSize: 12 }}>
+              {habit.streakUnit === "week" ? `${habit.streak}w` : habit.streak}
+            </Txt>
+          </View>
+        ) : null}
+
+        {/* Separate hit target: tapping the row logs the habit, so editing
+            needs its own control rather than a long-press nobody discovers. */}
+        <Pressable
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            onEdit();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={`Edit ${habit.name}`}
+          hitSlop={12}
+          style={{ paddingLeft: space.sm }}
+        >
+          <Ionicons
+            name="ellipsis-horizontal"
+            size={18}
+            color={color.textFaint}
+          />
+        </Pressable>
+      </View>
+    </PressCard>
+  );
+}
+
+/** A finished (or resting) item: one quiet line. */
+function DoneRow({
+  title,
+  detail,
+  accent,
+  faded,
+  onPress,
+}: {
+  title: string;
+  detail: string;
+  accent: string;
+  faded?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={() => {
+        void Haptics.selectionAsync();
+        onPress();
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}. ${detail}`}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: space.md,
+        paddingVertical: space.md,
+        paddingHorizontal: space.lg,
+        borderRadius: radius.md,
+        borderWidth: 1,
+        borderColor: color.border,
+      }}
+    >
+      {faded ? (
+        <View
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: 4,
+            backgroundColor: accent,
+          }}
+        />
+      ) : (
+        <Ionicons name="checkmark-circle" size={18} color={accent} />
+      )}
+      <Txt
+        variant="body"
+        c={color.textMuted}
+        style={[
+          { flex: 1 },
+          faded ? null : { textDecorationLine: "line-through" },
+        ]}
+        numberOfLines={1}
+      >
+        {title}
+      </Txt>
+      <Txt variant="small" c={color.textFaint} style={{ fontSize: 12 }}>
+        {detail}
+      </Txt>
+    </Pressable>
+  );
+}
+
+/** A collapsed group with a count. Hidden entirely when empty. */
+function Folded({
+  icon,
+  label,
+  count,
+  accent = color.textFaint,
+  children,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  count: number;
+  accent?: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  if (count === 0) return null;
+
+  return (
+    <View style={{ marginTop: space.xl }}>
+      <Pressable
+        onPress={() => {
+          void Haptics.selectionAsync();
+          setOpen((v) => !v);
+        }}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        hitSlop={8}
+        style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}
+      >
+        <Ionicons name={icon} size={15} color={accent} />
+        <Txt variant="small" c={color.textMuted} style={{ flex: 1 }}>
+          {label}
+        </Txt>
+        <Ionicons
+          name={open ? "chevron-up" : "chevron-down"}
+          size={15}
+          color={color.textFaint}
+        />
+      </Pressable>
+
+      {open ? (
+        <Animated.View
+          entering={FadeInDown.duration(220)}
+          style={{ gap: space.sm, marginTop: space.md }}
+        >
+          {children}
+        </Animated.View>
+      ) : null}
+    </View>
+  );
+}
+
+// ─── How are you feeling? ─────────────────────────────────────────────────────
+/**
+ * The check-in as a to-do. Closed it's one row; tapping it opens the five
+ * faces in place, and picking one saves and folds the row into Done. It
+ * writes through the check-in route, so a face tapped here and a journal
+ * written tonight edit the same day.
+ */
+function FeelingTask({
+  onSubmit,
+}: {
+  onSubmit: (mood: number) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState<number | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  const onPick = async (i: number) => {
+    setPicked(i);
+    setFailed(false);
+    try {
+      await onSubmit(MOOD_VALUES[i]);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      setPicked(null);
+      setFailed(true);
+    }
+  };
+
+  if (!open) {
+    return (
+      <TaskRow
+        icon="heart-outline"
+        accent={color.purple}
+        title="How are you feeling?"
+        subtitle="One tap"
+        onPress={() => setOpen(true)}
+      />
+    );
+  }
+
+  return (
+    <Animated.View entering={FadeIn.duration(200)}>
+      <Card style={{ padding: space.lg }}>
+        <Txt variant="bodyStrong" style={{ marginBottom: space.md }}>
+          How are you feeling?
+        </Txt>
+        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+          {MOODS.map((m, i) => {
+            const active = picked === i;
+            return (
+              <PressCard
+                key={m.label}
+                accent={active ? m.accent : undefined}
+                haptic="medium"
+                disabled={picked !== null}
+                onPress={() => void onPick(i)}
+                style={{
+                  flex: 1,
+                  marginHorizontal: 3,
+                  paddingVertical: space.md,
+                  paddingHorizontal: 0,
+                  alignItems: "center",
+                  backgroundColor: active
+                    ? tint(m.accent, 0.12)
+                    : "transparent",
+                  borderColor: active ? tint(m.accent, 0.32) : "transparent",
+                  shadowOpacity: 0,
+                  elevation: 0,
+                }}
+              >
+                <Txt variant="heading" style={{ fontSize: 26 }}>
+                  {m.emoji}
+                </Txt>
+                <Txt
+                  variant="small"
+                  c={active ? m.accent : color.textFaint}
+                  style={{ marginTop: 4, fontSize: 11 }}
+                >
+                  {m.label}
+                </Txt>
+              </PressCard>
+            );
+          })}
+        </View>
+        {failed ? (
+          <Txt variant="small" c={color.red} style={{ marginTop: space.md }}>
+            Couldn&apos;t save that. Try again.
+          </Txt>
+        ) : null}
+      </Card>
+    </Animated.View>
+  );
+}
+
+// ─── For you ──────────────────────────────────────────────────────────────────
+/**
+ * Shown only when a habit is actually slipping: due, no current streak, and
+ * kept under half the time. A permanent tip card is one more thing to read
+ * every day; this one appears when it has something to say.
+ */
+function SlippingTip({
+  habits,
+  onResize,
+}: {
+  habits: Habit[];
+  onResize: (id: string) => void;
+}) {
+  const slipping = habits.find(
+    (h) => h.streak === 0 && h.consistency !== null && h.consistency < 0.5,
+  );
+  if (!slipping) return null;
+
+  return (
+    <Card accent={color.blue}>
+      <View style={{ flexDirection: "row", gap: space.md }}>
+        <Ionicons name="bulb-outline" size={18} color={color.blue} />
+        <View style={{ flex: 1, gap: space.sm }}>
+          <Txt variant="bodyStrong" c={color.blue}>
+            {slipping.name} keeps slipping
+          </Txt>
+          <Txt variant="small" c={color.textMuted}>
+            Want to make it smaller? A two-minute version you actually do beats
+            a bigger one you skip.
+          </Txt>
+          <Pressable
+            onPress={() => onResize(slipping.id)}
+            accessibilityRole="button"
+            hitSlop={8}
+          >
+            <Txt variant="small" c={color.blue} style={{ fontWeight: "700" }}>
+              Resize it →
+            </Txt>
+          </Pressable>
+        </View>
+      </View>
+    </Card>
+  );
+}
+
+function StatsStrip({
+  bestStreak,
+  periodAverage,
+  periodLabel,
+  todayScore,
+}: {
+  bestStreak: number;
+  periodAverage: number | null;
+  periodLabel: string;
+  todayScore: number | null;
+}) {
+  const tiles = [
+    {
+      label: "Best streak",
+      value: bestStreak > 0 ? `${bestStreak}d` : "—",
+      accent: color.amber,
+    },
+    {
+      label: periodLabel,
+      value: periodAverage === null ? "—" : String(periodAverage),
+      accent: color.teal,
+    },
+    {
+      label: "Today",
+      value: todayScore === null ? "—" : String(todayScore),
+      accent: color.green,
+    },
+  ];
+  return (
+    <View style={{ flexDirection: "row", gap: space.md }}>
+      {tiles.map((t) => (
+        <Card
+          key={t.label}
+          style={{ flex: 1, padding: space.lg, alignItems: "flex-start" }}
+        >
+          <Txt variant="heading" c={t.accent}>
+            {t.value}
+          </Txt>
+          <Txt
+            variant="small"
+            c={color.textFaint}
+            style={{ marginTop: 2, fontSize: 12 }}
+          >
+            {t.label}
+          </Txt>
+        </Card>
+      ))}
+    </View>
+  );
+}
+
 /** Real, computed correlations between wearable data, mood, and habits.
  * Silent when there's nothing to show yet — an always-empty section reads
  * worse than no section at all. */
 function PatternsSection() {
   const api = useApi();
-  const [patterns, setPatterns] = useState<Awaited<ReturnType<typeof api.listPatterns>> | null>(
-    null
-  );
+  const [patterns, setPatterns] = useState<Awaited<
+    ReturnType<typeof api.listPatterns>
+  > | null>(null);
 
   useEffect(() => {
     api
@@ -318,8 +832,8 @@ function PatternsSection() {
   if (!patterns || patterns.length === 0) return null;
 
   return (
-    <>
-      <SectionTitle accent={color.pink}>Patterns</SectionTitle>
+    <View style={{ gap: space.md }}>
+      <Txt variant="bodyStrong">Patterns</Txt>
       <Card>
         <View style={{ gap: space.md }}>
           {patterns.slice(0, 3).map((p) => (
@@ -340,142 +854,7 @@ function PatternsSection() {
           ))}
         </View>
       </Card>
-    </>
-  );
-}
-
-// ─── Mood strip ───────────────────────────────────────────────────────────────
-const MOODS = [
-  { emoji: "😞", label: "Rough", accent: color.red },
-  { emoji: "😐", label: "Flat", accent: color.amber },
-  { emoji: "🙂", label: "Okay", accent: color.blue },
-  { emoji: "😄", label: "Good", accent: color.green },
-  { emoji: "🤩", label: "Great", accent: color.purple },
-] as const;
-
-/** 1-10 scale the mood API expects, evenly spaced across the five taps. */
-const MOOD_VALUES = [2, 4, 6, 8, 10] as const;
-
-/**
- * One tap to log a mood, one more to say the rest of it.
- *
- * The strip stays the fast path — five taps' worth of nothing-to-think-about —
- * but it writes through the check-in route, so tapping a face in the morning
- * and writing a journal entry at night edit the same day rather than
- * producing two entries the score has to reconcile.
- */
-function MoodStrip({
-  loggedToday,
-  reflectionDone,
-  onLogged,
-  onOpenFull,
-}: {
-  loggedToday: boolean;
-  reflectionDone: boolean;
-  onLogged: () => Promise<void>;
-  onOpenFull: () => void;
-}) {
-  const api = useApi();
-  const [picked, setPicked] = useState<number | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [failed, setFailed] = useState(false);
-
-  const onPick = async (i: number) => {
-    setPicked(i);
-    setFailed(false);
-    setSaving(true);
-    try {
-      await api.submitCheckIn({ mood: MOOD_VALUES[i] });
-      await onLogged();
-    } catch {
-      setFailed(true);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const showLogged = loggedToday || picked !== null;
-
-  return (
-    <Card>
-      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-        {MOODS.map((m, i) => {
-          const active = picked === i;
-          return (
-            <PressCard
-              key={m.label}
-              accent={active ? m.accent : undefined}
-              haptic="medium"
-              disabled={saving}
-              onPress={() => void onPick(i)}
-              style={{
-                flex: 1,
-                marginHorizontal: 3,
-                paddingVertical: space.md,
-                paddingHorizontal: 0,
-                alignItems: "center",
-                backgroundColor: active ? tint(m.accent, 0.12) : "transparent",
-                borderColor: active ? tint(m.accent, 0.32) : "transparent",
-                shadowOpacity: 0,
-                elevation: 0,
-              }}
-            >
-              <Txt variant="heading" style={{ fontSize: 26 }}>
-                {m.emoji}
-              </Txt>
-              <Txt
-                variant="small"
-                c={active ? m.accent : color.textFaint}
-                style={{ marginTop: 4, fontSize: 11 }}
-              >
-                {m.label}
-              </Txt>
-            </PressCard>
-          );
-        })}
-      </View>
-      {failed ? (
-        <Txt variant="small" c={color.red} style={{ marginTop: space.md }}>
-          Couldn't save that. Try again.
-        </Txt>
-      ) : showLogged ? (
-        <Txt variant="small" c={color.textMuted} style={{ marginTop: space.md }}>
-          Logged. Kairo will pick this up next time you talk.
-        </Txt>
-      ) : null}
-
-      {/* The rest of the check-in. Framed by what's still unearned rather than
-          as a generic "more" link, so the reason to tap it is concrete. */}
-      <Pressable
-        onPress={() => {
-          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          onOpenFull();
-        }}
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: space.sm,
-          marginTop: space.lg,
-          paddingTop: space.md,
-          borderTopWidth: 1,
-          borderTopColor: color.border,
-        }}
-      >
-        <Ionicons
-          name={reflectionDone ? "checkmark-circle" : "create-outline"}
-          size={16}
-          color={reflectionDone ? color.green : color.purple}
-        />
-        <Txt variant="small" c={reflectionDone ? color.green : color.purple} style={{ flex: 1 }}>
-          {reflectionDone
-            ? "Full check-in done today — tap to edit it"
-            : showLogged
-              ? "Add energy, stress and a few words — worth 15 points"
-              : "Or do the full check-in: energy, stress, gratitude, journal"}
-        </Txt>
-        <Ionicons name="chevron-forward" size={15} color={color.textFaint} />
-      </Pressable>
-    </Card>
+    </View>
   );
 }
 
@@ -489,7 +868,10 @@ function MoodStrip({
  */
 function NoHabitsYet({ onStart }: { onStart: () => void }) {
   return (
-    <Animated.View entering={FadeInDown.duration(450)}>
+    <Animated.View
+      entering={FadeInDown.duration(450)}
+      style={{ marginBottom: space.md }}
+    >
       <Card style={{ alignItems: "center", paddingVertical: space.xxl }}>
         <View
           style={{
@@ -512,8 +894,9 @@ function NoHabitsYet({ onStart }: { onStart: () => void }) {
           c={color.textMuted}
           style={{ textAlign: "center", marginTop: space.sm, maxWidth: 280 }}
         >
-          Start with one. Kinextion can suggest something from what it already knows about you, work
-          it out with you in conversation, or get out of the way while you write your own.
+          Start with one. Kinextion can suggest something from what it already
+          knows about you, work it out with you in conversation, or get out of
+          the way while you write your own.
         </Txt>
         <Button
           label="Build your first habit"
@@ -524,97 +907,5 @@ function NoHabitsYet({ onStart }: { onStart: () => void }) {
         />
       </Card>
     </Animated.View>
-  );
-}
-
-function HabitRow({
-  habit,
-  onToggle,
-  onEdit,
-}: {
-  habit: Habit;
-  onToggle: () => void;
-  onEdit: () => void;
-}) {
-  const accent = categoryColor[habit.category];
-
-  return (
-    <PressCard
-      accent={habit.done ? accent : undefined}
-      haptic="medium"
-      onPress={onToggle}
-      style={{ padding: space.lg }}
-    >
-      <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
-        {/* Checkbox */}
-        <View
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: 14,
-            borderWidth: 2,
-            borderColor: habit.done ? accent : color.borderStrong,
-            backgroundColor: habit.done ? accent : "transparent",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          {habit.done ? <Ionicons name="checkmark" size={17} color={color.bg} /> : null}
-        </View>
-
-        <View style={{ flex: 1 }}>
-          <Txt
-            variant="bodyStrong"
-            c={habit.done ? color.textMuted : color.text}
-            style={habit.done ? { textDecorationLine: "line-through" } : undefined}
-          >
-            {habit.name}
-          </Txt>
-          {habit.cue ? (
-            <Txt variant="small" c={color.textFaint} style={{ marginTop: 1 }}>
-              {habit.cue}
-            </Txt>
-          ) : null}
-        </View>
-
-        <View style={{ alignItems: "flex-end", gap: 5 }}>
-          <View
-            style={{
-              paddingHorizontal: space.sm,
-              paddingVertical: 2,
-              borderRadius: radius.pill,
-              backgroundColor: tint(accent, 0.12),
-            }}
-          >
-            <Txt variant="label" c={accent} style={{ fontSize: 9 }}>
-              {CATEGORY_LABEL[habit.category]}
-            </Txt>
-          </View>
-          {habit.streak > 0 ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-              <Ionicons name="flame" size={11} color={color.amber} />
-              <Txt variant="small" c={color.amber} style={{ fontSize: 11 }}>
-                {habit.streak}
-              </Txt>
-            </View>
-          ) : null}
-        </View>
-
-        {/* Separate hit target: tapping the row logs the habit, so editing
-            needs its own control rather than a long-press nobody discovers. */}
-        <Pressable
-          onPress={() => {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            onEdit();
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={`Edit ${habit.name}`}
-          hitSlop={12}
-          style={{ paddingLeft: space.sm }}
-        >
-          <Ionicons name="ellipsis-horizontal" size={18} color={color.textFaint} />
-        </Pressable>
-      </View>
-    </PressCard>
   );
 }

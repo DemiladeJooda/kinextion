@@ -32,7 +32,7 @@ export async function checkInRoutes(app: FastifyInstance) {
   // "edit today's check-in", and prefills the sheet.
   app.get("/today", async (request) => {
     const entry = await prisma.moodEntry.findFirst({
-      where: { userId: request.userId, createdAt: { gte: startOfToday() } },
+      where: { userId: request.userId, createdAt: { gte: startOfToday(request.timeZone) } },
       orderBy: { createdAt: "desc" },
     });
 
@@ -65,7 +65,7 @@ export async function checkInRoutes(app: FastifyInstance) {
 
     const userId = request.userId;
     const existing = await prisma.moodEntry.findFirst({
-      where: { userId, createdAt: { gte: startOfToday() } },
+      where: { userId, createdAt: { gte: startOfToday(request.timeZone) } },
       orderBy: { createdAt: "desc" },
     });
 
@@ -95,7 +95,7 @@ export async function checkInRoutes(app: FastifyInstance) {
 
     return reply.status(existing ? 200 : 201).send({
       success: true,
-      data: { entry, score: await recomputeTodayScore(userId) },
+      data: { entry, score: await recomputeTodayScore(userId, request.timeZone) },
     });
   });
 
@@ -110,7 +110,10 @@ export async function checkInRoutes(app: FastifyInstance) {
     const parsed = localTimeSchema.safeParse(request.body ?? {});
     const options = parsed.success ? parsed.data : {};
 
-    const context = await buildHabitContext(request.userId, options);
+    const context = await buildHabitContext(request.userId, {
+      ...options,
+      timeZone: options.timeZone ?? request.timeZone,
+    });
     const prompt = await generateCheckInPrompt(context);
 
     return { success: true, data: { ...prompt, basis: context.basis } };

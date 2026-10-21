@@ -48,8 +48,17 @@ export default function TabLayout() {
       }}
     >
       {/* Hidden — exists only so "/(tabs)" has a route to resolve to; it
-          immediately redirects into the Guides tab below. */}
+          immediately redirects into the Habits tab below. */}
       <Tabs.Screen name="index" options={{ href: null }} />
+      <Tabs.Screen
+        name="habits"
+        options={{
+          title: "Habits",
+          tabBarIcon: ({ color: c, focused }) => (
+            <TabIcon name={focused ? "checkbox" : "checkbox-outline"} c={c} focused={focused} />
+          ),
+        }}
+      />
       <Tabs.Screen
         name="chat"
         options={{
@@ -60,15 +69,6 @@ export default function TabLayout() {
               c={c}
               focused={focused}
             />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="habits"
-        options={{
-          title: "Habits",
-          tabBarIcon: ({ color: c, focused }) => (
-            <TabIcon name={focused ? "checkbox" : "checkbox-outline"} c={c} focused={focused} />
           ),
         }}
       />

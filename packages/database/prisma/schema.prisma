@@ -16,20 +16,23 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  profile          Profile?
-  conversations    Conversation[]
-  habits           Habit[]
-  habitLogs        HabitLog[]
-  workoutLogs      WorkoutLog[]
-  moodEntries      MoodEntry[]
-  recommendations  Recommendation[]
-  scores           KinextionScore[]
-  integrations     Integration[]
-  wearableMetrics  WearableMetric[]
-  therapistShare   TherapistShare?
-  therapistReports TherapistReport[]
-  memoryFacts      MemoryFact[]
-  metricRollups    MetricRollup[]
+  profile            Profile?
+  conversations      Conversation[]
+  habits             Habit[]
+  habitLogs          HabitLog[]
+  workoutLogs        WorkoutLog[]
+  moodEntries        MoodEntry[]
+  recommendations    Recommendation[]
+  scores             KinextionScore[]
+  integrations       Integration[]
+  wearableMetrics    WearableMetric[]
+  therapistShare     TherapistShare?
+  therapistReports   TherapistReport[]
+  memoryFacts        MemoryFact[]
+  metricRollups      MetricRollup[]
+  precommitments     Precommitment[]
+  habitReflections   HabitReflection[]
+  automaticityChecks AutomaticityCheck[]
 
   // Community
   communitiesCreated   Community[]           @relation("CommunityCreatedBy")
@@ -56,17 +59,24 @@ model Profile {
   id                 String  @id @default(cuid())
   userId             String  @unique
   displayName        String?
-  /** Ready Player Me avatar id — a stylized, face-matched avatar, not a body scan. */
+  /**
+   * Ready Player Me avatar id — a stylized, face-matched avatar, not a body scan.
+   */
   avatarId           String?
   age                Int?
   fitnessLevel       String? // beginner, intermediate, advanced
-  primaryGoals       Json?   // ["consistency", "strength", "mental_clarity"]
-  weeklyAvailability Int?    // days per week
-  equipment          Json?   // ["dumbbells", "gym_membership"]
-  healthConditions   Json?   // opt-in health info
-  preferences        Json?   // notification prefs, AI personality dial
+  primaryGoals       Json? // ["consistency", "strength", "mental_clarity"]
+  weeklyAvailability Int? // days per week
+  equipment          Json? // ["dumbbells", "gym_membership"]
+  healthConditions   Json? // opt-in health info
+  preferences        Json? // notification prefs, AI personality dial
   onboardingComplete Boolean @default(false)
-  aiContext          Json?   // evolving AI understanding of the user
+  /**
+   * Who they're becoming, in their words: "someone who moves every day".
+   * Habits attach to it and progress is described in its terms.
+   */
+  identityGoal       String?
+  aiContext          Json? // evolving AI understanding of the user
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -76,8 +86,8 @@ model Profile {
 model Conversation {
   id        String   @id @default(cuid())
   userId    String
-  persona   String   // "altheo" | "kairo"
-  summary   String?  // compressed context for long conversations
+  persona   String // "altheo" | "kairo"
+  summary   String? // compressed context for long conversations
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -90,9 +100,9 @@ model Conversation {
 model Message {
   id             String   @id @default(cuid())
   conversationId String
-  role           String   // "user" | "assistant" | "system"
+  role           String // "user" | "assistant" | "system"
   content        String
-  metadata       Json?    // sentiment, detected goals, action items
+  metadata       Json? // sentiment, detected goals, action items
   createdAt      DateTime @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -108,22 +118,32 @@ model Message {
 model MemoryFact {
   id       String @id @default(cuid())
   userId   String
-  /** "core" survives forever; "pattern" is kept as shape and can expire. */
+  /**
+   * "core" survives forever; "pattern" is kept as shape and can expire.
+   */
   tier     String
   category String // "constraint" | "identity" | "goal" | "preference" | "context"
-  /** Normalised dedup key, e.g. "constraint:left_knee" — reinforcement
-   *  bumps the existing row instead of writing a near-duplicate. */
+  /**
+   * Normalised dedup key, e.g. "constraint:left_knee" — reinforcement
+   * bumps the existing row instead of writing a near-duplicate.
+   */
   key      String
-  /** The fact itself. One line, written to be read back into a prompt. */
+  /**
+   * The fact itself. One line, written to be read back into a prompt.
+   */
   content  String
 
-  confidence Float    @default(0.6)
-  source     String   @default("chat") // "chat" | "onboarding" | "derived"
-  /** Times this fact has been re-observed — drives the retention score. */
-  hits       Int      @default(1)
-  lastSeenAt DateTime @default(now())
-  createdAt  DateTime @default(now())
-  /** null = never expires (core tier). */
+  confidence Float     @default(0.6)
+  source     String    @default("chat") // "chat" | "onboarding" | "derived"
+  /**
+   * Times this fact has been re-observed — drives the retention score.
+   */
+  hits       Int       @default(1)
+  lastSeenAt DateTime  @default(now())
+  createdAt  DateTime  @default(now())
+  /**
+   * null = never expires (core tier).
+   */
   expiresAt  DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -132,7 +152,9 @@ model MemoryFact {
   @@index([userId, tier])
 }
 
-/** Downsampled history. Raw rows age out; the shape survives here. */
+/**
+ * Downsampled history. Raw rows age out; the shape survives here.
+ */
 model MetricRollup {
   id          String   @id @default(cuid())
   userId      String
@@ -157,27 +179,68 @@ model MetricRollup {
 
 // ─── Habits (Atomic Habits Framework) ────────────────────────────
 
+/// The four habit-loop columns keep their original names; in the product
+/// they mean: cue = the anchor ("After I pour my coffee"), craving = why it
+/// matters to the user (played back to them later), response = the tiny
+/// version that still counts, reward = today's payoff. Renaming them would
+/// be a data migration with nothing in it for users.
 model Habit {
-  id         String   @id @default(cuid())
+  id         String  @id @default(cuid())
   userId     String
   name       String
-  category   String   // "physical" | "mental" | "emotional" | "spiritual"
-  cue        String?  // what triggers it
-  craving    String?  // why you want it
-  response   String?  // the actual habit action
-  reward     String?  // the payoff
-  frequency  String   // "daily" | "weekly" | "custom"
-  targetDays Json?    // [1,2,3,4,5] for specific days
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  category   String // "physical" | "mental" | "emotional" | "spiritual"
+  cue        String? // the anchor: "After I …"
+  craving    String? // why it matters, in the user's words
+  response   String? // the tiny version — counts for the streak
+  reward     String? // today's payoff
+  frequency  String // "daily" | "weekly" (X times a week) | "custom" (certain days)
+  targetDays Json? // [1,3,5] for "custom"; 0 = Sunday
+  isActive   Boolean @default(true) // false = archived; logs are kept
 
-  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  logs HabitLog[]
+  /**
+   * The full version, for days with room to spare.
+   */
+  fullVersion     String?
+  /**
+   * If-then plan for the likely obstacle, often from "What would it take?".
+   */
+  backupPlan      String?
+  /**
+   * Something enjoyable it's paired with ("only my podcast on the walk").
+   */
+  pairWith        String?
+  /**
+   * "morning" | "midday" | "evening" | "anytime" — a window, never a minute.
+   */
+  timeWindow      String  @default("anytime")
+  /**
+   * For "weekly": how many times a week. Null means once.
+   */
+  perWeekTarget   Int?
+  /**
+   * "building" | "established" | "paused". Established habits have
+   * graduated and stop counting toward the limit on habits in progress.
+   */
+  status          String  @default("building")
+  sortOrder       Int     @default(0)
+  reminderEnabled Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logs               HabitLog[]
+  precommitments     Precommitment[]
+  reflections        HabitReflection[]
+  automaticityChecks AutomaticityCheck[]
 
   @@index([userId, isActive])
 }
 
+/// One row per habit per day, on the user's own calendar date.
+/// `completed` is whether the day counts: true for "done" and "minimum".
+/// A planned rest day is completed=false with state "rest", which streaks
+/// treat as neutral. Missed = no row, or completed=false with any other state.
 model HabitLog {
   id        String   @id @default(cuid())
   habitId   String
@@ -185,6 +248,22 @@ model HabitLog {
   date      DateTime @db.Date
   completed Boolean
   notes     String?
+  /**
+   * "done" | "minimum" | "rest"
+   */
+  state     String   @default("done")
+  /**
+   * An amount, for measured habits (glasses, minutes, pages).
+   */
+  value     Float?
+  /**
+   * "tap" | "notification" | "backfill" | "integration"
+   */
+  source    String   @default("tap")
+  /**
+   * When it was last logged — createdAt never moves on an edit.
+   */
+  loggedAt  DateTime @default(now())
   createdAt DateTime @default(now())
 
   habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
@@ -196,14 +275,72 @@ model HabitLog {
 
 // ─── Workouts ────────────────────────────────────────────────────
 
+/// "Tomorrow at 7am I'll ___." Written the night before, quoted back in the
+/// next morning's reminder, followed up by Kairo.
+model Precommitment {
+  id           String    @id @default(cuid())
+  userId       String
+  habitId      String
+  forDate      DateTime  @db.Date
+  text         String
+  followedUpAt DateTime?
+  createdAt    DateTime  @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, forDate])
+  @@index([userId, forDate])
+}
+
+/// An answer to "What would it take to make this easier tomorrow?", and the
+/// change it led to, if the user applied one.
+model HabitReflection {
+  id            String   @id @default(cuid())
+  userId        String
+  habitId       String
+  date          DateTime @db.Date
+  prompt        String
+  answer        String
+  /**
+   * e.g. {"field":"response","from":"20 push-ups","to":"2 push-ups"}
+   */
+  appliedChange Json?
+  createdAt     DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+
+  @@index([habitId, date])
+  @@index([userId, createdAt])
+}
+
+/// A weekly Self-Report Behavioural Automaticity Index (SRBAI) check: four
+/// 1–7 items (Gardner et al. 2012). `score` is their mean.
+model AutomaticityCheck {
+  id        String   @id @default(cuid())
+  userId    String
+  habitId   String
+  date      DateTime @db.Date
+  items     Json // [n, n, n, n]
+  score     Float
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, date])
+  @@index([userId, date])
+}
+
 model WorkoutLog {
   id          String   @id @default(cuid())
   userId      String
   name        String
-  type        String   // "strength" | "cardio" | "mobility" | "mixed"
-  duration    Int?     // minutes
-  exercises   Json     // [{name, sets, reps, weight, notes}]
-  difficulty  String?  // "too_easy" | "just_right" | "too_hard"
+  type        String // "strength" | "cardio" | "mobility" | "mixed"
+  duration    Int? // minutes
+  exercises   Json // [{name, sets, reps, weight, notes}]
+  difficulty  String? // "too_easy" | "just_right" | "too_hard"
   aiGenerated Boolean  @default(false)
   createdAt   DateTime @default(now())
 
@@ -217,12 +354,12 @@ model WorkoutLog {
 model MoodEntry {
   id        String   @id @default(cuid())
   userId    String
-  mood      Int      // 1-10
-  energy    Int?     // 1-10
-  stress    Int?     // 1-10
-  journal   String?  // free-text reflection
-  gratitude String?  // gratitude entry
-  tags      Json?    // ["anxious", "motivated", "tired"]
+  mood      Int // 1-10
+  energy    Int? // 1-10
+  stress    Int? // 1-10
+  journal   String? // free-text reflection
+  gratitude String? // gratitude entry
+  tags      Json? // ["anxious", "motivated", "tired"]
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -235,9 +372,9 @@ model MoodEntry {
 model Recommendation {
   id        String   @id @default(cuid())
   userId    String
-  content   String   // the micro-recommendation text
-  category  String   // "physical" | "mental" | "emotional" | "spiritual"
-  context   String?  // why this was recommended
+  content   String // the micro-recommendation text
+  category  String // "physical" | "mental" | "emotional" | "spiritual"
+  context   String? // why this was recommended
   acted     Boolean  @default(false)
   dismissed Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -254,7 +391,7 @@ model Recommendation {
 model Integration {
   id             String    @id @default(cuid())
   userId         String
-  provider       String    // "strava" | "whoop" | "oura" | "apple_health" | "google_fit"
+  provider       String // "strava" | "whoop" | "oura" | "apple_health" | "google_fit"
   status         String    @default("connected") // "connected" | "error" | "disconnected"
   externalUserId String? // the account id on the provider's side
   accessToken    String? // encrypted at the app layer before storage — see lib/crypto.ts
@@ -301,7 +438,9 @@ model TherapistShare {
   id         String    @id @default(cuid())
   userId     String    @unique
   active     Boolean   @default(true)
-  /** { habits, moodTrends, journalExcerpts, patterns, score } — all bool, all opt-in */
+  /**
+   * { habits, moodTrends, journalExcerpts, patterns, score } — all bool, all opt-in
+   */
   categories Json
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
@@ -317,8 +456,10 @@ model TherapistReport {
   shareId     String
   periodStart DateTime @db.Date
   periodEnd   DateTime @db.Date
-  /** Structured, human-readable summary generated at report time — a
-   * snapshot, so revoking consent later doesn't rewrite reports already shared. */
+  /**
+   * Structured, human-readable summary generated at report time — a
+   * snapshot, so revoking consent later doesn't rewrite reports already shared.
+   */
   summary     Json
   createdAt   DateTime @default(now())
 
@@ -338,7 +479,9 @@ model TherapistReport {
 model NearbyGroup {
   id          String   @id @default(cuid())
   name        String
-  /** "running" | "yoga" | "hiit" | "cycling" | "strength" | "other" */
+  /**
+   * "running" | "yoga" | "hiit" | "cycling" | "strength" | "other"
+   */
   category    String
   description String
   address     String
@@ -347,10 +490,14 @@ model NearbyGroup {
   lng         Float
   website     String?
   phone       String?
-  /** Free text — "Mondays, 6:30pm" or "Drop in any class time." */
+  /**
+   * Free text — "Mondays, 6:30pm" or "Drop in any class time."
+   */
   schedule    String?
   isFree      Boolean  @default(false)
-  /** The page this was verified against, so a stale fact can be re-checked. */
+  /**
+   * The page this was verified against, so a stale fact can be re-checked.
+   */
   sourceUrl   String
   verifiedAt  DateTime
   createdAt   DateTime @default(now())
@@ -366,12 +513,16 @@ model NearbyGroup {
 // a user's data — a waitlist signup is not an account.
 
 model WaitlistEntry {
-  id    String @id @default(cuid())
-  email String @unique
-  /** Which tab the signup came from — the answer to "what converts". */
+  id        String   @id @default(cuid())
+  email     String   @unique
+  /**
+   * Which tab the signup came from — the answer to "what converts".
+   */
   source    String?
-  /** The anonymous session that produced it, so a signup can be tied back to
-   *  the visit without tying it to a person. */
+  /**
+   * The anonymous session that produced it, so a signup can be tied back to
+   * the visit without tying it to a person.
+   */
   sessionId String?
   createdAt DateTime @default(now())
 
@@ -380,20 +531,25 @@ model WaitlistEntry {
 
 /**
  * Site analytics.
- *
  * First-party and deliberately minimal: no IP address, no user id, no
  * fingerprint, no third-party script. `sessionId` is a random value the
  * browser generates per tab session and forgets when the tab closes, which
  * makes a funnel measurable without making a visitor identifiable.
  */
 model AnalyticsEvent {
-  id        String @id @default(cuid())
+  id        String   @id @default(cuid())
   sessionId String
-  /** "tab_view" | "tab_dwell" | "scroll_depth" | "chat_demo_message" | … */
+  /**
+   * "tab_view" | "tab_dwell" | "scroll_depth" | "chat_demo_message" | …
+   */
   name      String
-  /** Which tab it happened on, where that makes sense. */
+  /**
+   * Which tab it happened on, where that makes sense.
+   */
   tab       String?
-  /** Small, non-identifying extras — a dwell time, a scroll percentage. */
+  /**
+   * Small, non-identifying extras — a dwell time, a scroll percentage.
+   */
   props     Json?
   createdAt DateTime @default(now())
 
@@ -407,12 +563,12 @@ model KinextionScore {
   id             String   @id @default(cuid())
   userId         String
   date           DateTime @db.Date
-  overallScore   Int      // 0-100
+  overallScore   Int // 0-100
   physicalScore  Int?
   mentalScore    Int?
   emotionalScore Int?
   spiritualScore Int?
-  breakdown      Json?    // detailed scoring components
+  breakdown      Json? // detailed scoring components
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -435,20 +591,22 @@ model Community {
   slug        String    @unique
   name        String
   description String?
-  /** "forming" until FOUNDING_QUORUM founders accept | "active" | "archived" */
+  /**
+   * "forming" until FOUNDING_QUORUM founders accept | "active" | "archived"
+   */
   status      String    @default("forming")
   createdById String?
   createdAt   DateTime  @default(now())
   activatedAt DateTime?
   archivedAt  DateTime?
 
-  createdBy     User?                 @relation("CommunityCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  memberships   CommunityMembership[]
-  invites       CommunityInvite[]
-  joinRequests  JoinRequest[]
-  cycles        Cycle[]
-  activeChoices ActiveChoice[]
-  ballots       Ballot[]
+  createdBy      User?                 @relation("CommunityCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  memberships    CommunityMembership[]
+  invites        CommunityInvite[]
+  joinRequests   JoinRequest[]
+  cycles         Cycle[]
+  activeChoices  ActiveChoice[]
+  ballots        Ballot[]
   results        CycleResult[]
   chestEntries   ChestEntry[]
   chestProposals ChestProposal[]
@@ -483,10 +641,14 @@ model CommunityMembership {
   id          String    @id @default(cuid())
   communityId String
   userId      String
-  /** "steward" | "member". Stewards have no power over admission at or below 150 members. */
+  /**
+   * "steward" | "member". Stewards have no power over admission at or below 150 members.
+   */
   role        String    @default("member")
   joinedAt    DateTime  @default(now())
-  /** Soft leave — rejoining goes back through admission and clears this. */
+  /**
+   * Soft leave — rejoining goes back through admission and clears this.
+   */
   leftAt      DateTime?
 
   community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
@@ -497,12 +659,16 @@ model CommunityMembership {
   @@index([communityId, leftAt])
 }
 
-/** Founding invites. Only a forming community issues them — once active, the
- *  only way in is admission, so an invite can never bypass recognition. */
+/**
+ * Founding invites. Only a forming community issues them — once active, the
+ * only way in is admission, so an invite can never bypass recognition.
+ */
 model CommunityInvite {
   id          String    @id @default(cuid())
   communityId String
-  /** sha256 of the token. The token itself is shown once and never stored. */
+  /**
+   * sha256 of the token. The token itself is shown once and never stored.
+   */
   tokenHash   String    @unique
   invitedById String
   expiresAt   DateTime
@@ -517,17 +683,23 @@ model CommunityInvite {
   @@index([communityId, usedAt])
 }
 
-/** One row per person per community, reset on re-application — so the unique
- *  index stops concurrent requests creating two, and a denial's history isn't
- *  kept past the cooldown that needs it. */
+/**
+ * One row per person per community, reset on re-application — so the unique
+ * index stops concurrent requests creating two, and a denial's history isn't
+ * kept past the cooldown that needs it.
+ */
 model JoinRequest {
   id             String    @id @default(cuid())
   communityId    String
   userId         String
   note           String?
-  /** "pending" | "admitted" | "denied" */
+  /**
+   * "pending" | "admitted" | "denied"
+   */
   status         String    @default("pending")
-  /** The rule, snapshotted at request time — roster changes mid-vote don't move the goalposts. */
+  /**
+   * The rule, snapshotted at request time — roster changes mid-vote don't move the goalposts.
+   */
   panelMode      String
   panelSize      Int
   minBelongs     Int
@@ -535,9 +707,13 @@ model JoinRequest {
   round          Int       @default(1)
   deadlineAt     DateTime
   decidedAt      DateTime?
-  /** "panel" | "steward" | "timeout" */
+  /**
+   * "panel" | "steward" | "timeout"
+   */
   decidedBy      String?
-  /** Steward fast-track only: the external proof, never a judgement. */
+  /**
+   * Steward fast-track only: the external proof, never a judgement.
+   */
   fastTrackProof String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -550,18 +726,24 @@ model JoinRequest {
   @@index([status, deadlineAt])
 }
 
-/** A panel seat and its verdict. `userId` is stored so one person gets one
- *  vote and abuse can be reviewed. It never leaves the server — no route
- *  returns it in any shape; tests/community-routes.test.ts scans for it. */
+/**
+ * A panel seat and its verdict. `userId` is stored so one person gets one
+ * vote and abuse can be reviewed. It never leaves the server — no route
+ * returns it in any shape; tests/community-routes.test.ts scans for it.
+ */
 model AdmissionSeat {
   id            String    @id @default(cuid())
   joinRequestId String
   userId        String
   round         Int
-  /** "belongs" | "objects" — null until cast. Cannot be changed once cast. */
+  /**
+   * "belongs" | "objects" — null until cast. Cannot be changed once cast.
+   */
   verdict       String?
   votedAt       DateTime?
-  /** Silent seats replaced in a redraw, or held by someone who left. */
+  /**
+   * Silent seats replaced in a redraw, or held by someone who left.
+   */
   expiredAt     DateTime?
 
   joinRequest JoinRequest @relation(fields: [joinRequestId], references: [id], onDelete: Cascade)
@@ -573,23 +755,31 @@ model AdmissionSeat {
 
 // ─── The week ────────────────────────────────────────────────────
 
-/** One community's cycle for one ISO week. The stage is derived from these
- *  boundaries and `now` (packages/shared stageFor), never stored — a job that
- *  runs late can't leave a room showing the wrong stage. Boundaries are the
- *  same for every community today; they're stored so a per-community schedule
- *  would be data rather than a migration. */
+/**
+ * One community's cycle for one ISO week. The stage is derived from these
+ * boundaries and `now` (packages/shared stageFor), never stored — a job that
+ * runs late can't leave a room showing the wrong stage. Boundaries are the
+ * same for every community today; they're stored so a per-community schedule
+ * would be data rather than a migration.
+ */
 model Cycle {
   id               String    @id @default(cuid())
   communityId      String
-  /** The room's ISO week in COMMUNITY_TIME_ZONE, e.g. "2026-W38". */
+  /**
+   * The room's ISO week in COMMUNITY_TIME_ZONE, e.g. "2026-W38".
+   */
   weekKey          String
   gatheringOpensAt DateTime
   votingOpensAt    DateTime
   opensAt          DateTime
   closesAt         DateTime
-  /** Set once Kairo's options are on the ballot. */
+  /**
+   * Set once Kairo's options are on the ballot.
+   */
   synthesizedAt    DateTime?
-  /** Set once results are snapshotted, public responses published, the rest purged. */
+  /**
+   * Set once results are snapshotted, public responses published, the rest purged.
+   */
   settledAt        DateTime?
   createdAt        DateTime  @default(now())
 
@@ -605,14 +795,18 @@ model Cycle {
   @@index([weekKey])
 }
 
-/** Where someone sits this week. `communityId` null means sitting out — no penalty, ever. */
+/**
+ * Where someone sits this week. `communityId` null means sitting out — no penalty, ever.
+ */
 model ActiveChoice {
   id          String    @id @default(cuid())
   userId      String
   weekKey     String
   communityId String?
   chosenAt    DateTime  @default(now())
-  /** Set on first submission; the choice can't change after that. */
+  /**
+   * Set on first submission; the choice can't change after that.
+   */
   lockedAt    DateTime?
 
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -624,7 +818,9 @@ model ActiveChoice {
 
 // ─── Topics & ballots ────────────────────────────────────────────
 
-/** Private. Authorship is never returned by any read route. */
+/**
+ * Private. Authorship is never returned by any read route.
+ */
 model TopicSuggestion {
   id        String   @id @default(cuid())
   cycleId   String
@@ -638,16 +834,22 @@ model TopicSuggestion {
   @@index([cycleId])
 }
 
-/** Suggest → synthesize → vote → decide, generic over what's being decided:
- *  a week's topic, closing a community, or a chest project. One machine, so
- *  the three can't drift apart. */
+/**
+ * Suggest → synthesize → vote → decide, generic over what's being decided:
+ * a week's topic, closing a community, or a chest project. One machine, so
+ * the three can't drift apart.
+ */
 model Ballot {
   id              String   @id @default(cuid())
   communityId     String
   cycleId         String?
-  /** "topic" | "closure" | "chest_project" */
+  /**
+   * "topic" | "closure" | "chest_project"
+   */
   kind            String
-  /** "open" | "decided" | "cancelled" */
+  /**
+   * "open" | "decided" | "cancelled"
+   */
   status          String   @default("open")
   opensAt         DateTime
   closesAt        DateTime
@@ -667,7 +869,9 @@ model BallotOption {
   ballotId  String
   text      String
   rationale String?
-  /** A TOPIC_THEMES value, for topic ballots — keeps a room's rhythm varied. */
+  /**
+   * A TOPIC_THEMES value, for topic ballots — keeps a room's rhythm varied.
+   */
   theme     String?
   ordinal   Int
 
@@ -696,7 +900,9 @@ model Topic {
   id        String   @id @default(cuid())
   cycleId   String   @unique
   text      String
-  /** Normalised, so the same question three years apart can be compared. */
+  /**
+   * Normalised, so the same question three years apart can be compared.
+   */
   topicKey  String
   theme     String?
   createdAt DateTime @default(now())
@@ -727,7 +933,9 @@ model Circle {
 model CircleSeat {
   id       String @id @default(cuid())
   circleId String
-  /** Denormalised so "one circle per person per cycle" is an index, not a check. */
+  /**
+   * Denormalised so "one circle per person per cycle" is an index, not a check.
+   */
   cycleId  String
   userId   String
 
@@ -741,27 +949,41 @@ model CircleSeat {
 
 // ─── Responses ───────────────────────────────────────────────────
 
-/** A stored audio or video file. The API never proxies bytes: clients upload
- *  straight to object storage with a presigned URL. Deleting this row does not
- *  delete the object — the retention job does both, and asserts it. */
+/**
+ * A stored audio or video file. The API never proxies bytes: clients upload
+ * straight to object storage with a presigned URL. Deleting this row does not
+ * delete the object — the retention job does both, and asserts it.
+ */
 model MediaAsset {
   id          String    @id @default(cuid())
   ownerId     String
-  /** "video" | "audio" */
+  /**
+   * "video" | "audio"
+   */
   kind        String
   storageKey  String    @unique
-  /** Reserved for a managed video service; unused while media is storage-only. */
+  /**
+   * Reserved for a managed video service; unused while media is storage-only.
+   */
   playbackId  String?
   mimeType    String
   durationSec Int?
   bytes       Int?
-  /** Catches a re-upload of an old response. */
+  /**
+   * Catches a re-upload of an old response.
+   */
   contentHash String?
-  /** Share of the recording above the silence threshold, from the recorder's metering. */
+  /**
+   * Share of the recording above the silence threshold, from the recorder's metering.
+   */
   signalRatio Float?
-  /** When it was submitted as a response. A re-upload of a used recording is caught by hash. */
+  /**
+   * When it was submitted as a response. A re-upload of a used recording is caught by hash.
+   */
   usedAt      DateTime?
-  /** "pending" | "ready" | "rejected" | "purged" */
+  /**
+   * "pending" | "ready" | "rejected" | "purged"
+   */
   status      String    @default("pending")
   purgeAfter  DateTime?
   purgedAt    DateTime?
@@ -774,17 +996,23 @@ model MediaAsset {
   @@index([ownerId, contentHash])
 }
 
-/** One response per person per topic, forever. Withdrawing sets `status`; the
- *  row stays, so the unique index makes a replacement impossible. */
+/**
+ * One response per person per topic, forever. Withdrawing sets `status`; the
+ * row stays, so the unique index makes a replacement impossible.
+ */
 model RoomResponse {
   id          String    @id @default(cuid())
   topicId     String
   circleId    String?
   userId      String
   mediaId     String?   @unique
-  /** "community" | "public_after_close" */
+  /**
+   * "community" | "public_after_close"
+   */
   visibility  String
-  /** "submitted" | "withdrawn" | "rejected" */
+  /**
+   * "submitted" | "withdrawn" | "rejected"
+   */
   status      String    @default("submitted")
   durationSec Int
   createdAt   DateTime  @default(now())
@@ -804,12 +1032,16 @@ model RoomResponse {
   @@index([status, expiresAt])
 }
 
-/** Totals don't exist until close: no route aggregates these while a room is open. */
+/**
+ * Totals don't exist until close: no route aggregates these while a room is open.
+ */
 model RoomReaction {
   id         String   @id @default(cuid())
   responseId String
   userId     String
-  /** "agree" | "mixed" | "disagree" */
+  /**
+   * "agree" | "mixed" | "disagree"
+   */
   verdict    String
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -824,7 +1056,9 @@ model RoomComment {
   id         String    @id @default(cuid())
   responseId String
   userId     String
-  /** One reply level only. */
+  /**
+   * One reply level only.
+   */
   parentId   String?
   body       String
   createdAt  DateTime  @default(now())
@@ -851,17 +1085,25 @@ model RoomCommentLike {
   @@unique([commentId, userId])
 }
 
-/** A member's report of a response or comment. Reviewed by a person, never actioned by a model alone. */
+/**
+ * A member's report of a response or comment. Reviewed by a person, never actioned by a model alone.
+ */
 model ContentReport {
   id         String    @id @default(cuid())
-  /** No relation: the response or comment may be deleted at settlement, and the report must survive it. */
+  /**
+   * No relation: the response or comment may be deleted at settlement, and the report must survive it.
+   */
   responseId String?
   commentId  String?
   reporterId String
-  /** "not_genuine" | "harassment" | "hate" | "sexual" | "self_harm" | "ai_generated" | "other" */
+  /**
+   * "not_genuine" | "harassment" | "hate" | "sexual" | "self_harm" | "ai_generated" | "other"
+   */
   reason     String
   note       String?
-  /** "open" | "actioned" | "dismissed" */
+  /**
+   * "open" | "actioned" | "dismissed"
+   */
   status     String    @default("open")
   createdAt  DateTime  @default(now())
   reviewedAt DateTime?
@@ -873,8 +1115,10 @@ model ContentReport {
 
 // ─── What outlives the week ──────────────────────────────────────
 
-/** The only permanent record of a room. Aggregated across every circle, so the
- *  figure is always the whole community's. Holds no individual. */
+/**
+ * The only permanent record of a room. Aggregated across every circle, so the
+ * figure is always the whole community's. Holds no individual.
+ */
 model CycleResult {
   id               String   @id @default(cuid())
   communityId      String
@@ -883,7 +1127,9 @@ model CycleResult {
   topicKey         String
   topicText        String
   closedAt         DateTime
-  /** Whole percentages that sum to 100. */
+  /**
+   * Whole percentages that sum to 100.
+   */
   agreePct         Int
   mixedPct         Int
   disagreePct      Int
@@ -902,12 +1148,16 @@ model CycleResult {
 
 // ─── Integrity & chest ───────────────────────────────────────────
 
-/** A model may file a strike; only a reviewed strike can restrict an account. */
+/**
+ * A model may file a strike; only a reviewed strike can restrict an account.
+ */
 model IntegrityStrike {
   id           String    @id @default(cuid())
   userId       String
   reason       String
-  /** "low" | "medium" | "high" */
+  /**
+   * "low" | "medium" | "high"
+   */
   severity     String
   responseId   String?
   reviewedAt   DateTime?
@@ -920,17 +1170,23 @@ model IntegrityStrike {
   @@index([userId, expiresAt])
 }
 
-/** A project a member proposes for the chest. Anonymous to the community, like a topic suggestion. */
+/**
+ * A project a member proposes for the chest. Anonymous to the community, like a topic suggestion.
+ */
 model ChestProposal {
   id          String   @id @default(cuid())
   communityId String
   userId      String
   title       String
   description String?
-  /** "proposed" | "on_ballot" | "chosen" | "not_chosen" | "withdrawn" */
+  /**
+   * "proposed" | "on_ballot" | "chosen" | "not_chosen" | "withdrawn"
+   */
   status      String   @default("proposed")
   ballotId    String?
-  /** The option this proposal became on its ballot. */
+  /**
+   * The option this proposal became on its ballot.
+   */
   optionId    String?
   createdAt   DateTime @default(now())
 
@@ -940,12 +1196,16 @@ model ChestProposal {
   @@index([communityId, status])
 }
 
-/** A ledger in integer cents. Nothing pays out yet. */
+/**
+ * A ledger in integer cents. Nothing pays out yet.
+ */
 model ChestEntry {
   id          String   @id @default(cuid())
   communityId String
   cents       Int
-  /** "revenue_share" | "sponsorship" | "allocation" | "adjustment" */
+  /**
+   * "revenue_share" | "sponsorship" | "allocation" | "adjustment"
+   */
   kind        String
   memo        String?
   createdAt   DateTime @default(now())

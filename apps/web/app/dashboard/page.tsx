@@ -15,7 +15,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
-import { loadDashboard, todayString, type DashboardData } from "@/lib/data-api";
+import { isDueOn, localDateKey } from "@kinextion/shared";
+import { loadDashboard, type DashboardData } from "@/lib/data-api";
+import { TimeZoneSync } from "@/components/dashboard/TimeZoneSync";
 
 export const metadata: Metadata = {
   title: "Today — Kinextion",
@@ -73,13 +75,15 @@ export default async function DashboardPage() {
             {name ? `Hey, ${name}.` : "Today"}
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            {new Date().toLocaleDateString(undefined, {
+            {new Date(`${data.today}T12:00:00Z`).toLocaleDateString("en-US", {
               weekday: "long",
               month: "long",
               day: "numeric",
+              timeZone: "UTC",
             })}
           </p>
         </div>
+        <TimeZoneSync current={data.timeZone} />
 
         {data.unreachable ? <Unreachable /> : <Body data={data} />}
       </main>
@@ -88,13 +92,24 @@ export default async function DashboardPage() {
 }
 
 function Body({ data }: { data: DashboardData }) {
-  const today = todayString();
-  const habits = data.habits ?? [];
-  const doneIds = new Set(
-    (data.logs ?? [])
-      .filter((l) => l.completed && l.date.slice(0, 10) === today)
-      .map((l) => l.habitId)
+  const today = data.today;
+  const tz = data.timeZone ?? "UTC";
+  const completed = new Map<string, Set<string>>();
+  for (const l of data.logs ?? []) {
+    if (!l.completed) continue;
+    const set = completed.get(l.habitId) ?? new Set<string>();
+    set.add(l.date.slice(0, 10));
+    completed.set(l.habitId, set);
+  }
+  // Same rule as the phone and the score: only what's due today is listed.
+  const habits = (data.habits ?? []).filter((h) =>
+    isDueOn(
+      { ...h, startDate: localDateKey(new Date(h.createdAt), tz) },
+      today,
+      completed.get(h.id) ?? new Set()
+    )
   );
+  const doneIds = new Set(habits.filter((h) => completed.get(h.id)?.has(today)).map((h) => h.id));
   const done = habits.filter((h) => doneIds.has(h.id)).length;
   const score = data.score;
   const breakdown = score?.breakdown;

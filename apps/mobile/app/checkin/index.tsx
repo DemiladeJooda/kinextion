@@ -73,6 +73,35 @@ export default function CheckInScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const editing = Boolean(checkIn);
+  /** True once mood, energy and stress were started from the last check-in. */
+  const [prefilled, setPrefilled] = useState(false);
+
+  /**
+   * A first check-in of the day starts from the last one's answers.
+   *
+   * Most days resemble yesterday, so the default does the work: someone who
+   * feels the same taps Save, and someone who doesn't moves one slider. A
+   * blank form asks the same three questions from scratch every morning,
+   * which is exactly the friction that ends a daily habit.
+   */
+  useEffect(() => {
+    if (checkIn) return;
+    let cancelled = false;
+    api
+      .getLatestMood()
+      .then((last) => {
+        if (cancelled || !last) return;
+        setMood((m) => m ?? last.mood);
+        setEnergy((e) => e ?? last.energy);
+        setStress((st) => st ?? last.stress);
+        setPrefilled(true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Best-effort: a missing prompt must never block the check-in, so a failure
   // here just leaves the journal field with its own placeholder.
@@ -97,7 +126,7 @@ export default function CheckInScreen() {
         ? prev.filter((t) => t !== tag)
         : prev.length >= MAX_CHECKIN_TAGS
           ? prev
-          : [...prev, tag]
+          : [...prev, tag],
     );
   };
 
@@ -129,7 +158,10 @@ export default function CheckInScreen() {
   const reflectionEarned = Boolean(journal.trim() || gratitude.trim());
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: color.bg }} edges={["bottom"]}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: color.bg }}
+      edges={["bottom"]}
+    >
       <Stack.Screen
         options={{
           title: editing ? "Today's check-in" : "Check in",
@@ -185,8 +217,12 @@ export default function CheckInScreen() {
                       paddingVertical: space.md,
                       paddingHorizontal: 0,
                       alignItems: "center",
-                      backgroundColor: active ? tint(m.accent, 0.14) : "transparent",
-                      borderColor: active ? tint(m.accent, 0.34) : "transparent",
+                      backgroundColor: active
+                        ? tint(m.accent, 0.14)
+                        : "transparent",
+                      borderColor: active
+                        ? tint(m.accent, 0.34)
+                        : "transparent",
                       shadowOpacity: 0,
                       elevation: 0,
                     }}
@@ -206,6 +242,17 @@ export default function CheckInScreen() {
               })}
             </View>
           </Card>
+
+          {prefilled ? (
+            <Txt
+              variant="small"
+              c={color.textFaint}
+              style={{ marginTop: space.sm }}
+            >
+              Started from your last check-in. Change anything that&apos;s
+              different today.
+            </Txt>
+          ) : null}
 
           {/* ── Energy & stress ───────────────────────────────────────────── */}
           <Animated.View entering={FadeInDown.duration(400).delay(60)}>
@@ -242,7 +289,11 @@ export default function CheckInScreen() {
                 <Label>What sort of day was it?</Label>
                 <View style={{ flex: 1 }} />
                 {tags.length > 0 ? (
-                  <Txt variant="small" c={color.textFaint} style={{ fontSize: 11 }}>
+                  <Txt
+                    variant="small"
+                    c={color.textFaint}
+                    style={{ fontSize: 11 }}
+                  >
                     {tags.length}/{MAX_CHECKIN_TAGS}
                   </Txt>
                 ) : null}
@@ -287,7 +338,10 @@ export default function CheckInScreen() {
           <Animated.View entering={FadeInDown.duration(400).delay(240)}>
             <Card style={{ marginTop: space.md }} accent={color.purple}>
               {prompt ? (
-                <Animated.View entering={FadeIn.duration(300)} style={{ marginBottom: space.lg }}>
+                <Animated.View
+                  entering={FadeIn.duration(300)}
+                  style={{ marginBottom: space.lg }}
+                >
                   {prompt.observation ? (
                     <View
                       style={{
@@ -302,7 +356,11 @@ export default function CheckInScreen() {
                         color={color.purple}
                         style={{ marginTop: 3 }}
                       />
-                      <Txt variant="small" c={color.textFaint} style={{ flex: 1 }}>
+                      <Txt
+                        variant="small"
+                        c={color.textFaint}
+                        style={{ flex: 1 }}
+                      >
                         {prompt.observation}
                       </Txt>
                     </View>
@@ -393,10 +451,14 @@ export default function CheckInScreen() {
               color={color.textFaint}
               style={{ marginTop: 2 }}
             />
-            <Txt variant="small" c={color.textFaint} style={{ flex: 1, fontSize: 11 }}>
-              Your journal and gratitude entries stay on your account. They&apos;re kept out of
-              server logs, and are only ever shared if you opt a therapist into that category
-              yourself.
+            <Txt
+              variant="small"
+              c={color.textFaint}
+              style={{ flex: 1, fontSize: 11 }}
+            >
+              Your journal and gratitude entries stay on your account.
+              They&apos;re kept out of server logs, and are only ever shared if
+              you opt a therapist into that category yourself.
             </Txt>
           </View>
         </ScrollView>

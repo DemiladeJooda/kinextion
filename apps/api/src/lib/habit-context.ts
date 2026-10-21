@@ -11,7 +11,15 @@
  */
 
 import { prisma } from "@kinextion/database";
-import { toDateString } from "@kinextion/shared";
+import {
+  addDays,
+  dateFromKey,
+  describeSchedule,
+  isValidTimeZone,
+  localDateKey,
+  tallyBetween,
+} from "@kinextion/shared";
+import { completedByHabit, toScheduled } from "./score.js";
 import { computePatterns } from "./patterns.js";
 import { loadFactsForPrompt } from "./memory/store.js";
 
@@ -37,11 +45,6 @@ export interface ContextOptions {
   timeZone?: string | null;
 }
 
-function daysAgo(n: number): Date {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return new Date(toDateString(d));
-}
 
 /** Average of a list, rounded to one decimal. Null on an empty list rather
  *  than 0 — "no data" and "zero" are different claims. */
@@ -61,8 +64,11 @@ export async function buildHabitContext(
   userId: string,
   options: ContextOptions = {}
 ): Promise<HabitContext> {
-  const since = daysAgo(LOOKBACK_DAYS);
-  const moodSince = daysAgo(MOOD_LOOKBACK_DAYS);
+  const tz = isValidTimeZone(options.timeZone) ? options.timeZone : "UTC";
+  const today = localDateKey(new Date(), tz);
+  const fromKey = addDays(today, -(LOOKBACK_DAYS - 1));
+  const since = dateFromKey(fromKey);
+  const moodSince = dateFromKey(addDays(today, -MOOD_LOOKBACK_DAYS));
 
   const [profile, habits, logs, moods, metrics, memoryFacts, patterns] = await Promise.all([
     prisma.profile.findUnique({ where: { userId } }),
@@ -119,33 +125,38 @@ export async function buildHabitContext(
 
   if (active.length) {
     /**
-     * Completion is measured against the days a habit has actually existed,
-     * not a flat 30. A habit created on Tuesday is not "13% completed" on
-     * Thursday, and scoring it that way would make the assistant tell someone
-     * to shrink a habit they started two days ago.
+     * Completion is measured against the days each habit was actually due:
+     * from when it was created, on its own schedule. A habit created on
+     * Tuesday is not "13% completed" on Thursday, and a Mon/Wed/Fri habit
+     * isn't failing on Tuesdays — scoring either way would have the
+     * assistant shrink a habit that's going fine.
      */
+    const byHabit = completedByHabit(logs);
     const stats = active.map((h) => {
-      const age = Math.max(
-        1,
-        Math.min(
-          LOOKBACK_DAYS,
-          Math.ceil((Date.now() - new Date(h.createdAt).getTime()) / 86_400_000)
-        )
+      const { kept, due } = tallyBetween(
+        toScheduled(h, tz),
+        byHabit.get(h.id) ?? new Set<string>(),
+        fromKey,
+        today
       );
-      const done = logs.filter((l) => l.habitId === h.id && l.completed).length;
-      return { habit: h, age, done, rate: done / age };
+      return { habit: h, age: due, done: kept, rate: due ? kept / due : 0 };
     });
 
     const rows = stats.map(({ habit: h, age, done, rate }) => {
       const cue = h.cue ? ` — cue: "${h.cue}"` : "";
-      return `- ${h.name} (${h.category})${cue}: completed ${done}/${age} days (${Math.round(rate * 100)}%)`;
+      const schedule = describeSchedule(h).toLowerCase();
+      return `- ${h.name} (${h.category}, ${schedule})${cue}: done ${done} of ${age} due (${Math.round(rate * 100)}%)`;
     });
     sections.push(`## Current habits, last ${LOOKBACK_DAYS} days\n${rows.join("\n")}`);
     basis.push(`${active.length} current habit${active.length === 1 ? "" : "s"}`);
 
-    // A week is the earliest a habit can fairly be called struggling — before
-    // that there simply isn't enough evidence either way.
-    const struggling = stats.filter((s) => s.age >= 7 && s.rate < 0.3);
+    // A week old and at least three due occasions is the earliest a habit can
+    // fairly be called struggling — before that there simply isn't enough
+    // evidence either way. (`age` is now due occasions, not calendar days.)
+    const weekAgo = Date.now() - 7 * 86_400_000;
+    const struggling = stats.filter(
+      (s) => s.age >= 3 && new Date(s.habit.createdAt).getTime() <= weekAgo && s.rate < 0.3
+    );
     if (struggling.length) {
       sections.push(
         `Struggling (under 30% completion over at least a week): ` +

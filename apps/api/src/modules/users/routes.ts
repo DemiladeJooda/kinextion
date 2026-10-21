@@ -44,6 +44,7 @@ export async function userRoutes(app: FastifyInstance) {
         primaryGoals: data.primaryGoals,
         weeklyAvailability: data.weeklyAvailability,
         equipment: data.equipment ?? [],
+        identityGoal: data.identityGoal,
         preferences: data.preferences as Prisma.InputJsonValue | undefined,
         onboardingComplete: true,
       },
@@ -54,6 +55,7 @@ export async function userRoutes(app: FastifyInstance) {
         primaryGoals: data.primaryGoals,
         weeklyAvailability: data.weeklyAvailability,
         equipment: data.equipment ?? [],
+        ...(data.identityGoal ? { identityGoal: data.identityGoal } : {}),
         ...(data.preferences ? { preferences: data.preferences as Prisma.InputJsonValue } : {}),
         onboardingComplete: true,
       },
@@ -98,6 +100,7 @@ export async function userRoutes(app: FastifyInstance) {
     if ("primaryGoals" in body) data.primaryGoals = body.primaryGoals as Prisma.InputJsonValue;
     if ("weeklyAvailability" in body) data.weeklyAvailability = body.weeklyAvailability;
     if ("equipment" in body) data.equipment = body.equipment as Prisma.InputJsonValue;
+    if ("identityGoal" in body) data.identityGoal = body.identityGoal ?? null;
 
     if (body.preferences) {
       const current = (existing.preferences as Record<string, unknown> | null) ?? {};

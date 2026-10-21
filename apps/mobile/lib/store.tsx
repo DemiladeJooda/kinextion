@@ -1,8 +1,13 @@
 /**
  * Data-backed app state: today's habits, the daily check-in, and the
- * Kinextion Score — all persisted through apps/api. Every mutation calls the
- * server and re-derives local state from its response, so what's on screen is
- * the server's answer, never a client guess.
+ * Kinextion Score — all persisted through apps/api. Mutations re-derive local
+ * state from the server's response. The one exception is ticking a habit,
+ * which shows immediately and rolls back if the save fails: a tap that waits
+ * on the network is a tap that feels broken.
+ *
+ * Due-today, streaks and consistency come from @kinextion/shared's habit
+ * module — the same code the API scores with — so the phone and the server
+ * can't disagree about a day.
  */
 
 import {
@@ -15,20 +20,49 @@ import {
   type ReactNode,
 } from "react";
 import { useAuth } from "./auth";
-import { toDateString, today } from "@kinextion/shared";
-import type { CreateHabitInput, UpdateHabitInput, CheckInInput } from "@kinextion/shared";
+import {
+  addDays,
+  dateKeyOf,
+  describeSchedule,
+  habitProgress,
+  isDueOn,
+  localDateKey,
+  today,
+  type DateKey,
+} from "@kinextion/shared";
+import type {
+  CreateHabitInput,
+  UpdateHabitInput,
+  CheckInInput,
+} from "@kinextion/shared";
 import { useApi } from "../hooks/useApi";
-import type { RemoteHabit, RemoteHabitLog, RemoteMoodEntry } from "../services";
+import type {
+  LogWorkoutInput,
+  RemoteHabit,
+  RemoteHabitLog,
+  RemoteMoodEntry,
+} from "../services";
 import type { Category } from "../theme";
 
 export interface Habit {
   id: string;
   name: string;
-  /** Cue from the Atomic Habits loop — what this habit is stacked onto. */
+  /** The existing moment this habit is stacked onto. */
   cue: string;
   category: Category;
   done: boolean;
+  /** On today's list. False for a Mon/Wed/Fri habit on a Tuesday, or a
+   *  weekly habit already done this week. */
+  due: boolean;
+  /** "Every day", "Mon · Wed · Fri", "Once a week". */
+  scheduleLabel: string;
   streak: number;
+  /** Longest run in the loaded history (the last 90 days). */
+  bestStreak: number;
+  /** What one unit of streak means — weekly habits streak in weeks. */
+  streakUnit: "day" | "week";
+  /** Kept ÷ due over the loaded history; null before anything was due. */
+  consistency: number | null;
   /** The rest of the loop, carried so the edit screen prefills without
    *  a second fetch. */
   craving: string | null;
@@ -49,7 +83,10 @@ interface AppState {
   score: number | null;
   /** The headline number shown on screen — a rolling average over the
    *  period set in Profile (default weekly), not just today. */
-  periodScore: { average: number | null; period: "weekly" | "monthly" | "yearly" } | null;
+  periodScore: {
+    average: number | null;
+    period: "weekly" | "monthly" | "yearly";
+  } | null;
   loading: boolean;
   error: string | null;
   toggleHabit: (id: string) => Promise<void>;
@@ -60,28 +97,28 @@ interface AppState {
   /** Archives: the habit leaves today's list, its logs and streak history stay. */
   archiveHabit: (id: string) => Promise<void>;
   submitCheckIn: (input: CheckInInput) => Promise<void>;
+  /** Log a workout; today's score comes back in the same round trip. */
+  logWorkout: (input: LogWorkoutInput) => Promise<void>;
   /** Re-pull habits, logs, check-in, and score from the server. */
   refresh: () => Promise<void>;
 }
 
 const Ctx = createContext<AppState | null>(null);
 
-/** Consecutive completed days for one habit, ending today or yesterday. */
-function computeStreak(habitId: string, logs: RemoteHabitLog[]): number {
-  const completedDates = new Set(
-    logs.filter((l) => l.habitId === habitId && l.completed).map((l) => l.date.slice(0, 10))
-  );
+/** How much history the phone loads — enough for streaks and a month view. */
+const HISTORY_DAYS = 90;
 
-  let streak = 0;
-  const cursor = new Date();
-  if (!completedDates.has(toDateString(cursor))) {
-    cursor.setDate(cursor.getDate() - 1);
+/** Completed dates per habit, for the shared schedule functions. */
+function completedDates(logs: RemoteHabitLog[]): Map<string, Set<DateKey>> {
+  const map = new Map<string, Set<DateKey>>();
+  for (const l of logs) {
+    if (!l.completed) continue;
+    const key = dateKeyOf(l.date);
+    const set = map.get(l.habitId);
+    if (set) set.add(key);
+    else map.set(l.habitId, new Set([key]));
   }
-  while (completedDates.has(toDateString(cursor))) {
-    streak++;
-    cursor.setDate(cursor.getDate() - 1);
-  }
-  return streak;
+  return map;
 }
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
@@ -99,13 +136,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const applyScore = useCallback((s: Awaited<ReturnType<typeof api.getTodayScore>>) => {
-    setScore(s.overallScore);
-    setWorkoutLogged(s.breakdown?.workoutLogged ?? false);
-    setReflectionLogged(s.breakdown?.reflectionDone ?? false);
-    setMoodLogged(s.breakdown?.moodCheckedIn ?? false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const applyScore = useCallback(
+    (s: Awaited<ReturnType<typeof api.getTodayScore>>) => {
+      setScore(s.overallScore);
+      setWorkoutLogged(s.breakdown?.workoutLogged ?? false);
+      setReflectionLogged(s.breakdown?.reflectionDone ?? false);
+      setMoodLogged(s.breakdown?.moodCheckedIn ?? false);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [],
+  );
 
   /**
    * A new account starts with no habits and says so.
@@ -119,16 +159,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      const since = new Date();
-      since.setDate(since.getDate() - 90);
-
-      const [currentHabits, dayLogs, todayCheckIn, todayScore, period] = await Promise.all([
-        api.listHabits(),
-        api.listHabitLogs({ from: toDateString(since) }),
-        api.getTodayCheckIn(),
-        api.getTodayScore(),
-        api.getPeriodScore(),
-      ]);
+      const [currentHabits, dayLogs, todayCheckIn, todayScore, period] =
+        await Promise.all([
+          api.listHabits(),
+          api.listHabitLogs({ from: addDays(today(), -HISTORY_DAYS) }),
+          api.getTodayCheckIn(),
+          api.getTodayScore(),
+          api.getPeriodScore(),
+        ]);
 
       setRemoteHabits(currentHabits);
       setLogs(dayLogs);
@@ -151,22 +189,40 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const toggleHabit = useCallback(
     async (id: string) => {
       const todayStr = today();
-      const currentlyDone = logs.some(
-        (l) => l.habitId === id && l.date.slice(0, 10) === todayStr && l.completed
-      );
+      const sameDay = (l: RemoteHabitLog) =>
+        l.habitId === id && dateKeyOf(l.date) === todayStr;
+      const previous = logs.find(sameDay);
+      const completed = !(previous?.completed ?? false);
+
+      // Show it now; the server's row replaces this placeholder when it lands.
+      const optimistic: RemoteHabitLog = {
+        id: previous?.id ?? `pending-${id}`,
+        habitId: id,
+        userId: previous?.userId ?? "",
+        date: todayStr,
+        completed,
+        notes: previous?.notes ?? null,
+      };
+      setLogs((prev) => [optimistic, ...prev.filter((l) => !sameDay(l))]);
+      setError(null);
 
       try {
-        const log = await api.logHabit({ habitId: id, date: todayStr, completed: !currentlyDone });
-        setLogs((prev) => [
-          log,
-          ...prev.filter((l) => !(l.habitId === id && l.date.slice(0, 10) === todayStr)),
-        ]);
-        applyScore(await api.getTodayScore());
+        const { log, score: newScore } = await api.logHabit({
+          habitId: id,
+          date: todayStr,
+          completed,
+        });
+        setLogs((prev) => [log, ...prev.filter((l) => !sameDay(l))]);
+        applyScore(newScore ?? (await api.getTodayScore()));
       } catch {
+        setLogs((prev) => [
+          ...(previous ? [previous] : []),
+          ...prev.filter((l) => !sameDay(l)),
+        ]);
         setError("Couldn't save that. Try again.");
       }
     },
-    [logs, api, applyScore]
+    [logs, api, applyScore],
   );
 
   const addHabit = useCallback(
@@ -177,7 +233,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setRemoteHabits((prev) => [habit, ...prev]);
       applyScore(await api.getTodayScore());
     },
-    [api, applyScore]
+    [api, applyScore],
   );
 
   const addHabits = useCallback(
@@ -186,7 +242,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setRemoteHabits((prev) => [...created, ...prev]);
       applyScore(await api.getTodayScore());
     },
-    [api, applyScore]
+    [api, applyScore],
   );
 
   const editHabit = useCallback(
@@ -195,7 +251,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setRemoteHabits((prev) => prev.map((h) => (h.id === id ? updated : h)));
       applyScore(await api.getTodayScore());
     },
-    [api, applyScore]
+    [api, applyScore],
   );
 
   const archiveHabit = useCallback(
@@ -206,7 +262,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       // changes the moment it's removed.
       applyScore(await api.getTodayScore());
     },
-    [api, applyScore]
+    [api, applyScore],
   );
 
   const submitCheckIn = useCallback(
@@ -215,24 +271,47 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setCheckIn(result.entry);
       applyScore(result.score);
     },
-    [api, applyScore]
+    [api, applyScore],
+  );
+
+  const logWorkout = useCallback(
+    async (input: LogWorkoutInput) => {
+      const result = await api.logWorkout(input);
+      applyScore(result.score ?? (await api.getTodayScore()));
+    },
+    [api, applyScore],
   );
 
   const habits = useMemo<Habit[]>(() => {
     const todayStr = today();
-    return remoteHabits.map((h) => ({
-      id: h.id,
-      name: h.name,
-      cue: h.cue ?? "",
-      category: h.category as Category,
-      done: logs.some((l) => l.habitId === h.id && l.date.slice(0, 10) === todayStr && l.completed),
-      streak: computeStreak(h.id, logs),
-      craving: h.craving,
-      response: h.response,
-      reward: h.reward,
-      frequency: h.frequency,
-      targetDays: h.targetDays,
-    }));
+    const byHabit = completedDates(logs);
+    const none = new Set<DateKey>();
+    return remoteHabits.map((h) => {
+      const done = byHabit.get(h.id) ?? none;
+      const scheduled = {
+        ...h,
+        startDate: localDateKey(new Date(h.createdAt)),
+      };
+      const progress = habitProgress(scheduled, done, todayStr);
+      return {
+        id: h.id,
+        name: h.name,
+        cue: h.cue ?? "",
+        category: h.category as Category,
+        done: done.has(todayStr),
+        due: isDueOn(scheduled, todayStr, done),
+        scheduleLabel: describeSchedule(h),
+        streak: progress.streak,
+        bestStreak: progress.bestStreak,
+        streakUnit: progress.unit,
+        consistency: progress.consistency,
+        craving: h.craving,
+        response: h.response,
+        reward: h.reward,
+        frequency: h.frequency,
+        targetDays: h.targetDays,
+      };
+    });
   }, [remoteHabits, logs]);
 
   const value = useMemo<AppState>(
@@ -252,6 +331,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       editHabit,
       archiveHabit,
       submitCheckIn,
+      logWorkout,
       refresh,
     }),
     [
@@ -270,8 +350,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       editHabit,
       archiveHabit,
       submitCheckIn,
+      logWorkout,
       refresh,
-    ]
+    ],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -279,6 +360,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
 export function useAppState(): AppState {
   const ctx = useContext(Ctx);
-  if (!ctx) throw new Error("useAppState must be used inside <AppStateProvider>");
+  if (!ctx)
+    throw new Error("useAppState must be used inside <AppStateProvider>");
   return ctx;
 }

@@ -1,4 +1,11 @@
-import { Alert, Image, Pressable, ScrollView, Switch, View } from "react-native";
+import {
+  Alert,
+  Image,
+  Pressable,
+  ScrollView,
+  Switch,
+  View,
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -170,8 +177,11 @@ export default function ProfileScreen() {
   const [connected, setConnected] = useState<Record<string, boolean>>({});
   const [avatarId, setAvatarId] = useState<string | null>(null);
 
-  const longestStreak = habits.reduce((m, h) => Math.max(m, h.streak), 0);
-  const displayName = user?.firstName || user?.primaryEmailAddress?.emailAddress || "";
+  // Best run in the loaded history, not today's, so a 40-day best doesn't
+  // read as 0 the morning after one miss.
+  const longestStreak = habits.reduce((m, h) => Math.max(m, h.bestStreak), 0);
+  const displayName =
+    user?.firstName || user?.primaryEmailAddress?.emailAddress || "";
   const initial = displayName ? displayName[0]!.toUpperCase() : "K";
 
   useEffect(() => {
@@ -202,33 +212,40 @@ export default function ProfileScreen() {
           text: "Delete",
           style: "destructive",
           onPress: () =>
-            Alert.alert("Are you sure?", "There is no way to recover this data.", [
-              { text: "Keep my account", style: "cancel" },
-              {
-                text: "Delete everything",
-                style: "destructive",
-                onPress: async () => {
-                  try {
-                    await api.deleteAccount();
-                    // Sign-out clears the local session; the AuthGate then
-                    // routes back to sign-in on its own.
-                    await signOut();
-                  } catch {
-                    Alert.alert(
-                      "Couldn't delete your account",
-                      "Something went wrong. Your account is unchanged — please try again."
-                    );
-                  }
+            Alert.alert(
+              "Are you sure?",
+              "There is no way to recover this data.",
+              [
+                { text: "Keep my account", style: "cancel" },
+                {
+                  text: "Delete everything",
+                  style: "destructive",
+                  onPress: async () => {
+                    try {
+                      await api.deleteAccount();
+                      // Sign-out clears the local session; the AuthGate then
+                      // routes back to sign-in on its own.
+                      await signOut();
+                    } catch {
+                      Alert.alert(
+                        "Couldn't delete your account",
+                        "Something went wrong. Your account is unchanged — please try again.",
+                      );
+                    }
+                  },
                 },
-              },
-            ]),
+              ],
+            ),
         },
-      ]
+      ],
     );
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: color.bg }} edges={["top"]}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: color.bg }}
+      edges={["top"]}
+    >
       <AuroraBackdrop accent={color.teal} />
       <ScrollView
         contentContainerStyle={{
@@ -273,7 +290,9 @@ export default function ProfileScreen() {
                   >
                     {avatarId ? (
                       <Image
-                        source={{ uri: avatarImageUrl(avatarId, { camera: "portrait" }) }}
+                        source={{
+                          uri: avatarImageUrl(avatarId, { camera: "portrait" }),
+                        }}
                         style={{ width: "100%", height: "100%" }}
                       />
                     ) : user?.hasImage && user.imageUrl ? (
@@ -291,11 +310,23 @@ export default function ProfileScreen() {
               </Pressable>
               <View style={{ flex: 1 }}>
                 <Txt variant="heading">{displayName || "Kinextion"}</Txt>
-                <Txt variant="small" c={color.textMuted} style={{ marginTop: 2 }}>
-                  {user?.primaryEmailAddress?.emailAddress ?? "Synced across devices"}
+                <Txt
+                  variant="small"
+                  c={color.textMuted}
+                  style={{ marginTop: 2 }}
+                >
+                  {user?.primaryEmailAddress?.emailAddress ??
+                    "Synced across devices"}
                 </Txt>
-                <Pressable onPress={() => router.push("/avatar/create" as never)} hitSlop={8}>
-                  <Txt variant="small" c={color.green} style={{ marginTop: 4, fontWeight: "700" }}>
+                <Pressable
+                  onPress={() => router.push("/avatar/create" as never)}
+                  hitSlop={8}
+                >
+                  <Txt
+                    variant="small"
+                    c={color.green}
+                    style={{ marginTop: 4, fontWeight: "700" }}
+                  >
                     {avatarId ? "Edit avatar" : "Create your avatar"}
                   </Txt>
                 </Pressable>
@@ -311,13 +342,24 @@ export default function ProfileScreen() {
             >
               <Stat
                 label="Score"
-                value={periodScore?.average === null || periodScore?.average === undefined
-                  ? "—"
-                  : String(periodScore.average)}
+                value={
+                  periodScore?.average === null ||
+                  periodScore?.average === undefined
+                    ? "—"
+                    : String(periodScore.average)
+                }
                 accent={color.teal}
               />
-              <Stat label="Best streak" value={`${longestStreak}d`} accent={color.amber} />
-              <Stat label="Habits" value={String(habits.length)} accent={color.green} />
+              <Stat
+                label="Best streak"
+                value={`${longestStreak}d`}
+                accent={color.amber}
+              />
+              <Stat
+                label="Habits"
+                value={String(habits.length)}
+                accent={color.green}
+              />
             </View>
           </Card>
         </Animated.View>
@@ -325,10 +367,14 @@ export default function ProfileScreen() {
         {/* Wearables & fitness — the real Integrations feature */}
         <SectionTitle accent={color.amber}>Wearables & fitness</SectionTitle>
         <WearablesCard />
-        <Txt variant="small" c={color.textFaint} style={{ marginTop: space.sm }}>
-          Kinextion reads what's already tracking you, and connects the dots — a missed Strava sync
-          gets caught, and sleep from your ring gets read alongside how you actually showed up that
-          day.
+        <Txt
+          variant="small"
+          c={color.textFaint}
+          style={{ marginTop: space.sm }}
+        >
+          Kinextion reads what's already tracking you, and connects the dots — a
+          missed Strava sync gets caught, and sleep from your ring gets read
+          alongside how you actually showed up that day.
         </Txt>
 
         {/* Where connected data actually becomes visible. Sits directly under
@@ -364,26 +410,39 @@ export default function ProfileScreen() {
                 Every reading your connected apps have sent, charted.
               </Txt>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={color.textFaint} />
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={color.textFaint}
+            />
           </View>
         </PressCard>
 
         {/* Calendar — real OAuth, but a different disclosure from a wearable */}
         <SectionTitle accent={color.blue}>Calendar</SectionTitle>
         <WearablesCard providers={CALENDAR_PROVIDER_META} />
-        <Txt variant="small" c={color.textFaint} style={{ marginTop: space.sm }}>
-          Connecting a calendar lets Kinextion put habit cues in gaps that are actually free. It
-          reads only the shape of your days — when your first commitment is, how much is booked, and
-          where the longest open block sits. Event titles, people and locations are discarded before
-          anything is saved, and are never sent to the AI.
+        <Txt
+          variant="small"
+          c={color.textFaint}
+          style={{ marginTop: space.sm }}
+        >
+          Connecting a calendar lets Kinextion put habit cues in gaps that are
+          actually free. It reads only the shape of your days — when your first
+          commitment is, how much is booked, and where the longest open block
+          sits. Event titles, people and locations are discarded before anything
+          is saved, and are never sent to the AI.
         </Txt>
 
         {/* Music — real OAuth, life-context rather than fitness or calendar */}
         <SectionTitle accent={color.pink}>Music</SectionTitle>
         <WearablesCard providers={MUSIC_PROVIDER_META} />
-        <Txt variant="small" c={color.textFaint} style={{ marginTop: space.sm }}>
-          Reads your recently played tracks — nothing else about your account, and nothing is
-          posted on your behalf.
+        <Txt
+          variant="small"
+          c={color.textFaint}
+          style={{ marginTop: space.sm }}
+        >
+          Reads your recently played tracks — nothing else about your account,
+          and nothing is posted on your behalf.
         </Txt>
 
         {/* Data sources */}
@@ -416,7 +475,11 @@ export default function ProfileScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Txt variant="body">{s.label}</Txt>
-                <Txt variant="small" c={color.textFaint} style={{ marginTop: 1 }}>
+                <Txt
+                  variant="small"
+                  c={color.textFaint}
+                  style={{ marginTop: 1 }}
+                >
                   {s.detail}
                 </Txt>
               </View>
@@ -435,9 +498,13 @@ export default function ProfileScreen() {
             </View>
           ))}
         </Card>
-        <Txt variant="small" c={color.textFaint} style={{ marginTop: space.sm }}>
-          Integrations are not live yet — these toggles record your preference so the connection
-          happens the moment each one ships.
+        <Txt
+          variant="small"
+          c={color.textFaint}
+          style={{ marginTop: space.sm }}
+        >
+          Integrations are not live yet — these toggles record your preference
+          so the connection happens the moment each one ships.
         </Txt>
 
         {/* Therapist Starter Pack */}
@@ -464,7 +531,11 @@ export default function ProfileScreen() {
                 justifyContent: "center",
               }}
             >
-              <Ionicons name="heart-circle-outline" size={22} color={color.purple} />
+              <Ionicons
+                name="heart-circle-outline"
+                size={22}
+                color={color.purple}
+              />
             </View>
             <View style={{ flex: 1 }}>
               <Txt variant="bodyStrong">Therapist Starter Pack</Txt>
@@ -472,7 +543,11 @@ export default function ProfileScreen() {
                 Share real context with the therapist you already have
               </Txt>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={color.textFaint} />
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={color.textFaint}
+            />
           </View>
         </PressCard>
 
@@ -485,14 +560,18 @@ export default function ProfileScreen() {
               onPress={() => {
                 if (s.route) router.push(s.route as never);
                 else if (s.key === "sign-out")
-                  Alert.alert("Sign out?", "Your habits and history stay safe on your account.", [
-                    { text: "Cancel", style: "cancel" },
-                    {
-                      text: "Sign out",
-                      style: "destructive",
-                      onPress: () => void signOut(),
-                    },
-                  ]);
+                  Alert.alert(
+                    "Sign out?",
+                    "Your habits and history stay safe on your account.",
+                    [
+                      { text: "Cancel", style: "cancel" },
+                      {
+                        text: "Sign out",
+                        style: "destructive",
+                        onPress: () => void signOut(),
+                      },
+                    ],
+                  );
                 else if (s.key === "delete-account") confirmDeleteAccount();
               }}
               style={{
@@ -514,12 +593,18 @@ export default function ProfileScreen() {
               <Txt variant="body" c={s.accent} style={{ flex: 1 }}>
                 {s.label}
               </Txt>
-              <Ionicons name="chevron-forward" size={16} color={color.textFaint} />
+              <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={color.textFaint}
+              />
             </PressCard>
           ))}
         </Card>
 
-        <View style={{ alignItems: "center", marginTop: space.xxl, gap: space.sm }}>
+        <View
+          style={{ alignItems: "center", marginTop: space.xxl, gap: space.sm }}
+        >
           <Badge label="Kinextion 0.1.0" accent={color.textFaint} />
           <Txt variant="small" c={color.textFaint}>
             Made for people who are done starting over.
@@ -560,19 +645,28 @@ function WearablesCard({
       const { authorizeUrl } = await api.startConnect(provider);
       if (DEMO_MODE) {
         // No OAuth round trip in the demo — the connection is already made.
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        void Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Success,
+        );
         await refresh();
         return;
       }
       const redirectUrl = Linking.createURL("integrations/callback");
-      const result = await WebBrowser.openAuthSessionAsync(authorizeUrl, redirectUrl);
+      const result = await WebBrowser.openAuthSessionAsync(
+        authorizeUrl,
+        redirectUrl,
+      );
       if (result.type === "success") {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        void Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Success,
+        );
         await api.syncIntegration(provider);
         await refresh();
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't connect. Try again.");
+      setError(
+        err instanceof Error ? err.message : "Couldn't connect. Try again.",
+      );
     } finally {
       setBusy(null);
     }
@@ -608,7 +702,9 @@ function WearablesCard({
     <>
       <Card padded={false} style={{ paddingVertical: space.xs }}>
         {providers.map((p, i) => {
-          const connection = data?.integrations.find((c) => c.provider === p.id);
+          const connection = data?.integrations.find(
+            (c) => c.provider === p.id,
+          );
           const configured = data?.available[p.id] ?? true; // assume yes until we know otherwise
           const isBusy = busy === p.id;
 
@@ -639,7 +735,11 @@ function WearablesCard({
               </View>
               <View style={{ flex: 1 }}>
                 <Txt variant="body">{p.label}</Txt>
-                <Txt variant="small" c={color.textFaint} style={{ marginTop: 1 }}>
+                <Txt
+                  variant="small"
+                  c={color.textFaint}
+                  style={{ marginTop: 1 }}
+                >
                   {connection?.status === "connected"
                     ? connection.lastSyncedAt
                       ? `Synced ${timeAgo(connection.lastSyncedAt)}`
@@ -690,7 +790,10 @@ function WearablesCard({
                     elevation: 0,
                   }}
                 >
-                  <Txt variant="small" c={configured ? p.accent : color.textFaint}>
+                  <Txt
+                    variant="small"
+                    c={configured ? p.accent : color.textFaint}
+                  >
                     {isBusy ? "Connecting…" : "Connect"}
                   </Txt>
                 </PressCard>
@@ -718,7 +821,15 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-function Stat({ label, value, accent }: { label: string; value: string; accent: string }) {
+function Stat({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent: string;
+}) {
   return (
     <View
       style={{
@@ -734,7 +845,11 @@ function Stat({ label, value, accent }: { label: string; value: string; accent: 
       <Txt variant="heading" c={accent}>
         {value}
       </Txt>
-      <Txt variant="small" c={color.textFaint} style={{ fontSize: 11, marginTop: 1 }}>
+      <Txt
+        variant="small"
+        c={color.textFaint}
+        style={{ fontSize: 11, marginTop: 1 }}
+      >
         {label}
       </Txt>
     </View>

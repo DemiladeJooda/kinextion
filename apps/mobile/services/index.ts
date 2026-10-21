@@ -84,8 +84,15 @@ export function getMyProfile(token: string | null) {
   return apiRequest<RemoteUser>("/api/users/me/profile", { token });
 }
 
-export function completeOnboarding(token: string | null, input: OnboardingInput) {
-  return apiRequest<RemoteProfile>("/api/users/me/onboard", { method: "POST", body: input, token });
+export function completeOnboarding(
+  token: string | null,
+  input: OnboardingInput,
+) {
+  return apiRequest<RemoteProfile>("/api/users/me/onboard", {
+    method: "POST",
+    body: input,
+    token,
+  });
 }
 
 export function updateProfile(token: string | null, input: UpdateProfileInput) {
@@ -122,7 +129,10 @@ export function getDataSummary(token: string | null) {
 
 /** Permanently deletes the account and all associated data. Not reversible. */
 export function deleteAccount(token: string | null) {
-  return apiRequest<{ deleted: boolean }>("/api/users/me", { method: "DELETE", token });
+  return apiRequest<{ deleted: boolean }>("/api/users/me", {
+    method: "DELETE",
+    token,
+  });
 }
 
 // ─── Habits ─────────────────────────────────────────────────────────────────
@@ -140,6 +150,15 @@ export interface RemoteHabit {
   targetDays: number[] | null;
   isActive: boolean;
   createdAt: string;
+  /** v2 fields. Optional so an API that predates them still type-checks. */
+  fullVersion?: string | null;
+  backupPlan?: string | null;
+  pairWith?: string | null;
+  timeWindow?: "morning" | "midday" | "evening" | "anytime";
+  perWeekTarget?: number | null;
+  status?: "building" | "established" | "paused";
+  sortOrder?: number;
+  reminderEnabled?: boolean;
 }
 
 export function listHabits(token: string | null, includeArchived = false) {
@@ -150,16 +169,31 @@ export function listHabits(token: string | null, includeArchived = false) {
 }
 
 export function createHabit(token: string | null, input: CreateHabitInput) {
-  return apiRequest<RemoteHabit>("/api/habits", { method: "POST", body: input, token });
+  return apiRequest<RemoteHabit>("/api/habits", {
+    method: "POST",
+    body: input,
+    token,
+  });
 }
 
-export function updateHabit(token: string | null, id: string, input: UpdateHabitInput) {
-  return apiRequest<RemoteHabit>(`/api/habits/${id}`, { method: "PATCH", body: input, token });
+export function updateHabit(
+  token: string | null,
+  id: string,
+  input: UpdateHabitInput,
+) {
+  return apiRequest<RemoteHabit>(`/api/habits/${id}`, {
+    method: "PATCH",
+    body: input,
+    token,
+  });
 }
 
 /** Archives rather than deletes — the logs and streak history survive. */
 export function archiveHabit(token: string | null, id: string) {
-  return apiRequest<{ archived: boolean }>(`/api/habits/${id}`, { method: "DELETE", token });
+  return apiRequest<{ archived: boolean }>(`/api/habits/${id}`, {
+    method: "DELETE",
+    token,
+  });
 }
 
 export function restoreHabit(token: string | null, id: string) {
@@ -182,7 +216,7 @@ export interface HabitSuggestions {
 
 export function suggestHabits(
   token: string | null,
-  input: { focus?: string; count?: number } = {}
+  input: { focus?: string; count?: number } = {},
 ) {
   return apiRequest<HabitSuggestions>("/api/habits/suggest", {
     method: "POST",
@@ -218,17 +252,71 @@ export interface RemoteHabitLog {
   date: string;
   completed: boolean;
   notes: string | null;
+  /** "done" | "minimum" | "rest"; missing on logs from an older API. */
+  state?: "done" | "minimum" | "rest";
+  value?: number | null;
 }
 
-export function logHabit(token: string | null, input: LogHabitInput) {
-  return apiRequest<RemoteHabitLog>("/api/habits/log", { method: "POST", body: input, token });
+export interface RemoteWorkout {
+  id: string;
+  userId: string;
+  name: string;
+  type: "strength" | "cardio" | "mobility" | "mixed";
+  duration: number | null;
+  difficulty: "too_easy" | "just_right" | "too_hard" | null;
+  createdAt: string;
 }
 
-export function listHabitLogs(token: string | null, range?: { from?: string; to?: string }) {
-  return apiRequest<Array<RemoteHabitLog & { habit: { name: string; category: string } }>>(
-    "/api/habits/logs",
-    { token, query: range }
-  );
+export interface LogWorkoutInput {
+  name: string;
+  type: RemoteWorkout["type"];
+  duration?: number;
+  difficulty?: "too_easy" | "just_right" | "too_hard";
+}
+
+export async function logWorkout(
+  token: string | null,
+  input: LogWorkoutInput,
+): Promise<{ workout: RemoteWorkout; score: RemoteScore | null }> {
+  const { data, meta } = await apiRequestWithMeta<
+    RemoteWorkout,
+    { score?: RemoteScore }
+  >("/api/workouts", { method: "POST", body: input, token });
+  return { workout: data, score: meta?.score ?? null };
+}
+
+export function listWorkouts(token: string | null, limit = 20) {
+  return apiRequest<RemoteWorkout[]>("/api/workouts", {
+    token,
+    query: { limit: String(limit) },
+  });
+}
+
+export interface LogHabitResult {
+  log: RemoteHabitLog;
+  /** Today's recomputed score, returned in the same round trip. Null from
+   *  an API too old to send it — refetch in that case. */
+  score: RemoteScore | null;
+}
+
+export async function logHabit(
+  token: string | null,
+  input: LogHabitInput,
+): Promise<LogHabitResult> {
+  const { data, meta } = await apiRequestWithMeta<
+    RemoteHabitLog,
+    { score?: RemoteScore }
+  >("/api/habits/log", { method: "POST", body: input, token });
+  return { log: data, score: meta?.score ?? null };
+}
+
+export function listHabitLogs(
+  token: string | null,
+  range?: { from?: string; to?: string },
+) {
+  return apiRequest<
+    Array<RemoteHabitLog & { habit: { name: string; category: string } }>
+  >("/api/habits/logs", { token, query: range });
 }
 
 // ─── Mood ───────────────────────────────────────────────────────────────────
@@ -245,12 +333,22 @@ export interface RemoteMoodEntry {
   createdAt: string;
 }
 
-export function createMoodEntry(token: string | null, input: CreateMoodEntryInput) {
-  return apiRequest<RemoteMoodEntry>("/api/mood", { method: "POST", body: input, token });
+export function createMoodEntry(
+  token: string | null,
+  input: CreateMoodEntryInput,
+) {
+  return apiRequest<RemoteMoodEntry>("/api/mood", {
+    method: "POST",
+    body: input,
+    token,
+  });
 }
 
 export function listMoodEntries(token: string | null, limit = 30) {
-  return apiRequest<RemoteMoodEntry[]>("/api/mood", { token, query: { limit: String(limit) } });
+  return apiRequest<RemoteMoodEntry[]>("/api/mood", {
+    token,
+    query: { limit: String(limit) },
+  });
 }
 
 export function getLatestMood(token: string | null) {
@@ -278,7 +376,11 @@ export interface CheckInResult {
 }
 
 export function submitCheckIn(token: string | null, input: CheckInInput) {
-  return apiRequest<CheckInResult>("/api/checkin", { method: "POST", body: input, token });
+  return apiRequest<CheckInResult>("/api/checkin", {
+    method: "POST",
+    body: input,
+    token,
+  });
 }
 
 export interface CheckInPrompt {
@@ -321,7 +423,9 @@ export interface RecommendationEnvelope {
 
 /** Today's recommendation if one exists, without generating anything. */
 export function getTodayRecommendation(token: string | null) {
-  return apiRequest<RemoteRecommendation | null>("/api/recommendations/today", { token });
+  return apiRequest<RemoteRecommendation | null>("/api/recommendations/today", {
+    token,
+  });
 }
 
 /**
@@ -330,7 +434,7 @@ export function getTodayRecommendation(token: string | null) {
  */
 export async function requestRecommendation(
   token: string | null,
-  options: { refresh?: boolean } = {}
+  options: { refresh?: boolean } = {},
 ): Promise<RecommendationEnvelope> {
   const { data, meta } = await apiRequestWithMeta<
     RemoteRecommendation,
@@ -351,11 +455,11 @@ export async function requestRecommendation(
 export function sendRecommendationFeedback(
   token: string | null,
   id: string,
-  outcome: "acted" | "dismissed"
+  outcome: "acted" | "dismissed",
 ) {
   return apiRequest<{ id: string; acted: boolean; dismissed: boolean }>(
     `/api/recommendations/${id}/feedback`,
-    { method: "POST", body: { outcome }, token }
+    { method: "POST", body: { outcome }, token },
   );
 }
 
@@ -435,7 +539,7 @@ export interface RemoteNearbyGroup {
 
 export function getNearbyGroups(
   token: string | null,
-  params: { city?: string; category?: string; lat?: number; lng?: number } = {}
+  params: { city?: string; category?: string; lat?: number; lng?: number } = {},
 ) {
   return apiRequest<RemoteNearbyGroup[]>("/api/nearby/groups", {
     token,
@@ -449,7 +553,10 @@ export function getNearbyGroups(
 }
 
 export function getScoreHistory(token: string | null, days = 30) {
-  return apiRequest<RemoteScore[]>("/api/score/history", { token, query: { days: String(days) } });
+  return apiRequest<RemoteScore[]>("/api/score/history", {
+    token,
+    query: { days: String(days) },
+  });
 }
 
 // ─── Integrations ───────────────────────────────────────────────────────────
@@ -488,21 +595,36 @@ export function listIntegrations(token: string | null) {
   return apiRequest<IntegrationsList>("/api/integrations", { token });
 }
 
-export function startConnect(token: string | null, provider: IntegrationProvider) {
-  return apiRequest<{ authorizeUrl: string }>(`/api/integrations/${provider}/connect`, {
-    method: "POST",
-    token,
-  });
+export function startConnect(
+  token: string | null,
+  provider: IntegrationProvider,
+) {
+  return apiRequest<{ authorizeUrl: string }>(
+    `/api/integrations/${provider}/connect`,
+    {
+      method: "POST",
+      token,
+    },
+  );
 }
 
-export function disconnectIntegration(token: string | null, provider: IntegrationProvider) {
-  return apiRequest<{ disconnected: boolean }>(`/api/integrations/${provider}`, {
-    method: "DELETE",
-    token,
-  });
+export function disconnectIntegration(
+  token: string | null,
+  provider: IntegrationProvider,
+) {
+  return apiRequest<{ disconnected: boolean }>(
+    `/api/integrations/${provider}`,
+    {
+      method: "DELETE",
+      token,
+    },
+  );
 }
 
-export function syncIntegration(token: string | null, provider: IntegrationProvider) {
+export function syncIntegration(
+  token: string | null,
+  provider: IntegrationProvider,
+) {
   return apiRequest<{ synced: number }>(`/api/integrations/${provider}/sync`, {
     method: "POST",
     token,
@@ -520,9 +642,12 @@ export interface RemoteWearableMetric {
 
 export function listMetrics(
   token: string | null,
-  filter?: { type?: string; from?: string; to?: string }
+  filter?: { type?: string; from?: string; to?: string },
 ) {
-  return apiRequest<RemoteWearableMetric[]>("/api/integrations/metrics", { token, query: filter });
+  return apiRequest<RemoteWearableMetric[]>("/api/integrations/metrics", {
+    token,
+    query: filter,
+  });
 }
 
 export interface PatternInsight {
@@ -558,26 +683,39 @@ export function getTherapistConsent(token: string | null) {
   return apiRequest<TherapistConsent>("/api/therapist/consent", { token });
 }
 
-export function updateTherapistConsent(token: string | null, categories: TherapistCategories) {
-  return apiRequest<{ active: boolean; categories: TherapistCategories }>("/api/therapist/consent", {
-    method: "PUT",
-    body: categories,
-    token,
-  });
+export function updateTherapistConsent(
+  token: string | null,
+  categories: TherapistCategories,
+) {
+  return apiRequest<{ active: boolean; categories: TherapistCategories }>(
+    "/api/therapist/consent",
+    {
+      method: "PUT",
+      body: categories,
+      token,
+    },
+  );
 }
 
 export function revokeTherapistConsent(token: string | null) {
-  return apiRequest<{ active: boolean; categories: TherapistCategories }>("/api/therapist/consent/revoke", {
-    method: "POST",
-    token,
-  });
+  return apiRequest<{ active: boolean; categories: TherapistCategories }>(
+    "/api/therapist/consent/revoke",
+    {
+      method: "POST",
+      token,
+    },
+  );
 }
 
 export interface TherapistReportSummary {
   periodStart: string;
   periodEnd: string;
   categories: TherapistCategories;
-  habits?: { total: number; completionRate: number; longestActiveStreak: number };
+  habits?: {
+    total: number;
+    completionRate: number;
+    longestActiveStreak: number;
+  };
   moodTrends?: {
     entries: number;
     averageMood: number | null;
@@ -585,9 +723,16 @@ export interface TherapistReportSummary {
     averageStress: number | null;
     commonTags: string[];
   };
-  journalExcerpts?: Array<{ date: string; journal?: string; gratitude?: string }>;
+  journalExcerpts?: Array<{
+    date: string;
+    journal?: string;
+    gratitude?: string;
+  }>;
   patterns?: string[];
-  score?: { average: number | null; trend: "up" | "down" | "flat" | "not_enough_data" };
+  score?: {
+    average: number | null;
+    trend: "up" | "down" | "flat" | "not_enough_data";
+  };
 }
 
 export interface TherapistReport {
@@ -606,11 +751,17 @@ export interface TherapistReportListItem {
 }
 
 export function generateTherapistReport(token: string | null, days = 30) {
-  return apiRequest<TherapistReport>("/api/therapist/reports", { method: "POST", body: { days }, token });
+  return apiRequest<TherapistReport>("/api/therapist/reports", {
+    method: "POST",
+    body: { days },
+    token,
+  });
 }
 
 export function listTherapistReports(token: string | null) {
-  return apiRequest<TherapistReportListItem[]>("/api/therapist/reports", { token });
+  return apiRequest<TherapistReportListItem[]>("/api/therapist/reports", {
+    token,
+  });
 }
 
 export function getTherapistReport(token: string | null, id: string) {

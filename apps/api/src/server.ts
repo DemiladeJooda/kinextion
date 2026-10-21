@@ -4,8 +4,10 @@ import rateLimit from "@fastify/rate-limit";
 import helmet from "@fastify/helmet";
 import { validateEnv } from "./lib/env.js";
 import { registerAuth } from "./plugins/auth.js";
+import { registerTimeZone } from "./plugins/time-zone.js";
 import { userRoutes } from "./modules/users/routes.js";
 import { habitRoutes } from "./modules/habits/routes.js";
+import { workoutRoutes } from "./modules/workouts/routes.js";
 import { moodRoutes } from "./modules/mood/routes.js";
 import { checkInRoutes } from "./modules/checkin/routes.js";
 import { recommendationRoutes } from "./modules/recommendations/routes.js";
@@ -129,10 +131,12 @@ async function buildApp(options: BuildOptions = {}) {
     timestamp: new Date().toISOString(),
   }));
 
+  registerTimeZone(app);
   await registerAuth(app);
 
   await app.register(userRoutes, { prefix: "/api/users" });
   await app.register(habitRoutes, { prefix: "/api/habits" });
+  await app.register(workoutRoutes, { prefix: "/api/workouts" });
   await app.register(moodRoutes, { prefix: "/api/mood" });
   await app.register(checkInRoutes, { prefix: "/api/checkin" });
   await app.register(recommendationRoutes, { prefix: "/api/recommendations" });

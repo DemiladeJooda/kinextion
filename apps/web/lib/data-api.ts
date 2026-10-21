@@ -14,6 +14,23 @@ import "server-only";
  */
 
 import { auth } from "@clerk/nextjs/server";
+import { cookies } from "next/headers";
+import { isValidTimeZone, localDateKey, weekStartKey } from "@kinextion/shared";
+
+/** Set by components/dashboard/TimeZoneSync from the browser. */
+const TZ_COOKIE = "kx_tz";
+
+/** The reader's IANA zone, or null on the very first render before the
+ *  browser has had a chance to say. */
+export async function readerTimeZone(): Promise<string | null> {
+  try {
+    const raw = (await cookies()).get(TZ_COOKIE)?.value;
+    const tz = raw ? decodeURIComponent(raw) : null;
+    return isValidTimeZone(tz) ? tz : null;
+  } catch {
+    return null;
+  }
+}
 
 function apiBase(): string {
   return (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
@@ -27,7 +44,7 @@ function apiBase(): string {
  * one endpoint was slow is not — and these are independent reads, so one
  * being unavailable says nothing about the others.
  */
-async function get<T>(path: string): Promise<T | null> {
+async function get<T>(path: string, timeZone: string | null): Promise<T | null> {
   const base = apiBase();
   if (!base) return null;
 
@@ -37,7 +54,10 @@ async function get<T>(path: string): Promise<T | null> {
     if (!token) return null;
 
     const res = await fetch(`${base}${path}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(timeZone ? { "X-Time-Zone": timeZone } : {}),
+      },
       // Personal, always-changing data — never serve it from a cache.
       cache: "no-store",
     });
@@ -69,6 +89,9 @@ export interface DashboardHabit {
   name: string;
   category: string;
   cue: string | null;
+  frequency: string;
+  targetDays: number[] | null;
+  createdAt: string;
 }
 
 export interface DashboardHabitLog {
@@ -109,30 +132,30 @@ export interface DashboardData {
   logs: DashboardHabitLog[] | null;
   checkIn: DashboardCheckIn | null;
   recommendation: DashboardRecommendation | null;
+  /** The reader's today, in their own zone, and the zone it came from. */
+  today: string;
+  timeZone: string | null;
   /** True when the API couldn't be reached at all, so the page can say so. */
   unreachable: boolean;
 }
 
-/** Today, as the API's date strings are formatted. */
-export function todayString(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 export async function loadDashboard(): Promise<DashboardData> {
-  const today = todayString();
+  const timeZone = await readerTimeZone();
+  const today = localDateKey(new Date(), timeZone ?? "UTC");
 
   // Fetched together — six sequential round trips would be visible as a
   // slow first byte, and none of these depends on another.
   const [profile, score, habits, logs, checkIn, recommendation] = await Promise.all([
-    get<DashboardProfile>("/api/users/me/profile"),
-    get<DashboardScore>("/api/score/today"),
-    get<DashboardHabit[]>("/api/habits"),
-    get<DashboardHabitLog[]>(`/api/habits/logs?from=${today}`),
-    get<DashboardCheckIn>("/api/checkin/today"),
+    get<DashboardProfile>("/api/users/me/profile", timeZone),
+    get<DashboardScore>("/api/score/today", timeZone),
+    get<DashboardHabit[]>("/api/habits", timeZone),
+    // From Monday: a weekly habit done on Tuesday isn't due again this week.
+    get<DashboardHabitLog[]>(`/api/habits/logs?from=${weekStartKey(today)}`, timeZone),
+    get<DashboardCheckIn>("/api/checkin/today", timeZone),
     // GET, not POST: the read-only endpoint returns today's recommendation if
     // one exists and never spends a model call generating one. Opening the
     // dashboard should not cost anything.
-    get<DashboardRecommendation>("/api/recommendations/today"),
+    get<DashboardRecommendation>("/api/recommendations/today", timeZone),
   ]);
 
   return {
@@ -142,6 +165,8 @@ export async function loadDashboard(): Promise<DashboardData> {
     logs,
     checkIn,
     recommendation,
+    today,
+    timeZone,
     unreachable: !apiBase() || (profile === null && score === null && habits === null),
   };
 }

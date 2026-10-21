@@ -95,7 +95,7 @@ export async function therapistRoutes(app: FastifyInstance) {
       });
     }
 
-    const summary = await buildTherapistReport(request.userId, categories, parsed.data.days);
+    const summary = await buildTherapistReport(request.userId, categories, parsed.data.days, request.timeZone);
 
     const report = await prisma.therapistReport.create({
       data: {

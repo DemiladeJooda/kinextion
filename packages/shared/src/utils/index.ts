@@ -1,5 +1,6 @@
 import { SCORE_WEIGHTS, MAX_SCORE } from "../constants/index.js";
 import type { ScoreBreakdown } from "../types/index.js";
+import { localDateKey } from "../habits/dates.js";
 
 export * from "./insights.js";
 export * from "./preferences.js";
@@ -38,15 +39,20 @@ export function calculateKinextionScore(breakdown: ScoreBreakdown): number {
 }
 
 /**
- * Format a date to YYYY-MM-DD string.
+ * The UTC calendar date of `date` as YYYY-MM-DD.
+ *
+ * Right for values read from a `@db.Date` column (stored as UTC midnight).
+ * Wrong for "what day is it for the user" — that's `localDateKey` in
+ * ../habits/dates.ts, which knows their time zone.
  */
 export function toDateString(date: Date): string {
   return date.toISOString().split("T")[0];
 }
 
 /**
- * Get today's date as a YYYY-MM-DD string.
+ * Today as YYYY-MM-DD in this runtime's own time zone — on a phone, the
+ * user's. Server code should use `localDateKey(now, request.timeZone)`.
  */
 export function today(): string {
-  return toDateString(new Date());
+  return localDateKey();
 }

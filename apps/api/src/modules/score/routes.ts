@@ -9,7 +9,7 @@ export async function scoreRoutes(app: FastifyInstance) {
   // The computation itself lives in lib/score.ts, shared with the check-in
   // route so both surfaces can never disagree about the same day.
   app.get("/today", async (request) => {
-    return { success: true, data: await recomputeTodayScore(request.userId) };
+    return { success: true, data: await recomputeTodayScore(request.userId, request.timeZone) };
   });
 
   // The headline number shown on the home screen — a period average rather
@@ -19,7 +19,7 @@ export async function scoreRoutes(app: FastifyInstance) {
     const profile = await prisma.profile.findUnique({ where: { userId: request.userId } });
     const preferences = (profile?.preferences as { scorePeriod?: ScorePeriod } | null) ?? null;
     const period = preferences?.scorePeriod ?? "weekly";
-    return { success: true, data: await computePeriodScore(request.userId, period) };
+    return { success: true, data: await computePeriodScore(request.userId, period, request.timeZone) };
   });
 
   // Get score history

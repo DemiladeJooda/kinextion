@@ -7,7 +7,9 @@ import {
   suggestHabitsSchema,
   discoverHabitsSchema,
 } from "@kinextion/shared";
+import { addDays, dateFromKey } from "@kinextion/shared";
 import { buildHabitContext } from "../../lib/habit-context.js";
+import { recomputeTodayScore } from "../../lib/score.js";
 import { discoverHabits, suggestHabits } from "./assistant.js";
 
 export async function habitRoutes(app: FastifyInstance) {
@@ -27,7 +29,7 @@ export async function habitRoutes(app: FastifyInstance) {
         userId: request.userId,
         ...(includeArchived ? {} : { isActive: true }),
       },
-      orderBy: [{ isActive: "desc" }, { createdAt: "desc" }],
+      orderBy: [{ isActive: "desc" }, { sortOrder: "asc" }, { createdAt: "desc" }],
     });
     return { success: true, data: habits };
   });
@@ -45,6 +47,16 @@ export async function habitRoutes(app: FastifyInstance) {
     const habit = await prisma.habit.create({
       data: { userId: request.userId, ...parsed.data },
     });
+
+    request.log.info(
+      {
+        event: "habit_created",
+        frequency: habit.frequency,
+        hasCue: Boolean(habit.cue),
+        hasTinyVersion: Boolean(habit.response),
+      },
+      "habit event"
+    );
 
     return reply.status(201).send({ success: true, data: habit });
   });
@@ -115,7 +127,7 @@ export async function habitRoutes(app: FastifyInstance) {
 
     const context = await buildHabitContext(request.userId, {
       localHour: parsed.data.localHour,
-      timeZone: parsed.data.timeZone,
+      timeZone: parsed.data.timeZone ?? request.timeZone,
     });
 
     try {
@@ -147,7 +159,7 @@ export async function habitRoutes(app: FastifyInstance) {
 
     const context = await buildHabitContext(request.userId, {
       localHour: parsed.data.localHour,
-      timeZone: parsed.data.timeZone,
+      timeZone: parsed.data.timeZone ?? request.timeZone,
     });
 
     try {
@@ -173,26 +185,61 @@ export async function habitRoutes(app: FastifyInstance) {
       });
     }
 
-    const { habitId, date, completed, notes } = parsed.data;
+    const { habitId, date, notes, value } = parsed.data;
+    const state = parsed.data.state ?? "done";
+    // A rest day never counts as done, whatever the client sent.
+    const completed = state === "rest" ? false : parsed.data.completed;
+    const source = parsed.data.source ?? "tap";
+
+    /**
+     * `date` is the user's own calendar day, sent by the client. Nothing can
+     * be logged for a day that hasn't started yet. One day of slack, because
+     * a client too old to send X-Time-Zone is judged against UTC, and east of
+     * Greenwich the user's today is already UTC's tomorrow.
+     */
+    const today = request.localToday();
+    if (date > addDays(today, 1)) {
+      return reply.status(400).send({ success: false, error: "That day hasn't happened yet." });
+    }
 
     const habit = await prisma.habit.findUnique({ where: { id: habitId } });
     if (!habit || habit.userId !== request.userId) {
       return reply.status(404).send({ success: false, error: "Habit not found" });
     }
 
+    const day = dateFromKey(date);
     const log = await prisma.habitLog.upsert({
-      where: { habitId_date: { habitId, date: new Date(date) } },
+      where: { habitId_date: { habitId, date: day } },
       create: {
         habitId,
         userId: habit.userId,
-        date: new Date(date),
+        date: day,
         completed,
         notes,
+        state,
+        value,
+        source: date < today && source === "tap" ? "backfill" : source,
       },
-      update: { completed, notes },
+      update: { completed, notes, state, value, loggedAt: new Date() },
     });
 
-    return { success: true, data: log };
+    request.log.info(
+      {
+        event: "habit_logged",
+        completed,
+        state,
+        source,
+        backfill: date < today,
+        frequency: habit.frequency,
+      },
+      "habit event"
+    );
+
+    // The score moves in the same round trip, so the app doesn't need a
+    // second request before it can show the new number. `data` stays the
+    // log itself for clients that predate `meta`.
+    const score = await recomputeTodayScore(request.userId, request.timeZone);
+    return { success: true, data: log, meta: { score } };
   });
 
   // Get habit logs for a date range

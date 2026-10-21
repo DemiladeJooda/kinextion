@@ -11,7 +11,11 @@
  * come from real, verified groups; nothing here should read as one.
  */
 
-import { toDateString, type CheckInInput, type CreateHabitInput } from "@kinextion/shared";
+import {
+  localDateKey,
+  type CheckInInput,
+  type CreateHabitInput,
+} from "@kinextion/shared";
 import type {
   AdmissionSeatView,
   BallotView,
@@ -65,18 +69,26 @@ const iso = (offset: number, hour = 9) => {
   d.setHours(hour);
   return d.toISOString();
 };
-const dateOf = (offset: number) => toDateString(day(offset));
-const todayStr = () => toDateString(new Date());
+const dateOf = (offset: number) => localDateKey(day(offset));
+const todayStr = () => localDateKey(new Date());
 /** Deterministic wobble so charts look organic but identical every demo. */
-const wobble = (i: number, seed: number) => Math.sin(i * 1.7 + seed) * 0.5 + Math.sin(i * 0.45 + seed * 2) * 0.5;
+const wobble = (i: number, seed: number) =>
+  Math.sin(i * 1.7 + seed) * 0.5 + Math.sin(i * 0.45 + seed * 2) * 0.5;
 
-function haversineKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
+function haversineKm(
+  aLat: number,
+  aLng: number,
+  bLat: number,
+  bLng: number,
+): number {
   const R = 6371;
   const dLat = ((bLat - aLat) * Math.PI) / 180;
   const dLng = ((bLng - aLng) * Math.PI) / 180;
   const a =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos((aLat * Math.PI) / 180) * Math.cos((bLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+    Math.cos((aLat * Math.PI) / 180) *
+      Math.cos((bLat * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
@@ -90,7 +102,8 @@ const DALLAS_GROUPS: Omit<RemoteNearbyGroup, "distanceKm">[] = [
     id: "demo-214-run-club",
     name: "214 Run Club",
     category: "running",
-    description: "Free Saturday morning group runs — 8 miles for distance runners, 3-5 miles for everyone else.",
+    description:
+      "Free Saturday morning group runs — 8 miles for distance runners, 3-5 miles for everyone else.",
     address: "4825 Cole Ave, Dallas, TX 75205",
     city: "Dallas",
     lat: 32.826576,
@@ -99,7 +112,8 @@ const DALLAS_GROUPS: Omit<RemoteNearbyGroup, "distanceKm">[] = [
     phone: null,
     schedule: "Saturdays, 7:30am (distance) & 8:30am (3-5 mi)",
     isFree: true,
-    sourceUrl: "https://www.dallasites101.com/blog/post/running-clubs-groups-all-levels-dallas-fort-worth/",
+    sourceUrl:
+      "https://www.dallasites101.com/blog/post/running-clubs-groups-all-levels-dallas-fort-worth/",
     verifiedAt: "2026-10-06",
   },
   {
@@ -115,14 +129,16 @@ const DALLAS_GROUPS: Omit<RemoteNearbyGroup, "distanceKm">[] = [
     phone: null,
     schedule: "Thursdays 7pm, Sundays 7am",
     isFree: true,
-    sourceUrl: "https://www.dallasites101.com/blog/post/running-clubs-groups-all-levels-dallas-fort-worth/",
+    sourceUrl:
+      "https://www.dallasites101.com/blog/post/running-clubs-groups-all-levels-dallas-fort-worth/",
     verifiedAt: "2026-10-06",
   },
   {
     id: "demo-braindead-running-club",
     name: "Braindead Running Club",
     category: "running",
-    description: "Casual 3-5 mile Monday run from Westlake Brewing Company through Deep Ellum, Old East Dallas or Klyde Warren Park.",
+    description:
+      "Casual 3-5 mile Monday run from Westlake Brewing Company through Deep Ellum, Old East Dallas or Klyde Warren Park.",
     address: "2816 Commerce St, Dallas, TX 75226",
     city: "Dallas",
     lat: 32.7830812,
@@ -131,14 +147,16 @@ const DALLAS_GROUPS: Omit<RemoteNearbyGroup, "distanceKm">[] = [
     phone: null,
     schedule: "Mondays",
     isFree: true,
-    sourceUrl: "https://www.dallasites101.com/blog/post/running-clubs-groups-all-levels-dallas-fort-worth/",
+    sourceUrl:
+      "https://www.dallasites101.com/blog/post/running-clubs-groups-all-levels-dallas-fort-worth/",
     verifiedAt: "2026-10-06",
   },
   {
     id: "demo-pint-striders",
     name: "Pint Striders",
     category: "running",
-    description: "Social run club meeting at Bar W in Uptown, open to all paces.",
+    description:
+      "Social run club meeting at Bar W in Uptown, open to all paces.",
     address: "2926 Maple Ave, Dallas, TX 75201",
     city: "Dallas",
     lat: 32.7980309,
@@ -147,7 +165,8 @@ const DALLAS_GROUPS: Omit<RemoteNearbyGroup, "distanceKm">[] = [
     phone: null,
     schedule: "Thursdays, 6:30pm",
     isFree: true,
-    sourceUrl: "https://www.dallasites101.com/blog/post/running-clubs-groups-all-levels-dallas-fort-worth/",
+    sourceUrl:
+      "https://www.dallasites101.com/blog/post/running-clubs-groups-all-levels-dallas-fort-worth/",
     verifiedAt: "2026-10-06",
   },
   {
@@ -191,11 +210,13 @@ const DALLAS_GROUPS: Omit<RemoteNearbyGroup, "distanceKm">[] = [
     city: "Dallas",
     lat: 32.7863983,
     lng: -96.8092258,
-    website: "https://www.orangetheory.com/en-us/locations/victory-park-texas-1028",
+    website:
+      "https://www.orangetheory.com/en-us/locations/victory-park-texas-1028",
     phone: null,
     schedule: "Class times vary — book on the app",
     isFree: false,
-    sourceUrl: "https://www.orangetheory.com/en-us/locations/victory-park-texas-1028",
+    sourceUrl:
+      "https://www.orangetheory.com/en-us/locations/victory-park-texas-1028",
     verifiedAt: "2026-10-06",
   },
   {
@@ -207,11 +228,13 @@ const DALLAS_GROUPS: Omit<RemoteNearbyGroup, "distanceKm">[] = [
     city: "Dallas",
     lat: 32.788817,
     lng: -96.805545,
-    website: "https://www.corepoweryoga.com/yoga-studios/tx/dallas/victory-park",
+    website:
+      "https://www.corepoweryoga.com/yoga-studios/tx/dallas/victory-park",
     phone: null,
     schedule: "Class times vary — book on the app",
     isFree: false,
-    sourceUrl: "https://www.corepoweryoga.com/yoga-studios/tx/dallas/victory-park",
+    sourceUrl:
+      "https://www.corepoweryoga.com/yoga-studios/tx/dallas/victory-park",
     verifiedAt: "2026-10-06",
   },
   {
@@ -238,7 +261,8 @@ const DALLAS_GROUPS: Omit<RemoteNearbyGroup, "distanceKm">[] = [
  */
 export const DEMO_MEDIA = {
   audio: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3",
-  video: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
+  video:
+    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
 };
 
 // ─── Habits ───────────────────────────────────────────────────────────────────
@@ -251,7 +275,7 @@ function habit(
   category: string,
   cue: string,
   loop: { craving: string; response: string; reward: string },
-  createdDaysAgo: number
+  createdDaysAgo: number,
 ): RemoteHabit {
   return {
     id,
@@ -268,40 +292,85 @@ function habit(
 }
 
 let habits: RemoteHabit[] = [
-  habit("chabitwater001", "Glass of water on waking", "physical", "When my alarm goes off", {
-    craving: "Feel awake before I reach for my phone",
-    response: "Drink the glass I left on the nightstand",
-    reward: "First tick of the day",
-  }, 38),
-  habit("chabitwalk0001", "Ten-minute walk after lunch", "physical", "After I close my laptop for lunch", {
-    craving: "Clear the afternoon slump",
-    response: "Walk the block, no headphones",
-    reward: "Coffee on the way back",
-  }, 35),
-  habit("chabitbreath01", "Two minutes of box breathing", "emotional", "Before I open email", {
-    craving: "Start work calm, not reactive",
-    response: "Four in, hold, four out, hold",
-    reward: "Inbox feels smaller",
-  }, 30),
-  habit("chabitread0001", "Read 10 pages before bed", "mental", "When I plug my phone in to charge", {
-    craving: "Wind down without a screen",
-    response: "Book is already on the pillow",
-    reward: "Falling asleep faster",
-  }, 24),
-  habit("chabitstretch1", "Five-minute stretch", "physical", "While the kettle boils", {
-    craving: "Loosen up after sitting",
-    response: "Hips, hamstrings, shoulders",
-    reward: "Tea tastes earned",
-  }, 14),
-  habit("chabitgrate001", "One line of gratitude", "spiritual", "After I brush my teeth at night", {
-    craving: "End the day on something good",
-    response: "One line in the notes app",
-    reward: "A list worth rereading",
-  }, 10),
+  habit(
+    "chabitwater001",
+    "Glass of water on waking",
+    "physical",
+    "When my alarm goes off",
+    {
+      craving: "Feel awake before I reach for my phone",
+      response: "Drink the glass I left on the nightstand",
+      reward: "First tick of the day",
+    },
+    38,
+  ),
+  habit(
+    "chabitwalk0001",
+    "Ten-minute walk after lunch",
+    "physical",
+    "After I close my laptop for lunch",
+    {
+      craving: "Clear the afternoon slump",
+      response: "Walk the block, no headphones",
+      reward: "Coffee on the way back",
+    },
+    35,
+  ),
+  habit(
+    "chabitbreath01",
+    "Two minutes of box breathing",
+    "emotional",
+    "Before I open email",
+    {
+      craving: "Start work calm, not reactive",
+      response: "Four in, hold, four out, hold",
+      reward: "Inbox feels smaller",
+    },
+    30,
+  ),
+  habit(
+    "chabitread0001",
+    "Read 10 pages before bed",
+    "mental",
+    "When I plug my phone in to charge",
+    {
+      craving: "Wind down without a screen",
+      response: "Book is already on the pillow",
+      reward: "Falling asleep faster",
+    },
+    24,
+  ),
+  habit(
+    "chabitstretch1",
+    "Five-minute stretch",
+    "physical",
+    "While the kettle boils",
+    {
+      craving: "Loosen up after sitting",
+      response: "Hips, hamstrings, shoulders",
+      reward: "Tea tastes earned",
+    },
+    14,
+  ),
+  habit(
+    "chabitgrate001",
+    "One line of gratitude",
+    "spiritual",
+    "After I brush my teeth at night",
+    {
+      craving: "End the day on something good",
+      response: "One line in the notes app",
+      reward: "A list worth rereading",
+    },
+    10,
+  ),
 ];
 
 /** Current streak (ending yesterday), whether it's done today, and past hit rate. */
-const HABIT_SHAPE: Record<string, { streak: number; today: boolean; rate: number }> = {
+const HABIT_SHAPE: Record<
+  string,
+  { streak: number; today: boolean; rate: number }
+> = {
   chabitwater001: { streak: 31, today: true, rate: 0.95 },
   chabitwalk0001: { streak: 12, today: true, rate: 0.8 },
   chabitbreath01: { streak: 21, today: false, rate: 0.85 },
@@ -314,12 +383,15 @@ function seedLogs(): RemoteHabitLog[] {
   const out: RemoteHabitLog[] = [];
   habits.forEach((h, hi) => {
     const shape = HABIT_SHAPE[h.id]!;
-    const age = Math.round((Date.now() - new Date(h.createdAt).getTime()) / 86_400_000);
+    const age = Math.round(
+      (Date.now() - new Date(h.createdAt).getTime()) / 86_400_000,
+    );
     for (let d = 0; d <= age; d++) {
       let completed: boolean;
       if (d === 0) completed = shape.today;
       else if (d <= shape.streak) completed = true;
-      else if (d === shape.streak + 1) completed = false; // what ended the last run
+      else if (d === shape.streak + 1)
+        completed = false; // what ended the last run
       else completed = (wobble(d, hi + 1) + 1) / 2 < shape.rate;
       if (d === 0 && !completed) continue;
       out.push({
@@ -349,7 +421,7 @@ function streakDays() {
 function computeScore(): RemoteScore {
   const t = todayStr();
   const done = habits.filter((h) =>
-    logs.some((l) => l.habitId === h.id && l.date === t && l.completed)
+    logs.some((l) => l.habitId === h.id && l.date === t && l.completed),
   ).length;
   const moodCheckedIn = !!todayEntry;
   const reflectionDone = !!(todayEntry?.journal || todayEntry?.gratitude);
@@ -358,7 +430,7 @@ function computeScore(): RemoteScore {
       (moodCheckedIn ? 15 : 0) +
       (reflectionDone ? 15 : 0) +
       (workoutToday ? 15 : 0) +
-      Math.min(10, streakDays() / 3)
+      Math.min(10, streakDays() / 3),
   );
   return {
     id: "cscoretoday01",
@@ -386,37 +458,90 @@ function scoreHistory(days: number): RemoteScore[] {
       id: `cscore${i}`,
       userId: USER_ID,
       date: dateOf(offset),
-      overallScore: Math.round(Math.max(20, Math.min(98, trend + wobble(i, 3) * 11))),
+      overallScore: Math.round(
+        Math.max(20, Math.min(98, trend + wobble(i, 3) * 11)),
+      ),
       breakdown: null,
     };
   });
 }
 
 const pastEntries: RemoteMoodEntry[] = [
-  { mood: 8, energy: 7, stress: 3, tags: ["focused", "rested"], journal: "Walked at lunch even though it rained. Afternoon was noticeably better.", gratitude: "Sam covering the standup so I could sleep in." },
-  { mood: 6, energy: 5, stress: 6, tags: ["scattered"], journal: "Too many meetings. Skipped the stretch again — the kettle cue doesn't work on office days.", gratitude: null },
-  { mood: 7, energy: 6, stress: 4, tags: ["calm", "grateful"], journal: null, gratitude: "Dinner with my sister." },
-  { mood: 4, energy: 3, stress: 8, tags: ["anxious", "drained"], journal: "Deadline week. Didn't sleep well. Box breathing before email helped more than I expected.", gratitude: null },
-  { mood: 8, energy: 8, stress: 2, tags: ["energised", "connected"], journal: "Best run in weeks.", gratitude: "The community call — hearing other people say the same thing." },
-].map((e, i) => ({ id: `cmood${i}`, userId: USER_ID, createdAt: iso(-(i + 1), 21), ...e }));
+  {
+    mood: 8,
+    energy: 7,
+    stress: 3,
+    tags: ["focused", "rested"],
+    journal:
+      "Walked at lunch even though it rained. Afternoon was noticeably better.",
+    gratitude: "Sam covering the standup so I could sleep in.",
+  },
+  {
+    mood: 6,
+    energy: 5,
+    stress: 6,
+    tags: ["scattered"],
+    journal:
+      "Too many meetings. Skipped the stretch again — the kettle cue doesn't work on office days.",
+    gratitude: null,
+  },
+  {
+    mood: 7,
+    energy: 6,
+    stress: 4,
+    tags: ["calm", "grateful"],
+    journal: null,
+    gratitude: "Dinner with my sister.",
+  },
+  {
+    mood: 4,
+    energy: 3,
+    stress: 8,
+    tags: ["anxious", "drained"],
+    journal:
+      "Deadline week. Didn't sleep well. Box breathing before email helped more than I expected.",
+    gratitude: null,
+  },
+  {
+    mood: 8,
+    energy: 8,
+    stress: 2,
+    tags: ["energised", "connected"],
+    journal: "Best run in weeks.",
+    gratitude: "The community call — hearing other people say the same thing.",
+  },
+].map((e, i) => ({
+  id: `cmood${i}`,
+  userId: USER_ID,
+  createdAt: iso(-(i + 1), 21),
+  ...e,
+}));
 
 // ─── Recommendations ──────────────────────────────────────────────────────────
 
-const RECS: Omit<RemoteRecommendation, "id" | "createdAt" | "acted" | "dismissed">[] = [
+const RECS: Omit<
+  RemoteRecommendation,
+  "id" | "createdAt" | "acted" | "dismissed"
+>[] = [
   {
-    content: "Take your 2:30 gap for a 20-minute walk — leave the phone on your desk.",
+    content:
+      "Take your 2:30 gap for a 20-minute walk — leave the phone on your desk.",
     category: "physical",
-    context: "Your calendar has a 45-minute opening at 2:30, and your HRV is up 9% on last week — a good day to move.",
+    context:
+      "Your calendar has a 45-minute opening at 2:30, and your HRV is up 9% on last week — a good day to move.",
   },
   {
-    content: "Start tonight's 10 pages by 10:15, on the sofa rather than in bed.",
+    content:
+      "Start tonight's 10 pages by 10:15, on the sofa rather than in bed.",
     category: "mental",
-    context: "Your sleep score averaged 84 on nights you were reading before 10:30, and 71 on the nights you weren't.",
+    context:
+      "Your sleep score averaged 84 on nights you were reading before 10:30, and 71 on the nights you weren't.",
   },
   {
     content: "Send one message to someone you haven't spoken to this week.",
     category: "emotional",
-    context: "You tagged a check-in 'connected' on the two days you'd talked to a friend — and on no others.",
+    context:
+      "You tagged a check-in 'connected' on the two days you'd talked to a friend — and on no others.",
   },
 ];
 let recIndex = 0;
@@ -424,7 +549,13 @@ let currentRec: RemoteRecommendation | null = null;
 
 function makeRec(): RemoteRecommendation {
   const base = RECS[recIndex % RECS.length]!;
-  return { id: uid("rec"), createdAt: new Date().toISOString(), acted: false, dismissed: false, ...base };
+  return {
+    id: uid("rec"),
+    createdAt: new Date().toISOString(),
+    acted: false,
+    dismissed: false,
+    ...base,
+  };
 }
 
 const LEARNED = [
@@ -434,11 +565,21 @@ const LEARNED = [
 ];
 
 const recHistory: RemoteRecommendation[] = [
-  ["Do the stretch before your first meeting, not with the kettle.", "physical", true, false],
+  [
+    "Do the stretch before your first meeting, not with the kettle.",
+    "physical",
+    true,
+    false,
+  ],
   ["Put the book on your pillow when you make the bed.", "mental", true, false],
   ["Try a 5-minute body scan after the 4pm call.", "emotional", false, true],
   ["Walk the long way to the station tonight.", "physical", true, false],
-  ["Write tomorrow's first task down before you close the laptop.", "mental", true, false],
+  [
+    "Write tomorrow's first task down before you close the laptop.",
+    "mental",
+    true,
+    false,
+  ],
   ["Call your sister back on the walk home.", "emotional", true, false],
   ["Swap the late coffee for sparkling water.", "physical", false, true],
 ].map(([content, category, acted, dismissed], i) => ({
@@ -467,7 +608,7 @@ function series(
   swing: number,
   seed: number,
   drift = 0,
-  every = 1
+  every = 1,
 ): RemoteWearableMetric[] {
   const out: RemoteWearableMetric[] = [];
   for (let i = 0; i < 30; i++) {
@@ -493,16 +634,33 @@ function metrics(): RemoteWearableMetric[] {
     ...series("strava", "workout", "min", 38, 18, 5, 6, 2),
     ...series("strava", "active_calories", "kcal", 420, 140, 6, 40, 2),
     ...series("google_calendar", "calendar_busy_minutes", "min", 330, 110, 7),
-    ...series("google_calendar", "calendar_longest_free_minutes", "min", 70, 35, 8),
+    ...series(
+      "google_calendar",
+      "calendar_longest_free_minutes",
+      "min",
+      70,
+      35,
+      8,
+    ),
   ];
   return all.filter((m) => connected.has(m.provider));
 }
 
 // ─── Therapist ────────────────────────────────────────────────────────────────
 
-let consent: { active: boolean; categories: TherapistCategories; updatedAt: string | null } = {
+let consent: {
+  active: boolean;
+  categories: TherapistCategories;
+  updatedAt: string | null;
+} = {
   active: true,
-  categories: { habits: true, moodTrends: true, journalExcerpts: false, patterns: true, score: true },
+  categories: {
+    habits: true,
+    moodTrends: true,
+    journalExcerpts: false,
+    patterns: true,
+    score: true,
+  },
   updatedAt: iso(-12),
 };
 
@@ -516,7 +674,11 @@ function report(id: string, endOffset: number, days: number): TherapistReport {
       periodStart: iso(endOffset - days),
       periodEnd: iso(endOffset),
       categories: consent.categories,
-      habits: { total: habits.length, completionRate: 0.78, longestActiveStreak: 31 },
+      habits: {
+        total: habits.length,
+        completionRate: 0.78,
+        longestActiveStreak: 31,
+      },
       moodTrends: {
         entries: 26,
         averageMood: 6.8,
@@ -527,7 +689,10 @@ function report(id: string, endOffset: number, days: number): TherapistReport {
       journalExcerpts: consent.categories.journalExcerpts
         ? pastEntries
             .filter((e) => e.journal)
-            .map((e) => ({ date: e.createdAt, journal: e.journal ?? undefined }))
+            .map((e) => ({
+              date: e.createdAt,
+              journal: e.journal ?? undefined,
+            }))
         : undefined,
       patterns: [
         "Stress runs highest on days with more than six hours booked.",
@@ -538,7 +703,10 @@ function report(id: string, endOffset: number, days: number): TherapistReport {
   };
 }
 
-const reports: TherapistReport[] = [report("creport0002", -2, 30), report("creport0001", -32, 30)];
+const reports: TherapistReport[] = [
+  report("creport0002", -2, 30),
+  report("creport0001", -32, 30),
+];
 
 // ─── Community ────────────────────────────────────────────────────────────────
 
@@ -562,7 +730,8 @@ const COMMUNITIES = {
     id: "ccommparent01",
     slug: "new-parents",
     name: "New Parents",
-    description: "People a year or two into parenthood, figuring out where their own health fits.",
+    description:
+      "People a year or two into parenthood, figuring out where their own health fits.",
     members: 11,
   },
 } as const;
@@ -578,7 +747,9 @@ function weekKey(offsetWeeks: number) {
   const d = new Date();
   d.setDate(d.getDate() + offsetWeeks * 7);
   const jan1 = new Date(d.getFullYear(), 0, 1);
-  const week = Math.ceil(((d.getTime() - jan1.getTime()) / 86_400_000 + jan1.getDay() + 1) / 7);
+  const week = Math.ceil(
+    ((d.getTime() - jan1.getTime()) / 86_400_000 + jan1.getDay() + 1) / 7,
+  );
   return `${d.getFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
@@ -632,7 +803,8 @@ const ballot: BallotView = {
     {
       id: "coptpages0003",
       text: "Who taught you how to be kind to yourself?",
-      rationale: "A thread of thoughts about the people who shaped your habits.",
+      rationale:
+        "A thread of thoughts about the people who shaped your habits.",
     },
     {
       id: "coptpages0004",
@@ -646,7 +818,7 @@ function cycle(
   k: CommunityKey,
   stage: CycleView["stage"],
   extra: Partial<CycleView> = {},
-  weekOffset = 0
+  weekOffset = 0,
 ): CycleView {
   return {
     id: `ccycle${k}${weekOffset}`,
@@ -676,7 +848,11 @@ function myWeek(): MyWeekView {
       cycles: [
         cycle("run", "open", {
           topic: { id: TOPIC_ID, text: TOPIC_TEXT },
-          you: { suggestions: 1, voted: true, response: myResponse ? "submitted" : "none" },
+          you: {
+            suggestions: 1,
+            voted: true,
+            response: myResponse ? "submitted" : "none",
+          },
         }),
         cycle("pages", "voting", {
           ballotId: ballot.id,
@@ -694,7 +870,10 @@ function myWeek(): MyWeekView {
     next: {
       weekKey: nextKey,
       choice: { communityId: COMMUNITIES.run.id, locked: false },
-      cycles: [cycle("run", "scheduled", {}, 1), cycle("pages", "scheduled", {}, 1)],
+      cycles: [
+        cycle("run", "scheduled", {}, 1),
+        cycle("pages", "scheduled", {}, 1),
+      ],
     },
   };
 }
@@ -713,14 +892,21 @@ function topicView(): TopicView {
     },
     you: {
       chosen: activeChoice === COMMUNITIES.run.id,
-      choseElsewhere: activeChoice !== null && activeChoice !== COMMUNITIES.run.id,
+      choseElsewhere:
+        activeChoice !== null && activeChoice !== COMMUNITIES.run.id,
       response: myResponse,
       room: myResponse ? "open" : "locked",
     },
   };
 }
 
-const VOICES: { id: string; name: string; kind: "video" | "audio"; sec: number; comments: number }[] = [
+const VOICES: {
+  id: string;
+  name: string;
+  kind: "video" | "audio";
+  sec: number;
+  comments: number;
+}[] = [
   { id: "cresp00000001", name: "Priya", kind: "video", sec: 412, comments: 3 },
   { id: "cresp00000002", name: "Marcus", kind: "audio", sec: 623, comments: 5 },
   { id: "cresp00000003", name: "Ade", kind: "video", sec: 298, comments: 1 },
@@ -734,22 +920,32 @@ const commentThreads: Record<string, CommentView[]> = {};
 function comments(responseId: string): CommentView[] {
   if (!commentThreads[responseId]) {
     const seed: [string, string, number][] = [
-      ["Marcus", "The bit about taking up space at work really landed. Same here.", 4],
+      [
+        "Marcus",
+        "The bit about taking up space at work really landed. Same here.",
+        4,
+      ],
       ["Hannah", "I needed to hear this today, honestly.", 6],
-      ["Ade", "Curious whether it got easier after the first time you said no?", 2],
+      [
+        "Ade",
+        "Curious whether it got easier after the first time you said no?",
+        2,
+      ],
     ];
     const count = VOICES.find((v) => v.id === responseId)?.comments ?? 2;
-    commentThreads[responseId] = seed.slice(0, Math.min(count, 3)).map(([name, body, likes], i) => ({
-      id: `ccomm${responseId}${i}`,
-      parentId: null,
-      author: { displayName: name },
-      isMine: false,
-      body,
-      deleted: false,
-      createdAt: iso(0, 8 + i),
-      likeCount: likes,
-      likedByMe: false,
-    }));
+    commentThreads[responseId] = seed
+      .slice(0, Math.min(count, 3))
+      .map(([name, body, likes], i) => ({
+        id: `ccomm${responseId}${i}`,
+        parentId: null,
+        author: { displayName: name },
+        isMine: false,
+        body,
+        deleted: false,
+        createdAt: iso(0, 8 + i),
+        likeCount: likes,
+        likedByMe: false,
+      }));
   }
   return commentThreads[responseId]!;
 }
@@ -779,7 +975,7 @@ function result(
   topicKey: string,
   agree: number,
   mixed: number,
-  voices: number
+  voices: number,
 ): CycleResultView {
   return {
     weekKey: weekKey(-weeksAgo),
@@ -797,25 +993,79 @@ function result(
 
 const HISTORY: Record<string, CycleResultView[]> = {
   [COMMUNITIES.run.id]: [
-    result(1, "Is rest something you earn, or something you're owed?", "rest-earned", 38, 41, 11),
-    result(2, "What does 'showing up' mean when you're injured?", "showing-up-injured", 62, 27, 12),
-    result(3, "Should we race this year, or just run?", "race-or-run", 45, 30, 13),
-    result(8, "Is rest something you earn, or something you're owed?", "rest-earned", 71, 20, 9),
+    result(
+      1,
+      "Is rest something you earn, or something you're owed?",
+      "rest-earned",
+      38,
+      41,
+      11,
+    ),
+    result(
+      2,
+      "What does 'showing up' mean when you're injured?",
+      "showing-up-injured",
+      62,
+      27,
+      12,
+    ),
+    result(
+      3,
+      "Should we race this year, or just run?",
+      "race-or-run",
+      45,
+      30,
+      13,
+    ),
+    result(
+      8,
+      "Is rest something you earn, or something you're owed?",
+      "rest-earned",
+      71,
+      20,
+      9,
+    ),
   ],
   [COMMUNITIES.pages.id]: [
-    result(1, "Does writing it down make it more real?", "writing-real", 80, 15, 8),
-    result(2, "What's a belief you inherited and kept on purpose?", "inherited-belief", 55, 35, 7),
+    result(
+      1,
+      "Does writing it down make it more real?",
+      "writing-real",
+      80,
+      15,
+      8,
+    ),
+    result(
+      2,
+      "What's a belief you inherited and kept on purpose?",
+      "inherited-belief",
+      55,
+      35,
+      7,
+    ),
   ],
   [COMMUNITIES.parents.id]: [
-    result(1, "Is it selfish to protect an hour for yourself?", "selfish-hour", 22, 30, 10),
+    result(
+      1,
+      "Is it selfish to protect an hour for yourself?",
+      "selfish-hour",
+      22,
+      30,
+      10,
+    ),
   ],
 };
 
 function history(id: string): CommunityHistoryView {
-  const k = (Object.keys(COMMUNITIES) as CommunityKey[]).find((c) => COMMUNITIES[c].id === id) ?? "run";
+  const k =
+    (Object.keys(COMMUNITIES) as CommunityKey[]).find(
+      (c) => COMMUNITIES[c].id === id,
+    ) ?? "run";
   const results = HISTORY[id] ?? [];
   const byKey = new Map<string, CycleResultView[]>();
-  results.forEach((r) => byKey.set(r.topic.topicKey, [...(byKey.get(r.topic.topicKey) ?? []), r]));
+  results.forEach((r) =>
+    byKey.set(r.topic.topicKey, [...(byKey.get(r.topic.topicKey) ?? []), r]),
+  );
   return {
     community: ref(k),
     results,
@@ -830,7 +1080,10 @@ function history(id: string): CommunityHistoryView {
 }
 
 function detail(id: string): CommunityDetail {
-  const k = (Object.keys(COMMUNITIES) as CommunityKey[]).find((c) => COMMUNITIES[c].id === id) ?? "run";
+  const k =
+    (Object.keys(COMMUNITIES) as CommunityKey[]).find(
+      (c) => COMMUNITIES[c].id === id,
+    ) ?? "run";
   const c = COMMUNITIES[k];
   return {
     community: {
@@ -844,19 +1097,46 @@ function detail(id: string): CommunityDetail {
       createdAt: iso(-120),
       activatedAt: iso(-110),
     },
-    membership: { role: k === "run" ? "steward" : "member", joinedAt: iso(-110) },
+    membership: {
+      role: k === "run" ? "steward" : "member",
+      joinedAt: iso(-110),
+    },
     joinRequest: null,
   };
 }
 
 function chest(id: string): ChestView {
-  const k = (Object.keys(COMMUNITIES) as CommunityKey[]).find((c) => COMMUNITIES[c].id === id) ?? "run";
+  const k =
+    (Object.keys(COMMUNITIES) as CommunityKey[]).find(
+      (c) => COMMUNITIES[c].id === id,
+    ) ?? "run";
   const proposals: ChestView["proposals"] =
     k === "run"
       ? [
-          { id: "cprop0000001", title: "Entry fees for the autumn 10K", description: null, status: "on_ballot", isMine: false, createdAt: iso(-5) },
-          { id: "cprop0000002", title: "First-aid course for two members", description: null, status: "proposed", isMine: true, createdAt: iso(-3) },
-          { id: "cprop0000003", title: "Head torches for winter runs", description: null, status: "chosen", isMine: false, createdAt: iso(-40) },
+          {
+            id: "cprop0000001",
+            title: "Entry fees for the autumn 10K",
+            description: null,
+            status: "on_ballot",
+            isMine: false,
+            createdAt: iso(-5),
+          },
+          {
+            id: "cprop0000002",
+            title: "First-aid course for two members",
+            description: null,
+            status: "proposed",
+            isMine: true,
+            createdAt: iso(-3),
+          },
+          {
+            id: "cprop0000003",
+            title: "Head torches for winter runs",
+            description: null,
+            status: "chosen",
+            isMine: false,
+            createdAt: iso(-40),
+          },
         ]
       : [];
   return {
@@ -901,11 +1181,19 @@ function applyCheckIn(input: CheckInInput): RemoteMoodEntry {
     userId: USER_ID,
     createdAt: todayEntry?.createdAt ?? new Date().toISOString(),
     mood: input.mood,
-    energy: input.energy === undefined ? (todayEntry?.energy ?? null) : input.energy,
-    stress: input.stress === undefined ? (todayEntry?.stress ?? null) : input.stress,
+    energy:
+      input.energy === undefined ? (todayEntry?.energy ?? null) : input.energy,
+    stress:
+      input.stress === undefined ? (todayEntry?.stress ?? null) : input.stress,
     tags: input.tags === undefined ? (todayEntry?.tags ?? null) : input.tags,
-    gratitude: input.gratitude === undefined ? (todayEntry?.gratitude ?? null) : input.gratitude,
-    journal: input.journal === undefined ? (todayEntry?.journal ?? null) : input.journal,
+    gratitude:
+      input.gratitude === undefined
+        ? (todayEntry?.gratitude ?? null)
+        : input.gratitude,
+    journal:
+      input.journal === undefined
+        ? (todayEntry?.journal ?? null)
+        : input.journal,
   };
   return todayEntry;
 }
@@ -939,7 +1227,8 @@ const DRAFTS = [
     reward: "One less decision at 6am",
     frequency: "custom" as const,
     targetDays: [0, 2, 4],
-    rationale: "You logged a workout on 9 of the 12 mornings your calendar started after 9:30.",
+    rationale:
+      "You logged a workout on 9 of the 12 mornings your calendar started after 9:30.",
   },
   {
     name: "Phone in the kitchen at 10:30",
@@ -948,7 +1237,8 @@ const DRAFTS = [
     response: "Charge it downstairs",
     reward: "The book gets the last half hour",
     frequency: "daily" as const,
-    rationale: "Your sleep score is 11 points higher on nights your reading streak held.",
+    rationale:
+      "Your sleep score is 11 points higher on nights your reading streak held.",
   },
   {
     name: "Two-line check-in with a friend",
@@ -957,7 +1247,8 @@ const DRAFTS = [
     response: "Send one voice note",
     reward: "Coffee tastes better with a reply",
     frequency: "weekly" as const,
-    rationale: "'Connected' shows up in your check-ins on the days you'd talked to someone.",
+    rationale:
+      "'Connected' shows up in your check-ins on the days you'd talked to someone.",
   },
 ];
 
@@ -976,7 +1267,8 @@ export const demoApi: Api = {
   updateProfile: async (input) => {
     await wait();
     if (input.displayName) updateDemoSession({ name: input.displayName });
-    if ("avatarId" in input) updateDemoSession({ avatarId: input.avatarId ?? null });
+    if ("avatarId" in input)
+      updateDemoSession({ avatarId: input.avatarId ?? null });
     return profile();
   },
   getDataSummary: async () => {
@@ -996,7 +1288,9 @@ export const demoApi: Api = {
       },
       connected: [...connected.keys()],
       therapistSharing: consent.active
-        ? Object.entries(consent.categories).filter(([, v]) => v).map(([k]) => k)
+        ? Object.entries(consent.categories)
+            .filter(([, v]) => v)
+            .map(([k]) => k)
         : [],
       since: iso(-38),
     };
@@ -1021,9 +1315,11 @@ export const demoApi: Api = {
       h.id === id
         ? {
             ...h,
-            ...Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)),
+            ...Object.fromEntries(
+              Object.entries(input).filter(([, v]) => v !== undefined),
+            ),
           }
-        : h
+        : h,
     );
     return habits.find((h) => h.id === id)!;
   },
@@ -1047,21 +1343,34 @@ export const demoApi: Api = {
       completed: input.completed,
       notes: input.notes ?? null,
     };
-    logs = [log, ...logs.filter((l) => !(l.habitId === input.habitId && l.date === input.date))];
-    return log;
+    logs = [
+      log,
+      ...logs.filter(
+        (l) => !(l.habitId === input.habitId && l.date === input.date),
+      ),
+    ];
+    return { log, score: computeScore() };
   },
   listHabitLogs: async () => {
     await wait(200);
     return logs.map((l) => {
       const h = habits.find((x) => x.id === l.habitId);
-      return { ...l, habit: { name: h?.name ?? "", category: h?.category ?? "physical" } };
+      return {
+        ...l,
+        habit: { name: h?.name ?? "", category: h?.category ?? "physical" },
+      };
     });
   },
   suggestHabits: async (input) => {
     await wait(1400);
     return {
       drafts: DRAFTS.slice(0, input?.count ?? 3),
-      basis: ["Sleep score · Oura", "Workouts · Strava", "Calendar shape", "Last 14 check-ins"],
+      basis: [
+        "Sleep score · Oura",
+        "Workouts · Strava",
+        "Calendar shape",
+        "Last 14 check-ins",
+      ],
     };
   },
   discoverHabits: async (turns) => {
@@ -1092,7 +1401,28 @@ export const demoApi: Api = {
   },
   listMoodEntries: async (limit = 30) => {
     await wait();
-    return [...(todayEntry ? [todayEntry] : []), ...pastEntries].slice(0, limit);
+    return [...(todayEntry ? [todayEntry] : []), ...pastEntries].slice(
+      0,
+      limit,
+    );
+  },
+  logWorkout: async (input) => {
+    await wait(150);
+    workoutToday = true;
+    const workout = {
+      id: uid("wk"),
+      userId: USER_ID,
+      name: input.name,
+      type: input.type,
+      duration: input.duration ?? null,
+      difficulty: input.difficulty ?? null,
+      createdAt: new Date().toISOString(),
+    };
+    return { workout, score: computeScore() };
+  },
+  listWorkouts: async () => {
+    await wait();
+    return [];
   },
   getLatestMood: async () => {
     await wait();
@@ -1100,7 +1430,10 @@ export const demoApi: Api = {
   },
   getTodayCheckIn: async () => {
     await wait(200);
-    return { entry: todayEntry, reflectionDone: !!(todayEntry?.journal || todayEntry?.gratitude) };
+    return {
+      entry: todayEntry,
+      reflectionDone: !!(todayEntry?.journal || todayEntry?.gratitude),
+    };
   },
   submitCheckIn: async (input) => {
     await wait(500);
@@ -1110,8 +1443,10 @@ export const demoApi: Api = {
   getCheckInPrompt: async () => {
     await wait(900);
     return {
-      prompt: "The lunchtime walk has held for 12 days. What's making this one stick when others haven't?",
-      observation: "Your stress rating has come down on each of the last three days you walked.",
+      prompt:
+        "The lunchtime walk has held for 12 days. What's making this one stick when others haven't?",
+      observation:
+        "Your stress rating has come down on each of the last three days you walked.",
       basis: ["Habit streaks", "Last 7 check-ins"],
     };
   },
@@ -1138,15 +1473,31 @@ export const demoApi: Api = {
   sendRecommendationFeedback: async (id, outcome) => {
     await wait();
     if (currentRec?.id === id) {
-      currentRec = { ...currentRec, acted: outcome === "acted", dismissed: outcome === "dismissed" };
+      currentRec = {
+        ...currentRec,
+        acted: outcome === "acted",
+        dismissed: outcome === "dismissed",
+      };
     }
-    return { id, acted: outcome === "acted", dismissed: outcome === "dismissed" };
+    return {
+      id,
+      acted: outcome === "acted",
+      dismissed: outcome === "dismissed",
+    };
   },
   listRecommendations: async (limit = 30) => {
     await wait();
     return {
-      recommendations: [...(currentRec ? [currentRec] : []), ...recHistory].slice(0, limit),
-      preferences: { lines: LEARNED, answered: 14, acted: 10, provisional: false },
+      recommendations: [
+        ...(currentRec ? [currentRec] : []),
+        ...recHistory,
+      ].slice(0, limit),
+      preferences: {
+        lines: LEARNED,
+        answered: 14,
+        acted: 10,
+        provisional: false,
+      },
     };
   },
 
@@ -1159,12 +1510,14 @@ export const demoApi: Api = {
     await wait();
     return scoreHistory(days);
   },
-  getNearbyGroups: async (params: {
-    city?: string;
-    category?: string;
-    lat?: number;
-    lng?: number;
-  } = {}): Promise<RemoteNearbyGroup[]> => {
+  getNearbyGroups: async (
+    params: {
+      city?: string;
+      category?: string;
+      lat?: number;
+      lng?: number;
+    } = {},
+  ): Promise<RemoteNearbyGroup[]> => {
     await wait(200);
     const city = params.city ?? "Dallas";
     const withDistance = DALLAS_GROUPS.filter((g) => g.city === city)
@@ -1173,7 +1526,9 @@ export const demoApi: Api = {
         ...g,
         distanceKm:
           params.lat !== undefined && params.lng !== undefined
-            ? Math.round(haversineKm(params.lat, params.lng, g.lat, g.lng) * 10) / 10
+            ? Math.round(
+                haversineKm(params.lat, params.lng, g.lat, g.lng) * 10,
+              ) / 10
             : null,
       }));
     withDistance.sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0));
@@ -1186,8 +1541,10 @@ export const demoApi: Api = {
     start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
     return {
       period: "weekly",
-      periodStart: toDateString(start),
-      average: Math.round(week.reduce((sum, s) => sum + s.overallScore, 0) / week.length),
+      periodStart: localDateKey(start),
+      average: Math.round(
+        week.reduce((sum, s) => sum + s.overallScore, 0) / week.length,
+      ),
       daysLogged: week.length,
     };
   },
@@ -1232,26 +1589,31 @@ export const demoApi: Api = {
   },
   listMetrics: async (filter) => {
     await wait(300);
-    return metrics().filter((m) => !filter?.type || m.metricType === filter.type);
+    return metrics().filter(
+      (m) => !filter?.type || m.metricType === filter.type,
+    );
   },
   listPatterns: async () => {
     await wait(400);
     return [
       {
         metricType: "sleep_score",
-        summary: "On nights you slept 80+, your next-day mood averaged 7.8 — versus 5.9 otherwise.",
+        summary:
+          "On nights you slept 80+, your next-day mood averaged 7.8 — versus 5.9 otherwise.",
         r: 0.62,
         n: 28,
       },
       {
         metricType: "hrv",
-        summary: "Your HRV runs about 11% higher the morning after a day with box breathing.",
+        summary:
+          "Your HRV runs about 11% higher the morning after a day with box breathing.",
         r: 0.41,
         n: 24,
       },
       {
         metricType: "calendar_busy_minutes",
-        summary: "Days with more than six hours booked are the days the stretch gets skipped.",
+        summary:
+          "Days with more than six hours booked are the days the stretch gets skipped.",
         r: -0.48,
         n: 30,
       },
@@ -1270,7 +1632,11 @@ export const demoApi: Api = {
   },
   revokeTherapistConsent: async () => {
     await wait();
-    consent = { ...consent, active: false, updatedAt: new Date().toISOString() };
+    consent = {
+      ...consent,
+      active: false,
+      updatedAt: new Date().toISOString(),
+    };
     return { active: false, categories: consent.categories };
   },
   generateTherapistReport: async (days = 30) => {
@@ -1342,13 +1708,21 @@ export const demoApi: Api = {
   },
   castAdmissionVote: async (joinRequestId) => {
     await wait(400);
-    ADMISSION_SEATS = ADMISSION_SEATS.filter((s) => s.joinRequestId !== joinRequestId);
+    ADMISSION_SEATS = ADMISSION_SEATS.filter(
+      (s) => s.joinRequestId !== joinRequestId,
+    );
     return { recorded: true };
   },
   suggestTopic: async (cycleId, text) => {
     await wait(600);
-    suggestions[cycleId] = [...(suggestions[cycleId] ?? []), { text, createdAt: new Date().toISOString() }];
-    return { suggestions: suggestions[cycleId]!, remaining: Math.max(0, 3 - suggestions[cycleId]!.length) };
+    suggestions[cycleId] = [
+      ...(suggestions[cycleId] ?? []),
+      { text, createdAt: new Date().toISOString() },
+    ];
+    return {
+      suggestions: suggestions[cycleId]!,
+      remaining: Math.max(0, 3 - suggestions[cycleId]!.length),
+    };
   },
   getMySuggestions: async (cycleId) => {
     await wait();
@@ -1357,9 +1731,13 @@ export const demoApi: Api = {
   },
   getDiscover: async (): Promise<DiscoverView> => {
     await wait(300);
-    const rows: DiscoverRow[] = (Object.keys(COMMUNITIES) as CommunityKey[]).map((k) => {
+    const rows: DiscoverRow[] = (
+      Object.keys(COMMUNITIES) as CommunityKey[]
+    ).map((k) => {
       const topics = HISTORY[COMMUNITIES[k].id] ?? [];
-      const topic = topics[0] ?? { topic: { text: TOPIC_TEXT, topicKey: "apologising" } };
+      const topic = topics[0] ?? {
+        topic: { text: TOPIC_TEXT, topicKey: "apologising" },
+      };
       return {
         topic: topic.topic,
         community: ref(k),
@@ -1375,7 +1753,9 @@ export const demoApi: Api = {
     });
     return { rows };
   },
-  getDiscoverResponse: async (responseId: string): Promise<DiscoverResponseView> => {
+  getDiscoverResponse: async (
+    responseId: string,
+  ): Promise<DiscoverResponseView> => {
     await wait(300);
     const voiceId = responseId.split("-").slice(2).join("-");
     const voice = VOICES.find((v) => v.id === voiceId) ?? VOICES[0]!;
@@ -1390,7 +1770,12 @@ export const demoApi: Api = {
       item,
       topic: { text: TOPIC_TEXT, topicKey: "apologising" },
       community: ref("run"),
-      playback: { kind: voice.kind, url: DEMO_MEDIA[voice.kind], expiresAt: iso(1), durationSec: voice.sec },
+      playback: {
+        kind: voice.kind,
+        url: DEMO_MEDIA[voice.kind],
+        expiresAt: iso(1),
+        durationSec: voice.sec,
+      },
       next: VOICES.filter((v) => v.id !== voice.id).map((v) => ({
         id: `cdisc-run-${v.id}`,
         speaker: { displayName: v.name },
@@ -1415,7 +1800,8 @@ export const demoApi: Api = {
   },
   getRoom: async () => {
     await wait(350);
-    if (!myResponse) throw new Error("Share your answer first and the room opens.");
+    if (!myResponse)
+      throw new Error("Share your answer first and the room opens.");
     return roomView();
   },
   getTopicResult: async () => {
@@ -1509,4 +1895,5 @@ export const demoApi: Api = {
   },
 };
 
-let pendingUpload: { kind: "video" | "audio"; durationSec: number } | null = null;
+let pendingUpload: { kind: "video" | "audio"; durationSec: number } | null =
+  null;

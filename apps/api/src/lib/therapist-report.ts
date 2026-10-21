@@ -7,7 +7,16 @@
  */
 
 import { prisma } from "@kinextion/database";
-import { toDateString, type TherapistCategoriesInput } from "@kinextion/shared";
+import {
+  addDays,
+  dateFromKey,
+  habitProgress,
+  localDateKey,
+  tallyBetween,
+  toDateString,
+  type TherapistCategoriesInput,
+} from "@kinextion/shared";
+import { completedByHabit, toScheduled } from "./score.js";
 import { computePatterns } from "./patterns.js";
 
 export type TherapistShareCategories = TherapistCategoriesInput;
@@ -47,41 +56,55 @@ export interface TherapistReportSummary {
 export async function buildTherapistReport(
   userId: string,
   categories: TherapistShareCategories,
-  days = 30
+  days = 30,
+  timeZone = "UTC"
 ): Promise<TherapistReportSummary> {
   const periodEnd = new Date();
   const periodStart = new Date();
   periodStart.setDate(periodStart.getDate() - days);
+  const endKey = localDateKey(periodEnd, timeZone);
+  const startKey = addDays(endKey, -days);
 
   const summary: TherapistReportSummary = {
-    periodStart: toDateString(periodStart),
-    periodEnd: toDateString(periodEnd),
+    periodStart: startKey,
+    periodEnd: endKey,
     categories,
   };
 
   if (categories.habits) {
+    // Logs reach back further than the period so a streak that started
+    // before it is still counted in full.
     const [habits, logs] = await Promise.all([
       prisma.habit.findMany({ where: { userId, isActive: true } }),
-      prisma.habitLog.findMany({ where: { userId, date: { gte: periodStart } } }),
+      prisma.habitLog.findMany({
+        where: { userId, completed: true, date: { gte: dateFromKey(addDays(startKey, -90)) } },
+        select: { habitId: true, date: true, completed: true },
+      }),
     ]);
-    const completed = logs.filter((l) => l.completed).length;
-    const streaks = new Map<string, number>();
+    const byHabit = completedByHabit(logs);
+
+    /**
+     * Rate = kept ÷ due across every habit's own schedule. The old version
+     * divided by logged rows, and a missed day has no row — so a habit kept
+     * three days out of thirty read as 100%. A therapist is the last person
+     * who should be shown a flattering number.
+     */
+    let kept = 0;
+    let due = 0;
+    let longest = 0;
     for (const habit of habits) {
-      let streak = 0;
-      const cursor = new Date();
-      const habitLogs = new Set(
-        logs.filter((l) => l.habitId === habit.id && l.completed).map((l) => toDateString(l.date))
-      );
-      while (habitLogs.has(toDateString(cursor))) {
-        streak++;
-        cursor.setDate(cursor.getDate() - 1);
-      }
-      streaks.set(habit.id, streak);
+      const scheduled = toScheduled(habit, timeZone);
+      const completed = byHabit.get(habit.id) ?? new Set<string>();
+      const tally = tallyBetween(scheduled, completed, startKey, endKey);
+      kept += tally.kept;
+      due += tally.due;
+      longest = Math.max(longest, habitProgress(scheduled, completed, endKey).streak);
     }
+
     summary.habits = {
       total: habits.length,
-      completionRate: logs.length > 0 ? completed / logs.length : 0,
-      longestActiveStreak: Math.max(0, ...streaks.values()),
+      completionRate: due > 0 ? kept / due : 0,
+      longestActiveStreak: longest,
     };
   }
 

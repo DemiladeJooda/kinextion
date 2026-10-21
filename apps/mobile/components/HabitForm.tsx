@@ -2,9 +2,10 @@
  * The habit builder.
  *
  * Shared by "new habit" and "edit habit" so the two can't drift apart. The
- * shape follows the Atomic Habits loop the schema has always had room for —
- * cue, craving, response, reward — but only the name, category and frequency
- * are required. The loop is offered as an optional second step rather than a
+ * optional section maps onto the habit-loop columns the schema already has
+ * (cue, craving, response, reward), but the UI uses plain words for them and
+ * never names the framework: when it happens, why it matters, the tiny
+ * version, the payoff. Only the name, category and frequency are required. The loop is offered as an optional second step rather than a
  * wall of fields, because a habit you can't be bothered to finish creating is
  * worse than a habit with three empty columns.
  */
@@ -177,14 +178,14 @@ export function HabitForm({
         </View>
       </Card>
 
-      {/* ── The Atomic Habits loop, optional ─────────────────────────────── */}
+      {/* ── The habit loop, optional ─────────────────────────────────────── */}
       <PressCard haptic="light" onPress={() => setShowLoop((v) => !v)} style={{ padding: space.lg }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
           <Ionicons name="repeat" size={18} color={color.amber} />
           <View style={{ flex: 1 }}>
             <Txt variant="bodyStrong">Make it stick</Txt>
             <Txt variant="small" c={color.textMuted} style={{ marginTop: 1 }}>
-              Cue, craving, response, reward. Optional, but it's what makes one hold.
+              When, why, the tiny version and the payoff. Optional, but it's what makes one hold.
             </Txt>
           </View>
           <Ionicons
@@ -200,7 +201,7 @@ export function HabitForm({
           <Card>
             <View style={{ gap: space.lg }}>
               <Field
-                label="Cue — when"
+                label="When — after I…"
                 value={values.cue}
                 onChangeText={(v) => set("cue", v)}
                 placeholder="After I put the kettle on"
@@ -209,7 +210,7 @@ export function HabitForm({
                 hint="Anchor it to something already in your day."
               />
               <Field
-                label="Craving — why you'd want to"
+                label="Why it matters to you"
                 value={values.craving}
                 onChangeText={(v) => set("craving", v)}
                 placeholder="I think more clearly after moving"
@@ -217,7 +218,7 @@ export function HabitForm({
                 accent={accent}
               />
               <Field
-                label="Response — the two-minute version"
+                label="The tiny version"
                 value={values.response}
                 onChangeText={(v) => set("response", v)}
                 placeholder="Shoes on, to the end of the road"
@@ -226,7 +227,7 @@ export function HabitForm({
                 hint="Small enough to do on your worst day."
               />
               <Field
-                label="Reward — the payoff today"
+                label="Today's payoff"
                 value={values.reward}
                 onChangeText={(v) => set("reward", v)}
                 placeholder="Coffee when I get back"

@@ -30,9 +30,9 @@ export async function recommendationRoutes(app: FastifyInstance) {
   /** Generation costs a model call — capped like the other assisted routes. */
   const ASSIST_RATE_LIMIT = { rateLimit: { max: 12, timeWindow: "1 minute" } };
 
-  const latestToday = (userId: string) =>
+  const latestToday = (userId: string, timeZone: string) =>
     prisma.recommendation.findFirst({
-      where: { userId, createdAt: { gte: startOfToday() } },
+      where: { userId, createdAt: { gte: startOfToday(timeZone) } },
       orderBy: { createdAt: "desc" },
     });
 
@@ -40,7 +40,7 @@ export async function recommendationRoutes(app: FastifyInstance) {
   // on mount so a reopened screen shows the same card, with the same id, in
   // whatever state the user left it.
   app.get("/today", async (request) => {
-    return { success: true, data: await latestToday(request.userId) };
+    return { success: true, data: await latestToday(request.userId, request.timeZone) };
   });
 
   /**
@@ -62,7 +62,7 @@ export async function recommendationRoutes(app: FastifyInstance) {
 
     const userId = request.userId;
     const { refresh, localHour, timeZone } = parsed.data;
-    const existing = await latestToday(userId);
+    const existing = await latestToday(userId, request.timeZone);
 
     if (existing && !existing.dismissed && !refresh) {
       return { success: true, data: existing };
@@ -79,7 +79,7 @@ export async function recommendationRoutes(app: FastifyInstance) {
     }
 
     const [context, history] = await Promise.all([
-      buildHabitContext(userId, { localHour, timeZone }),
+      buildHabitContext(userId, { localHour, timeZone: timeZone ?? request.timeZone }),
       loadRecommendationHistory(userId, timeZone ?? null),
     ]);
 

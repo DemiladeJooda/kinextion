@@ -4,72 +4,98 @@
  * Both /api/score/today and the check-in route need this, and an earlier draft
  * of the check-in had its own copy. Two copies of a scoring rule is how the
  * number on the home screen ends up disagreeing with the number returned when
- * you save — and it would also have meant two copies of the streak loop below,
- * which is a known N+1 waiting to be fixed. One implementation, one place to
- * fix it.
+ * you save. One implementation, one place to fix it.
+ *
+ * "Today" is the user's today: every function here takes their IANA zone
+ * (from the X-Time-Zone header, see plugins/time-zone.ts). Before that, the
+ * day rolled over at UTC midnight — 7pm in Dallas.
  */
 
 import { prisma } from "@kinextion/database";
-import { calculateKinextionScore, toDateString } from "@kinextion/shared";
+import {
+  addDays,
+  calculateKinextionScore,
+  dateFromKey,
+  dateKeyOf,
+  dayStartInstant,
+  habitTotalsForDay,
+  localDateKey,
+  showingUpStreak,
+  type DateKey,
+} from "@kinextion/shared";
 
 /** How far back a streak is allowed to run before we stop counting. */
 const MAX_STREAK_LOOKBACK = 90;
 
-export function startOfToday(): Date {
-  return new Date(toDateString(new Date()));
+/**
+ * The instant the user's day began — the lower bound for "created today" on
+ * timestamp columns (mood entries, recommendations).
+ */
+export function startOfToday(timeZone = "UTC"): Date {
+  return dayStartInstant(localDateKey(new Date(), timeZone), timeZone);
 }
 
-/**
- * Walks backwards day by day until it finds one with no completed habit.
- *
- * Known cost: up to 90 sequential queries on every home-screen load. It is
- * left as-is here rather than optimised in passing, because replacing it with
- * one grouped query is a change worth making deliberately and testing on its
- * own — but it now lives in exactly one function, so that change is a one-file
- * change rather than a hunt.
- */
-async function computeStreak(userId: string, todayDate: Date): Promise<number> {
-  let streakDays = 0;
-  const cursor = new Date(todayDate);
+/** Habits as the shared schedule module wants them: with a start date in the
+ *  user's own zone, so the day a habit was created is its first due day. */
+export function toScheduled<T extends { createdAt: Date }>(habit: T, timeZone: string) {
+  return { ...habit, startDate: localDateKey(habit.createdAt, timeZone) };
+}
 
-  for (let i = 0; i < MAX_STREAK_LOOKBACK; i++) {
-    cursor.setDate(cursor.getDate() - 1);
-    const dayLogs = await prisma.habitLog.findMany({
-      where: { userId, date: new Date(toDateString(cursor)), completed: true },
-    });
-    if (dayLogs.length === 0) break;
-    streakDays++;
+/** Completed log dates grouped by habit. */
+export function completedByHabit(logs: { habitId: string; date: Date; completed: boolean }[]) {
+  const map = new Map<string, Set<DateKey>>();
+  for (const log of logs) {
+    if (!log.completed) continue;
+    const key = dateKeyOf(log.date);
+    const set = map.get(log.habitId);
+    if (set) set.add(key);
+    else map.set(log.habitId, new Set([key]));
   }
-
-  return streakDays;
+  return map;
 }
 
 /**
  * Recompute today's score from live data and persist it.
  *
+ * One query for 90 days of completed logs feeds both today's habit totals and
+ * the streak — the old version walked back a day at a time, up to 90
+ * sequential queries per home-screen load.
+ *
  * Reads *all* of today's mood entries rather than one: the home screen can
  * write a mood-only entry after a full check-in, and reading a single row
  * would then decide reflection wasn't done and quietly take those points back.
  */
-export async function recomputeTodayScore(userId: string) {
-  const todayDate = startOfToday();
+export async function recomputeTodayScore(userId: string, timeZone = "UTC") {
+  const today = localDateKey(new Date(), timeZone);
+  const todayDate = dateFromKey(today);
+  const dayStart = dayStartInstant(today, timeZone);
 
-  const [habits, habitLogs, workoutLog, moodEntries] = await Promise.all([
+  const [habits, recentLogs, workoutLog, moodEntries] = await Promise.all([
     prisma.habit.findMany({ where: { userId, isActive: true } }),
-    prisma.habitLog.findMany({ where: { userId, date: todayDate } }),
-    prisma.workoutLog.findFirst({ where: { userId, createdAt: { gte: todayDate } } }),
-    prisma.moodEntry.findMany({ where: { userId, createdAt: { gte: todayDate } } }),
+    prisma.habitLog.findMany({
+      where: {
+        userId,
+        completed: true,
+        date: { gte: dateFromKey(addDays(today, -MAX_STREAK_LOOKBACK)), lte: todayDate },
+      },
+      select: { habitId: true, date: true, completed: true },
+    }),
+    prisma.workoutLog.findFirst({ where: { userId, createdAt: { gte: dayStart } } }),
+    prisma.moodEntry.findMany({ where: { userId, createdAt: { gte: dayStart } } }),
   ]);
 
+  const scheduled = habits.map((h) => toScheduled(h, timeZone));
+  const byHabit = completedByHabit(recentLogs);
+  const activeDays = new Set(recentLogs.map((l) => dateKeyOf(l.date)));
+
   const breakdown = {
-    habitsCompleted: habitLogs.filter((l: { completed: boolean }) => l.completed).length,
-    habitsTotal: habits.length,
+    ...habitTotalsForDay(scheduled, byHabit, today),
     workoutLogged: !!workoutLog,
     moodCheckedIn: moodEntries.length > 0,
     reflectionDone: moodEntries.some(
       (e: { journal: string | null; gratitude: string | null }) => !!(e.journal || e.gratitude)
     ),
-    streakDays: await computeStreak(userId, todayDate),
+    streakDays: showingUpStreak(scheduled, activeDays, today, MAX_STREAK_LOOKBACK),
   };
 
   const overallScore = calculateKinextionScore(breakdown);
@@ -83,21 +109,16 @@ export async function recomputeTodayScore(userId: string) {
 
 export type ScorePeriod = "weekly" | "monthly" | "yearly";
 
-/** Start of the given period, anchored to `now` — Monday for weekly, the 1st
- *  for monthly and yearly. This is what makes the displayed score "reset":
- *  the average below only ever looks at rows from this date forward. */
-function periodStart(period: ScorePeriod, now: Date): Date {
-  const d = new Date(now);
+/** Start of the given period on the user's calendar — Monday for weekly, the
+ *  1st for monthly and yearly. This is what makes the displayed score
+ *  "reset": the average below only ever looks at rows from this date on. */
+function periodStart(period: ScorePeriod, today: DateKey): DateKey {
   if (period === "weekly") {
-    const isoDay = (d.getDay() + 6) % 7; // 0 = Monday
-    d.setDate(d.getDate() - isoDay);
-  } else if (period === "monthly") {
-    d.setDate(1);
-  } else {
-    d.setMonth(0, 1);
+    const isoDay = (dateFromKey(today).getUTCDay() + 6) % 7; // 0 = Monday
+    return addDays(today, -isoDay);
   }
-  d.setHours(0, 0, 0, 0);
-  return d;
+  if (period === "monthly") return `${today.slice(0, 7)}-01`;
+  return `${today.slice(0, 4)}-01-01`;
 }
 
 /**
@@ -106,11 +127,11 @@ function periodStart(period: ScorePeriod, now: Date): Date {
  * chess ELO) instead of a total that only ever grows. `recomputeTodayScore`
  * still owns the per-day number this averages over.
  */
-export async function computePeriodScore(userId: string, period: ScorePeriod) {
-  const start = periodStart(period, new Date());
+export async function computePeriodScore(userId: string, period: ScorePeriod, timeZone = "UTC") {
+  const start = periodStart(period, localDateKey(new Date(), timeZone));
 
   const rows = await prisma.kinextionScore.findMany({
-    where: { userId, date: { gte: start } },
+    where: { userId, date: { gte: dateFromKey(start) } },
     orderBy: { date: "asc" },
   });
 
@@ -120,7 +141,7 @@ export async function computePeriodScore(userId: string, period: ScorePeriod) {
 
   return {
     period,
-    periodStart: toDateString(start),
+    periodStart: start,
     average,
     daysLogged: rows.length,
   };
