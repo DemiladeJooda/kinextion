@@ -20,7 +20,8 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Kinextion uses the camera for Smart Referee, Form Control and Environment Design, which analyse what they see without recording it — and to record the video response you choose to share with your community, which is stored until that week's conversation ends, or for 30 days if you make it public.",
         "NSPhotoLibraryUsageDescription": "Kinextion needs photo access so you can analyse a photo of your space with Environment Design instead of using the camera live.",
-        "NSMicrophoneUsageDescription": "Kinextion uses the microphone to record your response to your community's weekly question, and while recording a workout video for form analysis.",
+        "NSMicrophoneUsageDescription": "Kinextion uses the microphone so you can talk to your guides, record your response to your community's weekly question, and record workout videos for form analysis.",
+        "NSSpeechRecognitionUsageDescription": "Kinextion turns what you say to your guides into text so they can answer you.",
         "NSLocationWhenInUseUsageDescription": "Kinextion uses your location to show how far nearby run clubs and studios are and sort them by distance. Never stored, never shared."
       }
     },
@@ -66,6 +67,13 @@
         {
           "backgroundColor": "#0A0A1A",
           "resizeMode": "contain"
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Kinextion uses the microphone so you can talk to your guides.",
+          "speechRecognitionPermission": "Kinextion turns what you say to your guides into text so they can answer you."
         }
       ]
     ],

@@ -27,6 +27,7 @@ import {
 import { reflectOnMiss } from "./coach.js";
 import { schedulePolish } from "./polish.js";
 import { statusSideEffects } from "../../lib/habit-status.js";
+import { habitData } from "../../lib/habit-json.js";
 
 const ASSIST_RATE_LIMIT = { rateLimit: { max: 12, timeWindow: "1 minute" } };
 
@@ -145,7 +146,7 @@ export function registerCoachRoutes(app: FastifyInstance) {
     if (Object.keys(data).length) {
       await prisma.habit.updateMany({
         where: { id: reflection.habitId, userId: request.userId },
-        data,
+        data: habitData(data),
       });
     }
     await prisma.habitReflection.update({

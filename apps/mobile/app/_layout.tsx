@@ -15,6 +15,7 @@ import { useApi } from "../hooks/useApi";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { AuroraBackdrop, BrandMark, Txt } from "../components/ui";
 import { color, space } from "../theme";
+import { WidgetSync } from "../lib/widget";
 
 const CLERK_PUBLISHABLE_KEY =
   process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "";
@@ -262,6 +263,8 @@ export default function RootLayout() {
                 options={{ headerShown: true }}
               />
               <Stack.Screen name="simulate" options={{ headerShown: true }} />
+              <Stack.Screen name="away" options={{ headerShown: true }} />
+              <Stack.Screen name="quick-log" options={{ animation: "none" }} />
               <Stack.Screen
                 name="settings/help"
                 options={{ headerShown: true }}
@@ -277,6 +280,7 @@ export default function RootLayout() {
             </Stack>
           </AuthGate>
           <HabitReminderSync />
+          <WidgetSync />
           {DEMO_MODE ? <DemoBadge /> : null}
         </AppStateProvider>
       </GestureHandlerRootView>

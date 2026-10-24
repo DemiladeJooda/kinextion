@@ -78,6 +78,8 @@ export interface StreamChatOptions {
    * guide knows what the user is working on. Membership is checked server-side.
    */
   readonly topicId?: string | null;
+  /** Spoken, and the reply will be read aloud — the guide answers like talk. */
+  readonly voice?: boolean;
 }
 
 export interface StreamChatResult {
@@ -112,6 +114,7 @@ export async function streamChat({
   token,
   conversationId,
   topicId,
+  voice,
 }: StreamChatOptions): Promise<StreamChatResult> {
   if (DEMO_MODE) {
     const last = messages[messages.length - 1]?.content ?? "";
@@ -135,6 +138,7 @@ export async function streamChat({
         content: messages[messages.length - 1]?.content ?? "",
         ...(conversationId ? { conversationId } : {}),
         ...(topicId ? { topicId } : {}),
+        ...(voice ? { voice: true } : {}),
       }
     : { messages, userName, guide, surface: "app" };
 

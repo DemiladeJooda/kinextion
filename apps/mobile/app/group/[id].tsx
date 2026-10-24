@@ -27,6 +27,7 @@ import {
 } from "../../components/ui";
 import { useApi } from "../../hooks/useApi";
 import { color, space } from "../../theme";
+import { BuildingTogether } from "../../components/BuildingTogether";
 
 function ResultBar({ agree, mixed, disagree }: { agree: number; mixed: number; disagree: number }) {
   return (
@@ -108,6 +109,8 @@ export default function GroupScreen() {
             </Txt>
           </Card>
         ) : null}
+
+        {detail?.membership && id ? <BuildingTogether communityId={id} /> : null}
 
         {goal ? (
           <>

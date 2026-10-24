@@ -9,6 +9,11 @@ interface TokenResponse {
   expires_in?: number;
 }
 
+interface OuraDailyActivity {
+  day: string;
+  steps?: number;
+}
+
 interface OuraDailySleep {
   day: string;
   score?: number;
@@ -83,7 +88,7 @@ export const oura: ProviderAdapter = {
     if (!res.ok) throw new Error(`Oura sleep fetch failed (${res.status})`);
     const body = (await res.json()) as { data?: OuraDailySleep[] };
 
-    return (body.data ?? [])
+    const metrics: WearableMetricInput[] = (body.data ?? [])
       .filter((d): d is Required<OuraDailySleep> => d.score != null)
       .map((d) => ({
         metricType: "sleep_score",
@@ -91,5 +96,17 @@ export const oura: ProviderAdapter = {
         value: d.score,
         raw: d as unknown as Record<string, unknown>,
       }));
+
+    const activity = await fetch(
+      `https://api.ouraring.com/v2/usercollection/daily_activity?start_date=${startDate}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    if (activity.ok) {
+      const ab = (await activity.json()) as { data?: OuraDailyActivity[] };
+      for (const a of ab.data ?? []) {
+        if (a.steps != null) metrics.push({ metricType: "steps", date: a.day, value: a.steps, unit: "steps" });
+      }
+    }
+    return metrics;
   },
 };

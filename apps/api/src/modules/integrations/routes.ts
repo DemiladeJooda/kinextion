@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { autoLogFromMetrics } from "../../lib/auto-log.js";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { prisma, type Prisma } from "@kinextion/database";
 import { decryptToken, encryptToken } from "../../lib/crypto.js";
@@ -242,7 +243,10 @@ export async function integrationRoutes(app: FastifyInstance) {
           data: { lastSyncedAt: new Date(), status: "connected", lastError: null },
         });
 
-        return { success: true, data: { synced: metrics.length } };
+        // Habits linked to this service tick themselves, shown and undoable.
+        const autoLogged = await autoLogFromMetrics(request.userId, request.timeZone, providerId, metrics);
+
+        return { success: true, data: { synced: metrics.length, autoLogged } };
       } catch (err) {
         const message = err instanceof Error ? err.message : "Sync failed";
         await prisma.integration.update({

@@ -136,6 +136,8 @@ const PROTECTED: Array<[string, string]> = [
   ["POST", "/api/chat/me/message"],
   ["POST", "/api/chat/me/stream"],
   ["POST", "/api/chat/me/actions/undo"],
+  ["GET", "/api/chat/me/voice"],
+  ["POST", "/api/chat/me/speech"],
   ["GET", "/api/chat/me/conversations"],
   ["GET", "/api/integrations"],
   ["POST", "/api/integrations/strava/connect"],

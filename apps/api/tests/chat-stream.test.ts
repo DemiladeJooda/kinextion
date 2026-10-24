@@ -179,6 +179,34 @@ describe("POST /api/chat/me/stream with events", () => {
   });
 });
 
+describe("talking instead of typing", () => {
+  it("tells the guide a turn is spoken, and only then", async () => {
+    streamChatWithTools.mockResolvedValue("Sure.");
+    const ask = (voice?: boolean) =>
+      app.inject({
+        method: "POST",
+        url: "/api/chat/me/stream",
+        headers: { "x-chat-protocol": "events" },
+        payload: { persona: "altheo", content: "hey", ...(voice ? { voice } : {}) },
+      });
+    await ask(true);
+    await ask();
+    expect(streamChatWithTools.mock.calls[0][0].systemPrompt).toMatch(/talking to you out loud/);
+    expect(streamChatWithTools.mock.calls[1][0].systemPrompt).not.toMatch(/out loud/);
+  });
+
+  it("reports no premium voice until one is set up, and says so on /speech", async () => {
+    const voice = await app.inject({ method: "GET", url: "/api/chat/me/voice" });
+    expect(voice.json().data).toEqual({ premium: false, provider: null });
+    const speech = await app.inject({
+      method: "POST",
+      url: "/api/chat/me/speech",
+      payload: { persona: "kairo", text: "Take a breath." },
+    });
+    expect(speech.statusCode).toBe(501);
+  });
+});
+
 describe("POST /api/chat/me/actions/undo", () => {
   it("undoes a valid spec for the signed-in user", async () => {
     undoChatAction.mockResolvedValue(true);

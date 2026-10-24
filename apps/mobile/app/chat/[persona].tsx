@@ -15,11 +15,15 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeIn, FadeInDown, Layout } from "react-native-reanimated";
 import { GUIDES, getGreeting, resolveGuideId, DEFAULT_GUIDE } from "@kinextion/ai-core";
+import { createSentenceSplitter } from "@kinextion/shared";
+import * as SecureStore from "expo-secure-store";
 
 import { ChatError, streamChat, type ChatAction, type ChatTurn } from "../../lib/api";
 import { useApi } from "../../hooks/useApi";
 import { useAppState } from "../../lib/store";
 import { AuroraBackdrop, Chip, Txt, TypingDots } from "../../components/ui";
+import { VoiceDock, type VoiceState } from "../../components/VoiceDock";
+import { createSpeaker, useListener, voiceSupported, type Speaker } from "../../lib/voice";
 import { color, radius, space, tint, type } from "../../theme";
 
 interface Message {
@@ -36,6 +40,11 @@ interface ShownAction extends ChatAction {
   id: string;
   undone?: boolean;
 }
+
+/** Talking is the default; typing is a tap away and remembered per device. */
+type InputMode = "voice" | "type";
+const MODE_KEY = "chat.inputMode";
+const SPEAK_KEY = "chat.speakAloud";
 
 /** Conversation starters, tuned per guide. */
 const OPENERS: Record<string, string[]> = {
@@ -74,16 +83,60 @@ export default function ChatScreen() {
   const listRef = useRef<FlatList<Message>>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  // ── Voice ──────────────────────────────────────────────────────────────
+  const [mode, setMode] = useState<InputMode>(voiceSupported ? "voice" : "type");
+  const [speakAloud, setSpeakAloud] = useState(true);
+  const [speaking, setSpeaking] = useState(false);
+  const [premium, setPremium] = useState(false);
+  const speakerRef = useRef<Speaker | null>(null);
+  // Once they've tapped to talk, the conversation is hands-free: after the
+  // guide finishes speaking, it listens again.
+  const handsFree = useRef(false);
+  const sendRef = useRef<(text: string, spoken?: boolean) => void>(() => {});
+
+  const listener = useListener({ onFinal: (text) => sendRef.current(text, true) });
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const [m, s] = await Promise.all([SecureStore.getItemAsync(MODE_KEY), SecureStore.getItemAsync(SPEAK_KEY)]);
+        if (m === "type" || (m === "voice" && voiceSupported)) setMode(m);
+        if (s === "off") setSpeakAloud(false);
+      } catch {
+        // first run, or storage unavailable: keep the defaults
+      }
+    })();
+    api.getVoice().then((v) => setPremium(v.premium)).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const remember = (key: string, value: string) => void SecureStore.setItemAsync(key, value).catch(() => {});
+
+  const stopVoice = useCallback(() => {
+    handsFree.current = false;
+    speakerRef.current?.stop();
+    speakerRef.current = null;
+    listener.cancel();
+  }, [listener]);
+
   // Cancel any in-flight request if the screen goes away, so we stop paying
-  // for tokens the user will never see.
-  useEffect(() => () => abortRef.current?.abort(), []);
+  // for tokens the user will never see — and stop talking and listening.
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+      speakerRef.current?.stop();
+      listener.cancel();
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
   const scrollToEnd = useCallback(() => {
     requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
   }, []);
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, spoken = false) => {
       const trimmed = text.trim();
       if (!trimmed || sending) return;
 
@@ -113,6 +166,25 @@ export default function ChatScreen() {
       // Once the guide has changed something, Today should show it.
       let acted = false;
 
+      // In voice mode the reply is spoken sentence by sentence as it streams.
+      speakerRef.current?.stop();
+      const aloud = mode === "voice" && speakAloud;
+      const splitter = createSentenceSplitter();
+      let heard = 0;
+      const speaker = aloud
+        ? createSpeaker({
+            persona: guideId,
+            premium,
+            getToken,
+            onSpeaking: setSpeaking,
+            onIdle: () => {
+              if (speakerRef.current === speaker) speakerRef.current = null;
+              if (handsFree.current) void listener.start();
+            },
+          })
+        : null;
+      speakerRef.current = speaker;
+
       const settle = (content: string, error = false) =>
         setMessages((prev) => prev.map((m) => (m.id === replyId ? { ...m, content, error } : m)));
 
@@ -124,10 +196,15 @@ export default function ChatScreen() {
           token: await getToken(),
           conversationId: conversationIdRef.current,
           topicId,
+          voice: spoken || mode === "voice",
           onDelta: (full) => {
             setMessages((prev) =>
               prev.map((m) => (m.id === replyId ? { ...m, content: full } : m))
             );
+            if (speaker) {
+              splitter.push(full.slice(heard)).forEach((s) => speaker.say(s));
+              heard = full.length;
+            }
           },
           onAction: (action) => {
             acted = true;
@@ -148,8 +225,15 @@ export default function ChatScreen() {
           },
         });
         conversationIdRef.current = result.conversationId;
+        if (speaker) {
+          splitter.flush().forEach((s) => speaker.say(s));
+          speaker.end();
+        } else if (handsFree.current && mode === "voice") {
+          void listener.start();
+        }
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } catch (err) {
+        speaker?.stop();
         if (controller.signal.aborted) {
           // Stopped by the user: keep whatever streamed, drop an empty bubble.
           setMessages((prev) => prev.filter((m) => m.id !== replyId || m.content.trim()));
@@ -165,8 +249,31 @@ export default function ChatScreen() {
         if (acted) void refresh();
       }
     },
-    [guideId, messages, scrollToEnd, sending, getToken, refresh]
+    [guideId, messages, scrollToEnd, sending, getToken, refresh, mode, speakAloud, premium, listener]
   );
+  sendRef.current = (text, spoken) => void send(text, spoken);
+
+  const voiceState: VoiceState =
+    listener.state === "listening" ? "listening" : speaking ? "speaking" : sending ? "thinking" : "idle";
+
+  /** The orb: talk, finish talking, or cut in on the guide. */
+  const onOrb = useCallback(() => {
+    listener.clearError();
+    if (voiceState === "listening") return listener.stop();
+    if (voiceState === "speaking") {
+      speakerRef.current?.stop();
+      speakerRef.current = null;
+    }
+    if (voiceState === "thinking") return;
+    handsFree.current = true;
+    void listener.start();
+  }, [listener, voiceState]);
+
+  const switchMode = (next: InputMode) => {
+    stopVoice();
+    setMode(next);
+    remember(MODE_KEY, next);
+  };
 
   /** Undo one card. The message stays; the card shows it was undone. */
   const undo = useCallback(
@@ -227,7 +334,13 @@ export default function ChatScreen() {
                 <Txt variant="bodyStrong">{guide.name}</Txt>
               </View>
               <Txt variant="small" c={color.textFaint} style={{ fontSize: 11, lineHeight: 14 }}>
-                {sending ? "typing…" : guide.role}
+                {voiceState === "listening"
+                  ? "listening…"
+                  : voiceState === "speaking"
+                    ? "speaking…"
+                    : sending
+                      ? "thinking…"
+                      : guide.role}
               </Txt>
             </View>
           ),
@@ -280,19 +393,39 @@ export default function ChatScreen() {
             </Animated.View>
           ) : null}
 
-          <Composer
-            value={input}
-            onChange={setInput}
-            onSend={() => send(input)}
-            onStop={() => abortRef.current?.abort()}
-            sending={sending}
-            accent={guide.color}
-            placeholder={
-              guideId === "altheo"
-                ? "Ask about training, sleep, or today's plan…"
-                : "Say what's actually on your mind…"
-            }
-          />
+          {mode === "voice" ? (
+            <VoiceDock
+              state={voiceState}
+              partial={listener.partial}
+              volume={listener.volume}
+              accent={guide.color}
+              speakAloud={speakAloud}
+              error={listener.error}
+              onOrb={onOrb}
+              onKeyboard={() => switchMode("type")}
+              onToggleSpeech={() => {
+                const next = !speakAloud;
+                if (!next) speakerRef.current?.stop();
+                setSpeakAloud(next);
+                remember(SPEAK_KEY, next ? "on" : "off");
+              }}
+            />
+          ) : (
+            <Composer
+              value={input}
+              onChange={setInput}
+              onSend={() => send(input)}
+              onStop={() => abortRef.current?.abort()}
+              onVoice={voiceSupported ? () => switchMode("voice") : undefined}
+              sending={sending}
+              accent={guide.color}
+              placeholder={
+                guideId === "altheo"
+                  ? "Ask about training, sleep, or today's plan…"
+                  : "Say what's actually on your mind…"
+              }
+            />
+          )}
         </KeyboardAvoidingView>
       </SafeAreaView>
     </>
@@ -300,6 +433,23 @@ export default function ChatScreen() {
 }
 
 // ─── Message bubble ───────────────────────────────────────────────────────────
+/**
+ * Guides sometimes answer in light markdown. Show **bold** as bold and
+ * "- item" as a bullet rather than printing the symbols.
+ */
+function renderInline(text: string) {
+  const lines = text.replace(/^\s*[-*]\s+/gm, "• ");
+  return lines.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+    part.startsWith("**") && part.endsWith("**") && part.length > 4 ? (
+      <Txt key={i} variant="bodyStrong">
+        {part.slice(2, -2)}
+      </Txt>
+    ) : (
+      part
+    )
+  );
+}
+
 function Bubble({
   message,
   guideColor,
@@ -379,7 +529,7 @@ function Bubble({
           </View>
         ) : (
           <Txt variant="body" c={message.error ? color.textMuted : color.text}>
-            {message.content}
+            {renderInline(message.content)}
           </Txt>
         )}
       </View>
@@ -477,6 +627,7 @@ function Composer({
   onChange,
   onSend,
   onStop,
+  onVoice,
   sending,
   accent,
   placeholder,
@@ -485,6 +636,8 @@ function Composer({
   onChange: (v: string) => void;
   onSend: () => void;
   onStop: () => void;
+  /** Switch back to talking. */
+  onVoice?: () => void;
   sending: boolean;
   accent: string;
   placeholder: string;
@@ -504,6 +657,23 @@ function Composer({
         backgroundColor: "rgba(14,21,36,0.92)",
       }}
     >
+      {onVoice ? (
+        <Pressable
+          onPress={onVoice}
+          hitSlop={8}
+          accessibilityLabel="Talk instead"
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(255,255,255,0.05)",
+          }}
+        >
+          <Ionicons name="mic-outline" size={20} color={color.textMuted} />
+        </Pressable>
+      ) : null}
       <TextInput
         value={value}
         onChangeText={onChange}

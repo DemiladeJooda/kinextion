@@ -6,7 +6,7 @@
  */
 
 import { apiRequest, apiRequestWithMeta } from "./client";
-import type { HabitChange, UserBackground } from "@kinextion/shared";
+import type { AutoLog, HabitChange, UserBackground } from "@kinextion/shared";
 import type {
   OnboardingInput,
   UpdateProfileInput,
@@ -170,6 +170,12 @@ export interface RemoteHabit {
   startsOn?: string | null;
   /** How Kinextion reads the free-text fields, tidied for display. */
   polished?: unknown;
+  /** Measured habits: unit, usual amount, tiny amount. */
+  measureUnit?: string | null;
+  measureTarget?: number | null;
+  measureTiny?: number | null;
+  /** Logged by a connected service. */
+  autoLog?: AutoLog | null;
 }
 
 export function listHabits(token: string | null, includeArchived = false) {
@@ -197,6 +203,70 @@ export function updateHabit(
     body: input,
     token,
   });
+}
+
+// ─── Away, and building together ─────────────────────────────────────────────
+
+export type AwayReason = "travel" | "illness" | "family" | "move" | "other";
+
+export interface RemoteAway {
+  id: string;
+  reason: AwayReason;
+  startsOn: string;
+  endsOn: string | null;
+  habits: { id: string; name: string }[];
+}
+
+export interface RestartedHabit {
+  id: string;
+  name: string;
+  cue: string | null;
+  plan: string;
+}
+
+export function getAway(token: string | null) {
+  return apiRequest<RemoteAway | null>("/api/habits/away", { token });
+}
+
+export function startAway(token: string | null, input: { reason: AwayReason; until?: string; habitIds?: string[] }) {
+  return apiRequest<RemoteAway>("/api/habits/away", { method: "POST", body: input, token });
+}
+
+export function endAway(token: string | null) {
+  return apiRequest<{ restarted: RestartedHabit[] }>("/api/habits/away/end", { method: "POST", token });
+}
+
+export type WeekDot = "done" | "minimum" | "rest" | "none" | "future";
+
+export interface SharedHabitRow {
+  habitId: string;
+  mine: boolean;
+  member: string;
+  habit: string;
+  plan: string;
+  paused: boolean;
+  week: WeekDot[];
+}
+
+export function getHabitShares(token: string | null, habitId: string) {
+  return apiRequest<string[]>(`/api/habits/${habitId}/shares`, { token });
+}
+
+export function shareHabit(token: string | null, habitId: string, communityId: string) {
+  return apiRequest<{ shared: boolean }>(`/api/habits/${habitId}/share`, { method: "POST", body: { communityId }, token });
+}
+
+export function unshareHabit(token: string | null, habitId: string, communityId: string) {
+  return apiRequest<{ shared: boolean }>(`/api/habits/${habitId}/share/${communityId}`, { method: "DELETE", token });
+}
+
+export function getSharedHabits(token: string | null, communityId: string) {
+  return apiRequest<{ weekStart: string; rows: SharedHabitRow[] }>(`/api/habits/shared/${communityId}`, { token });
+}
+
+/** Whether the API has a premium voice set up for the guides. */
+export function getVoice(token: string | null) {
+  return apiRequest<{ premium: boolean; provider: string | null }>(`/api/chat/me/voice`, { token });
 }
 
 /**
@@ -279,6 +349,8 @@ export interface RemoteHabitLog {
   /** "done" | "minimum" | "rest"; missing on logs from an older API. */
   state?: "done" | "minimum" | "rest";
   value?: number | null;
+  /** "tap" | "notification" | "integration" | "chat" | "widget" … */
+  source?: string | null;
 }
 
 export interface RemoteWorkout {
@@ -768,7 +840,7 @@ export function syncIntegration(
   token: string | null,
   provider: IntegrationProvider,
 ) {
-  return apiRequest<{ synced: number }>(`/api/integrations/${provider}/sync`, {
+  return apiRequest<{ synced: number; autoLogged?: { habitId: string; habitName: string; date: string; detail: string }[] }>(`/api/integrations/${provider}/sync`, {
     method: "POST",
     token,
   });

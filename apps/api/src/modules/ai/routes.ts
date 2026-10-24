@@ -18,6 +18,7 @@ import {
   type ChatAction,
   type ToolContext,
 } from "./chat-tools.js";
+import { MAX_SPEECH_CHARS, VOICE_PROMPT, premiumVoice, speakable } from "./voice.js";
 import { prepareTurn, resolveConversation } from "./conversation.js";
 import { compactConversation } from "../../lib/memory/store.js";
 import type { ChatMessage, Persona } from "@kinextion/shared";
@@ -111,7 +112,7 @@ export async function chatRoutes(app: FastifyInstance) {
       });
     }
 
-    const { persona, content, conversationId, topicId } = parsed.data;
+    const { persona, content, conversationId, topicId, voice } = parsed.data;
     const convo = await resolveConversation(request.userId, persona, conversationId);
     if ("error" in convo) {
       return reply.status(404).send({ success: false, error: "Conversation not found" });
@@ -125,6 +126,7 @@ export async function chatRoutes(app: FastifyInstance) {
       topicId,
       request.timeZone
     );
+    if (voice) turn.systemPrompt = `${turn.systemPrompt}\n\n${VOICE_PROMPT}`;
 
     // Client navigated away or hit stop → abort upstream so we stop paying
     // for tokens nobody will read.
@@ -308,6 +310,31 @@ export async function chatRoutes(app: FastifyInstance) {
     }
     return reply;
   }
+
+  /** Whether a premium voice is set up; the app uses the phone's voice otherwise. */
+  app.get("/me/voice", async () => {
+    const provider = premiumVoice();
+    return { success: true, data: { premium: Boolean(provider), provider: provider?.id ?? null } };
+  });
+
+  /** A guide's reply, spoken in the premium voice. 501 when there isn't one. */
+  app.post("/me/speech", { config: CHAT_RATE_LIMIT }, async (request, reply) => {
+    const parsed = z
+      .object({ persona: z.enum(["altheo", "kairo"]), text: z.string().min(1).max(MAX_SPEECH_CHARS) })
+      .safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ success: false, error: "Nothing to say." });
+    const provider = premiumVoice();
+    if (!provider) return reply.status(501).send({ success: false, error: "No premium voice set up." });
+    const text = speakable(parsed.data.text);
+    if (!text) return reply.status(400).send({ success: false, error: "Nothing to say." });
+    try {
+      const { audio, contentType } = await provider.synthesize(text, parsed.data.persona);
+      return reply.header("Content-Type", contentType).header("Cache-Control", "no-store").send(audio);
+    } catch (err) {
+      request.log.warn({ err, provider: provider.id }, "speech failed");
+      return reply.status(502).send({ success: false, error: "The voice didn't come through." });
+    }
+  });
 
   /** Undo an action from its card in the chat. */
   app.post("/me/actions/undo", async (request, reply) => {

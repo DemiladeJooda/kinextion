@@ -11,6 +11,7 @@ import { prisma } from "@kinextion/database";
 import {
   addDays,
   canRestOn,
+  stateForAmount,
   dateFromKey,
   dateKeyOf,
   localDateKey,
@@ -34,7 +35,7 @@ export interface LogDayInput {
   completed: boolean;
   notes?: string;
   value?: number;
-  source?: "tap" | "notification" | "backfill" | "integration" | "chat";
+  source?: "tap" | "notification" | "backfill" | "integration" | "chat" | "widget";
 }
 
 export type LogDayResult =
@@ -43,8 +44,8 @@ export type LogDayResult =
 
 export async function logHabitDay(input: LogDayInput): Promise<LogDayResult> {
   const { userId, timeZone, habitId, date, notes, value } = input;
-  const state = input.state ?? "done";
-  const completed = state === "rest" ? false : input.completed;
+  let state = input.state ?? "done";
+  let completed = state === "rest" ? false : input.completed;
   const source = input.source ?? "tap";
 
   /**
@@ -70,6 +71,14 @@ export async function logHabitDay(input: LogDayInput): Promise<LogDayResult> {
   const habit = await prisma.habit.findUnique({ where: { id: habitId } });
   if (!habit || habit.userId !== userId) {
     return { ok: false, status: 404, error: "Habit not found" };
+  }
+
+  // A measured habit's amount decides the day: the target is done, the
+  // tiny amount is the tiny version, less than that is recorded but doesn't count.
+  if (habit.measureTarget && value != null && state !== "rest") {
+    const fromAmount = stateForAmount(habit, value);
+    state = fromAmount ?? "done";
+    completed = fromAmount !== null;
   }
 
   // One planned rest day per habit per week, so rest stays a plan rather

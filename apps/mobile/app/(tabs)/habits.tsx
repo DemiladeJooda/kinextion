@@ -35,7 +35,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Animated, {
@@ -46,6 +46,9 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { MicroRecommendation } from "../../components/MicroRecommendation";
+import { AmountSheet } from "../../components/AmountSheet";
+import type { RemoteAway } from "../../services";
+import { useAutoSync } from "../../lib/auto-sync";
 import {
   TAB_BAR_CLEARANCE,
   AuroraBackdrop,
@@ -65,6 +68,7 @@ import {
   shouldOfferToFade,
   today,
   isDueOn,
+  describeAmount,
   reviewWindow,
   weekInReview,
   type ReminderHabit,
@@ -127,6 +131,7 @@ export default function TodayScreen() {
     habits: allHabits,
     toggleHabit,
     setHabitDay,
+    logAmount,
     editHabit,
     reminderHabits,
     answerMiss,
@@ -166,6 +171,18 @@ export default function TodayScreen() {
     (h) => h.comeback && h.todayState !== null && h.todayState !== "rest",
   );
   const [sheetFor, setSheetFor] = useState<Habit | null>(null);
+  // Measured habits open a "how many?" sheet instead of ticking.
+  const [amountFor, setAmountFor] = useState<Habit | null>(null);
+  // Away: habits paused for travel, illness or a move.
+  const [away, setAway] = useState<RemoteAway | null>(null);
+  const awayApi = useApi();
+  useAutoSync(allHabits, awayApi, refresh);
+  useFocusEffect(
+    useCallback(() => {
+      awayApi.getAway().then(setAway).catch(() => {});
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+  );
 
   // ── Coach loop ────────────────────────────────────────────────────────
   // One "What would it take?" at a time, for the habit at the top of the
@@ -324,6 +341,8 @@ export default function TodayScreen() {
           </Txt>
         ) : null}
 
+        {away ? <AwayBanner away={away} onBack={() => router.push("/away" as never)} /> : null}
+
         <View style={{ gap: space.md }}>
           {habitsLeft.map((h, i) => (
             <Animated.View
@@ -335,7 +354,7 @@ export default function TodayScreen() {
                 habit={h}
                 isNext={i === 0}
                 showStreaks={showStreaks}
-                onToggle={() => toggleHabit(h.id)}
+                onToggle={() => (h.measure ? setAmountFor(h) : toggleHabit(h.id))}
                 onMore={() => setSheetFor(h)}
               />
             </Animated.View>
@@ -512,6 +531,8 @@ export default function TodayScreen() {
 
           <RemindersPrompt reminderHabits={reminderHabits} />
 
+          {!away ? <GoingAwayCard onOpen={() => router.push("/away" as never)} /> : null}
+
           <SimulateCard onOpen={() => router.push("/simulate" as never)} />
 
           {graduating ? (
@@ -563,6 +584,7 @@ export default function TodayScreen() {
       <LogSheet
         habit={sheetFor}
         onClose={() => setSheetFor(null)}
+        onAmount={(h) => setAmountFor(h)}
         onMinimum={(h) => setHabitDay(h.id, "minimum")}
         onRest={(h) => setHabitDay(h.id, "rest")}
         onNote={(h, notes) =>
@@ -571,6 +593,26 @@ export default function TodayScreen() {
           })
         }
         onEdit={(h) => openHabit(h.id)}
+      />
+
+      <AmountSheet
+        habit={
+          amountFor?.measure
+            ? {
+                name: amountFor.name,
+                unit: amountFor.measure.unit,
+                target: amountFor.measure.target,
+                tiny: amountFor.measure.tiny,
+                current: amountFor.todayValue,
+              }
+            : null
+        }
+        accent={amountFor ? categoryColor[amountFor.category] : color.amber}
+        onClose={() => setAmountFor(null)}
+        onSave={(value) => {
+          if (amountFor) void logAmount(amountFor.id, value);
+          setAmountFor(null);
+        }}
       />
     </SafeAreaView>
   );
@@ -715,9 +757,21 @@ function HabitRow({
 
         <View style={{ flex: 1 }}>
           <Txt variant="bodyStrong">{habit.name}</Txt>
-          {/* At risk beats the cue: it's the one thing worth knowing today,
-              said as an invitation, never as "you broke it". */}
-          {habit.atRisk ? (
+          {/* Logged by a connected service: say so, so it's never a mystery tick. */}
+          {habit.todayAuto ? (
+            <Txt variant="small" c={color.teal} style={{ marginTop: 1 }} numberOfLines={1}>
+              Logged automatically · {habit.todayAuto}
+            </Txt>
+          ) : habit.measure && habit.todayValue ? (
+            <Txt variant="small" c={color.textMuted} style={{ marginTop: 1 }} numberOfLines={1}>
+              {describeAmount(
+                { measureTarget: habit.measure.target, measureUnit: habit.measure.unit },
+                habit.todayValue
+              )}
+            </Txt>
+          ) : /* At risk beats the cue: it's the one thing worth knowing today,
+              said as an invitation, never as "you broke it". */
+          habit.atRisk ? (
             <Txt
               variant="small"
               c={color.amber}
@@ -808,6 +862,7 @@ function HabitRow({
 function LogSheet({
   habit,
   onClose,
+  onAmount,
   onMinimum,
   onRest,
   onNote,
@@ -815,6 +870,7 @@ function LogSheet({
 }: {
   habit: Habit | null;
   onClose: () => void;
+  onAmount: (h: Habit) => void;
   onMinimum: (h: Habit) => void;
   onRest: (h: Habit) => void;
   onNote: (h: Habit, notes: string) => void;
@@ -895,6 +951,15 @@ function LogSheet({
               </View>
             ) : (
               <>
+                {habit.measure ? (
+                  <SheetOption
+                    icon="calculator-outline"
+                    accent={color.amber}
+                    title="Log an amount"
+                    detail={`Usual ${describeAmount({ measureTarget: habit.measure.target, measureUnit: habit.measure.unit })}`}
+                    onPress={choose(onAmount)}
+                  />
+                ) : null}
                 <SheetOption
                   icon="leaf-outline"
                   accent={color.green}
@@ -1263,6 +1328,59 @@ function FeelingTask({
         ) : null}
       </Card>
     </Animated.View>
+  );
+}
+
+// ─── Away ─────────────────────────────────────────────────────────────────────
+
+const AWAY_WORDS: Record<string, string> = {
+  travel: "You're travelling",
+  illness: "You're taking time to get better",
+  family: "You're with family",
+  move: "You're moving",
+  other: "You're taking a break",
+};
+
+/** While away: the habits are paused and nothing counts against them. */
+function AwayBanner({ away, onBack }: { away: RemoteAway; onBack: () => void }) {
+  const until = away.endsOn
+    ? ` until ${new Date(`${away.endsOn}T12:00:00Z`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}`
+    : "";
+  const due = away.endsOn && away.endsOn <= today();
+  return (
+    <Card accent={color.blue} style={{ marginBottom: space.lg }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+        <Ionicons name="airplane-outline" size={20} color={color.blue} />
+        <View style={{ flex: 1 }}>
+          <Txt variant="bodyStrong">
+            {due ? "Welcome back" : `${AWAY_WORDS[away.reason] ?? AWAY_WORDS.other}${until}`}
+          </Txt>
+          <Txt variant="small" c={color.textMuted}>
+            {due
+              ? "Ready to pick your habits back up? Nothing counted while you were gone."
+              : `${away.habits.length} habit${away.habits.length === 1 ? "" : "s"} paused. Nothing counts as missed.`}
+          </Txt>
+        </View>
+      </View>
+      <Button label="I'm back" variant="secondary" accent={color.blue} onPress={onBack} style={{ marginTop: space.md }} />
+    </Card>
+  );
+}
+
+function GoingAwayCard({ onOpen }: { onOpen: () => void }) {
+  return (
+    <PressCard onPress={onOpen} style={{ padding: space.lg }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+        <Ionicons name="airplane-outline" size={20} color={color.textMuted} />
+        <View style={{ flex: 1 }}>
+          <Txt variant="bodyStrong">Going away?</Txt>
+          <Txt variant="small" c={color.textMuted}>
+            Travel, illness, a new baby. Pause everything so nothing counts as missed.
+          </Txt>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={color.textFaint} />
+      </View>
+    </PressCard>
   );
 }
 

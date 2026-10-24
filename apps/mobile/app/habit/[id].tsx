@@ -23,6 +23,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import type { DisplayFields, PolishedField } from "@kinextion/shared";
 import { HabitProgress } from "../../components/ProgressCards";
+import { HabitConnections } from "../../components/HabitConnections";
 import {
   HabitForm,
   toCreateInput,
@@ -65,6 +66,10 @@ export default function EditHabitScreen() {
           pairWith: habit.pairWith ?? "",
           start: "today",
           reminderEnabled: habit.reminderEnabled,
+          measureOn: Boolean(habit.measure),
+          measureTarget: habit.measure ? String(habit.measure.target) : "",
+          measureTiny: habit.measure?.tiny ? String(habit.measure.tiny) : "",
+          measureUnit: habit.measure?.unit ?? "",
         }
       : null,
   );
@@ -174,6 +179,13 @@ export default function EditHabitScreen() {
             submitLabel="Save changes"
             saving={saving}
             error={error}
+          />
+
+          <HabitConnections
+            habitId={habit.id}
+            autoLog={habit.autoLog}
+            accent={categoryColor[habit.category]}
+            onAutoLog={(next) => editHabit(habit.id, { autoLog: next })}
           />
 
           <Card style={{ marginTop: space.xxl }}>

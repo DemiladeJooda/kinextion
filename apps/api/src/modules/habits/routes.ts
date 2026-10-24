@@ -33,12 +33,17 @@ import { schedulePolish } from "./polish.js";
 import { registerCoachRoutes } from "./coach-routes.js";
 import { logHabitDay } from "./log-day.js";
 import { statusSideEffects } from "../../lib/habit-status.js";
+import { registerAwayRoutes } from "./away.js";
+import { registerShareRoutes } from "./shares.js";
+import { habitData } from "../../lib/habit-json.js";
 
 /** Background polishes started per list load, so one open never fans out. */
 const POLISH_PER_LOAD = 3;
 
 export async function habitRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.requireAuth);
+  registerAwayRoutes(app);
+  registerShareRoutes(app);
 
   /** AI-backed routes cost a model call each, so they get their own cap on
    * top of the API-wide limit — same reasoning as the chat routes. */
@@ -83,7 +88,7 @@ export async function habitRoutes(app: FastifyInstance) {
     }
 
     const habit = await prisma.habit.create({
-      data: { userId: request.userId, ...parsed.data, startsOn },
+      data: { userId: request.userId, ...habitData(parsed.data), startsOn },
     });
 
     request.log.info(
@@ -92,6 +97,8 @@ export async function habitRoutes(app: FastifyInstance) {
         frequency: habit.frequency,
         hasCue: Boolean(habit.cue),
         hasTinyVersion: Boolean(habit.response),
+        measured: Boolean(habit.measureTarget),
+        autoLog: Boolean(habit.autoLog),
       },
       "habit event"
     );
@@ -134,7 +141,7 @@ export async function habitRoutes(app: FastifyInstance) {
 
     const result = await prisma.habit.updateMany({
       where: { id: request.params.id, userId: request.userId },
-      data: { ...parsed.data, ...(startsOn !== undefined ? { startsOn } : {}), ...statusExtra },
+      data: { ...habitData(parsed.data), ...(startsOn !== undefined ? { startsOn } : {}), ...statusExtra },
     });
 
     if (result.count === 0) {

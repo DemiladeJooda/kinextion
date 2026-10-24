@@ -40,6 +40,8 @@ import {
   type DateKey,
   type ReminderHabit,
   type DisplayFields,
+  stateForAmount,
+  type AutoLog,
 } from "@kinextion/shared";
 import type {
   CreateHabitInput,
@@ -81,6 +83,13 @@ export interface Habit {
   consistency: number | null;
   /** Today's log, if any: done, the tiny version, or a planned rest day. */
   todayState: "done" | "minimum" | "rest" | null;
+  /** Today's amount, for a measured habit. */
+  todayValue: number | null;
+  /** Set when a connected service logged today: "Strava: 32 min". */
+  todayAuto: string | null;
+  /** Measured habits: the unit, usual amount and tiny amount. */
+  measure: { unit: string; target: number; tiny: number | null } | null;
+  autoLog: AutoLog | null;
   /** Streak alive but the last occasion was missed — today saves it. */
   atRisk: boolean;
   /** Today's tick restarted the habit after a streak ended. */
@@ -166,9 +175,13 @@ interface AppState {
       date?: DateKey;
       notes?: string;
       /** Where the log came from — "notification" for the lock-screen buttons. */
-      source?: "tap" | "notification";
+      source?: "tap" | "notification" | "widget";
+      /** An amount, for a measured habit. */
+      value?: number;
     },
   ) => Promise<void>;
+  /** Log an amount; the habit's own target decides what it counts as. */
+  logAmount: (id: string, value: number) => Promise<void>;
   addHabit: (input: CreateHabitInput) => Promise<void>;
   /** Accept several AI drafts at once, then refresh once rather than n times. */
   addHabits: (inputs: CreateHabitInput[]) => Promise<void>;
@@ -348,6 +361,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         completed,
         state: logState,
         notes: notes ?? null,
+        value: options.value ?? previous?.value ?? null,
       };
       setLogs((prev) => [optimistic, ...prev.filter((l) => !sameDay(l))]);
       setError(null);
@@ -361,6 +375,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           state: logState,
           notes,
           source: options.source,
+          value: options.value,
         });
         setLogs((prev) => [log, ...prev.filter((l) => !sameDay(l))]);
         applyScore(newScore ?? (await api.getTodayScore()));
@@ -380,6 +395,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       }
     },
     [logs, api, applyScore],
+  );
+
+  const logAmount = useCallback<AppState["logAmount"]>(
+    async (id, value) => {
+      const h = remoteHabits.find((r) => r.id === id);
+      const state = stateForAmount({ measureTarget: h?.measureTarget, measureTiny: h?.measureTiny }, value);
+      // Below the tiny amount still saves the number; it just doesn't count.
+      await setHabitDay(id, state ?? "clear", { value });
+    },
+    [remoteHabits, setHabitDay],
   );
 
   const toggleHabit = useCallback(
@@ -576,6 +601,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           : null;
       return {
         todayState,
+        todayValue: log?.value ?? null,
+        todayAuto: log?.source === "integration" ? (log.notes ?? "Logged automatically") : null,
+        measure: h.measureTarget
+          ? { unit: h.measureUnit ?? "", target: h.measureTarget, tiny: h.measureTiny ?? null }
+          : null,
+        autoLog: h.autoLog ?? null,
         missedOn,
         askAboutMiss:
           missedOn !== null &&
@@ -689,6 +720,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       submitCheckIn,
       logWorkout,
       setHabitDay,
+      logAmount,
       refresh,
       reminderHabits,
       answerMiss,
@@ -716,6 +748,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       submitCheckIn,
       logWorkout,
       setHabitDay,
+      logAmount,
       refresh,
       reminderHabits,
       answerMiss,

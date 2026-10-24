@@ -33,6 +33,8 @@ model User {
   precommitments     Precommitment[]
   habitReflections   HabitReflection[]
   automaticityChecks AutomaticityCheck[]
+  habitShares        HabitShare[]
+  awayPeriods        AwayPeriod[]
 
   // Community
   communitiesCreated   Community[]           @relation("CommunityCreatedBy")
@@ -246,12 +248,27 @@ model Habit {
    * {cue?, response?, craving?, backupPlan?, concern?, source: "ai"|"basic"}
    */
   polished        Json?
+  /**
+   * Measured habits: what's counted ("glasses", "min", "pages"), the usual
+   * amount, and the tiny-version amount. A logged amount at the target is
+   * "done"; at the tiny amount, "minimum". All null for a yes/no habit.
+   */
+  measureUnit     String?
+  measureTarget   Float?
+  measureTiny     Float?
+  /**
+   * Logged automatically from a connected service: {provider, metric, min?}.
+   * Days logged this way are source "integration", shown as such, and can
+   * be undone like any other log.
+   */
+  autoLog         Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   logs               HabitLog[]
+  shares             HabitShare[]
   precommitments     Precommitment[]
   reflections        HabitReflection[]
   automaticityChecks AutomaticityCheck[]
@@ -642,6 +659,7 @@ model Community {
   ballots        Ballot[]
   results        CycleResult[]
   chestEntries   ChestEntry[]
+  habitShares    HabitShare[]
   chestProposals ChestProposal[]
   goals          CommunityGoal[]
 
@@ -1246,4 +1264,43 @@ model ChestEntry {
   community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
 
   @@index([communityId, createdAt])
+}
+
+/// A habit a member has chosen to build alongside their community. Members
+/// see the habit and which days this week it happened; nothing is ranked
+/// and no totals are compared.
+model HabitShare {
+  id          String   @id @default(cuid())
+  habitId     String
+  userId      String
+  communityId String
+  createdAt   DateTime @default(now())
+
+  habit     Habit     @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, communityId])
+  @@index([communityId])
+}
+
+/// Travel, illness, a new baby, a move: a stretch where habits are paused
+/// without penalty. `habits` records which were paused and their status
+/// before, so coming back restores exactly those.
+model AwayPeriod {
+  id        String    @id @default(cuid())
+  userId    String
+  startsOn  DateTime  @db.Date
+  /// When they expect to be back. Null = not sure yet.
+  endsOn    DateTime? @db.Date
+  /// "travel" | "illness" | "family" | "move" | "other"
+  reason    String
+  /// [{id, status}] paused when this began.
+  habits    Json
+  endedAt   DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, endedAt])
 }

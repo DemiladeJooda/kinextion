@@ -9,7 +9,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type Row = Record<string, any> & { id: string };
-const db: { habits: Row[]; logs: Row[]; facts: Row[]; promises: Row[]; moods: Row[] } = {
+const db: { habits: Row[]; logs: Row[]; facts: Row[]; promises: Row[]; moods: Row[]; away: Row[] } = {
+  away: [],
   habits: [],
   logs: [],
   facts: [],
@@ -27,6 +28,10 @@ vi.mock("@kinextion/database", () => ({
         return row;
       },
       findUnique: async ({ where }: { where: { id: string } }) => db.habits.find((h) => h.id === where.id) ?? null,
+      findMany: async ({ where }: { where: Row }) =>
+        db.habits.filter((h) => h.userId === where.userId && h.isActive && h.status !== "paused"),
+      update: async ({ where, data }: { where: Row; data: Row }) =>
+        ({ ...Object.assign(db.habits.find((h) => h.id === where.id)!, data) }),
       updateMany: async ({ where, data }: { where: Row; data: Row }) => {
         const h = db.habits.find((x) => x.id === where.id && x.userId === where.userId);
         if (!h) return { count: 0 };
@@ -84,6 +89,15 @@ vi.mock("@kinextion/database", () => ({
         return { count: before - db.promises.length };
       },
     },
+    awayPeriod: {
+      findFirst: async () => db.away.find((a) => !a.endedAt) ?? null,
+      create: async ({ data }: { data: Row }) => {
+        const row = { id: "a1", ...data };
+        db.away.push(row);
+        return row;
+      },
+      update: async ({ where, data }: { where: Row; data: Row }) => Object.assign(db.away.find((a) => a.id === where.id)!, data),
+    },
     moodEntry: {
       findFirst: async () => db.moods[0] ?? null,
       create: async ({ data }: { data: Row }) => {
@@ -119,6 +133,7 @@ beforeEach(() => {
   db.facts = [];
   db.promises = [];
   db.moods = [];
+  db.away = [];
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-10-23T15:00:00Z")); // Friday, 10am in Dallas
 });
@@ -237,6 +252,15 @@ describe("save_check_in, promise_tomorrow and remember", () => {
     expect(db.facts[0]).toMatchObject({ tier: "core", category: "constraint", content: "Has a sore left knee; avoids running." });
     await undoChatAction("u1", TZ, out.action!.undo!, log);
     expect(db.facts).toHaveLength(0);
+  });
+
+  it("pauses everything when they're going away, and Undo brings it back", async () => {
+    await runChatTool("create_habit", PUSHUPS, ctx());
+    const out = await runChatTool("going_away", { reason: "travel", until: "2026-10-30" }, ctx());
+    expect(db.habits[0].status).toBe("paused");
+    expect(out.action).toMatchObject({ kind: "away_started", title: "Away, back Fri, Oct 30", undo: { kind: "end_away" } });
+    expect(await undoChatAction("u1", TZ, out.action!.undo!, log)).toBe(true);
+    expect(db.habits[0].status).toBe("building");
   });
 
   it("rejects an unknown tool", async () => {

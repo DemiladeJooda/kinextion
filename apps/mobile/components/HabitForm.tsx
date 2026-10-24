@@ -35,6 +35,7 @@ import {
   describeHabitPlan,
   nextMondayKey,
   today,
+  MEASURE_UNITS,
 } from "@kinextion/shared";
 import type { CreateHabitInput, PolishedField } from "@kinextion/shared";
 
@@ -91,6 +92,11 @@ export interface HabitFormValues {
   start: "today" | "monday";
   /** A reminder at the start of its part of the day. */
   reminderEnabled: boolean;
+  /** Count an amount ("8 glasses") rather than yes/no. Numbers as typed. */
+  measureOn: boolean;
+  measureTarget: string;
+  measureTiny: string;
+  measureUnit: string;
 }
 
 export function emptyHabitForm(): HabitFormValues {
@@ -110,6 +116,10 @@ export function emptyHabitForm(): HabitFormValues {
     pairWith: "",
     start: "today",
     reminderEnabled: true,
+    measureOn: false,
+    measureTarget: "",
+    measureTiny: "",
+    measureUnit: "",
   };
 }
 
@@ -133,6 +143,21 @@ export function toCreateInput(values: HabitFormValues): CreateHabitInput {
     pairWith: trimmed(values.pairWith),
     startsOn: values.start === "monday" ? nextMondayKey(today()) : undefined,
     reminderEnabled: values.reminderEnabled,
+    // Always sent, so turning the amount off on an edit clears it.
+    ...measureFields(values),
+  };
+}
+
+function measureFields(values: HabitFormValues) {
+  const num = (s: string) => {
+    const n = Number(s.replace(",", "."));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+  const target = values.measureOn ? num(values.measureTarget) : null;
+  return {
+    measureTarget: target,
+    measureTiny: target ? num(values.measureTiny) : null,
+    measureUnit: target ? values.measureUnit.trim() || null : null,
   };
 }
 
@@ -337,6 +362,51 @@ export function HabitForm({
           />
           <Reading text={readingFor("response")} />
           <TinyExamples name={values.name} accent={accent} />
+
+          {/* Amounts: for habits people count, like water, pages or minutes. */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
+            <Chip
+              label={values.measureOn ? "Counting an amount" : "Count an amount instead"}
+              icon={values.measureOn ? "checkmark" : "add"}
+              accent={accent}
+              selected={values.measureOn}
+              onPress={() => set("measureOn", !values.measureOn)}
+            />
+          </View>
+          {values.measureOn ? (
+            <View style={{ gap: space.md }}>
+              <View style={{ flexDirection: "row", gap: space.md }}>
+                <View style={{ flex: 1 }}>
+                  <Field
+                    label="Usual amount"
+                    value={values.measureTarget}
+                    onChangeText={(v) => set("measureTarget", v.replace(/[^0-9.,]/g, ""))}
+                    placeholder="8"
+                    maxLength={7}
+                    accent={accent}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Field
+                    label="Tiny amount"
+                    value={values.measureTiny}
+                    onChangeText={(v) => set("measureTiny", v.replace(/[^0-9.,]/g, ""))}
+                    placeholder="2"
+                    maxLength={7}
+                    accent={accent}
+                  />
+                </View>
+              </View>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.xs }}>
+                {MEASURE_UNITS.map((u) => (
+                  <Chip key={u} label={u} accent={accent} selected={values.measureUnit === u} onPress={() => set("measureUnit", u)} />
+                ))}
+              </View>
+              <Txt variant="small" c={color.textFaint}>
+                Log how much each day. The usual amount is done, the tiny amount still counts.
+              </Txt>
+            </View>
+          ) : null}
         </View>
       </Card>
 

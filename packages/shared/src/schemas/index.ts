@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { backgroundSchema } from "../profile/index.js";
+import { autoLogSchema } from "../habits/measure.js";
 
 // ─── Enums ───────────────────────────────────────────────────────
 
@@ -30,7 +31,7 @@ export const habitStatusSchema = z.enum(["building", "established", "paused"]);
 /** What a log says about the day. Done and minimum count; rest is neutral. */
 export const habitLogStateSchema = z.enum(["done", "minimum", "rest"]);
 
-export const habitLogSourceSchema = z.enum(["tap", "notification", "backfill", "integration"]);
+export const habitLogSourceSchema = z.enum(["tap", "notification", "backfill", "integration", "chat", "widget"]);
 
 /** "someone who moves every day" — the identity a user's habits attach to. */
 export const identityGoalSchema = z.string().trim().min(3).max(120);
@@ -144,6 +145,8 @@ export const sendMessageSchema = z.object({
    * server-side; an id alone reveals nothing.
    */
   topicId: z.string().min(1).max(64).optional(),
+  /** Spoken, and the reply will be read aloud — so it should sound like talk. */
+  voice: z.boolean().optional(),
 });
 
 export type SendMessageInput = z.infer<typeof sendMessageSchema>;
@@ -174,6 +177,12 @@ export const createHabitSchema = z.object({
   reminderEnabled: z.boolean().optional(),
   /** First day it's due, when that's later than today ("start Monday"). */
   startsOn: z.string().date().optional(),
+  /** Measured habits: "glasses", the usual amount, the tiny amount. Null clears. */
+  measureUnit: z.string().trim().min(1).max(20).nullish(),
+  measureTarget: z.number().positive().max(100_000).nullish(),
+  measureTiny: z.number().positive().max(100_000).nullish(),
+  /** Logged by a connected service. Null turns it off. */
+  autoLog: autoLogSchema.nullish(),
 });
 
 export type CreateHabitInput = z.infer<typeof createHabitSchema>;
@@ -209,6 +218,17 @@ export const logHabitSchema = z.object({
 });
 
 export type LogHabitInput = z.infer<typeof logHabitSchema>;
+
+/** Going away: travel, illness, family, a move. Habits pause without penalty. */
+export const awayReasonSchema = z.enum(["travel", "illness", "family", "move", "other"]);
+export const startAwaySchema = z.object({
+  reason: awayReasonSchema,
+  /** When they expect to be back; omitted when they're not sure. */
+  until: z.string().date().optional(),
+  /** Which habits to pause. Omitted = every active one. */
+  habitIds: z.array(z.string().cuid()).max(50).optional(),
+});
+export type StartAwayInput = z.infer<typeof startAwaySchema>;
 
 // ─── Habit assistance (AI-proposed drafts) ───────────────────────
 // A draft is a *proposal*, never a saved habit. Nothing reaches the database

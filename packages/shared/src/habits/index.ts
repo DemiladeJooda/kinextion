@@ -6,3 +6,5 @@ export * from "./reminders.js";
 export * from "./coach.js";
 export * from "./automaticity.js";
 export * from "./usage.js";
+export * from "./measure.js";
+export * from "./widget.js";

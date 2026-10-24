@@ -12,7 +12,9 @@
  */
 
 import {
+  addDays,
   localDateKey,
+  weekStartKey,
   type CheckInInput,
   type CreateHabitInput,
   type UserBackground,
@@ -41,6 +43,8 @@ import type {
   IntegrationProvider,
   RemoteHabit,
   RemoteHabitLog,
+  RemoteAway,
+  WeekDot,
   RemoteMoodEntry,
   RemoteNearbyGroup,
   RemotePeriodScore,
@@ -1160,6 +1164,20 @@ function chest(id: string): ChestView {
 
 // ─── The API ──────────────────────────────────────────────────────────────────
 
+/** Away mode and shares, in memory for the demo session. */
+let away: RemoteAway | null = null;
+let awayStatus: Record<string, string> = {};
+const demoShares = new Map<string, Set<string>>();
+function demoWeek(habitId: string): WeekDot[] {
+  const start = weekStartKey(localDateKey());
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = addDays(start, i);
+    if (d > localDateKey()) return "future";
+    const l = logs.find((x) => x.habitId === habitId && x.date.slice(0, 10) === d);
+    return !l ? "none" : l.state === "rest" ? "rest" : !l.completed ? "none" : l.state === "minimum" ? "minimum" : "done";
+  });
+}
+
 /** Empty until the demo viewer fills in "About you". */
 let background: UserBackground | null = null;
 
@@ -1344,6 +1362,64 @@ export const demoApi: Api = {
   },
   // The demo guide never acts, so there is never anything to undo.
   undoChatAction: async () => ({ undone: true }),
+  getVoice: async () => ({ premium: false, provider: null }),
+  getAway: async () => {
+    await wait(100);
+    return away;
+  },
+  startAway: async (input) => {
+    await wait();
+    const paused = habits.filter((h) => h.isActive && h.status !== "paused" && (!input.habitIds || input.habitIds.includes(h.id)));
+    awayStatus = Object.fromEntries(paused.map((h) => [h.id, h.status ?? "building"]));
+    habits = habits.map((h) => (awayStatus[h.id] ? { ...h, status: "paused" as const } : h));
+    away = {
+      id: uid("away"),
+      reason: input.reason,
+      startsOn: localDateKey(),
+      endsOn: input.until ?? null,
+      habits: paused.map((h) => ({ id: h.id, name: h.name })),
+    };
+    return away;
+  },
+  endAway: async () => {
+    await wait();
+    const restarted = habits
+      .filter((h) => awayStatus[h.id])
+      .map((h) => ({ id: h.id, name: h.name, cue: h.cue, plan: h.cue ? `${h.cue}, ${h.response ?? h.name}` : h.name }));
+    habits = habits.map((h) => (awayStatus[h.id] ? { ...h, status: awayStatus[h.id] as "building" | "established" } : h));
+    away = null;
+    awayStatus = {};
+    return { restarted };
+  },
+  getHabitShares: async (habitId) => [...(demoShares.get(habitId) ?? [])],
+  shareHabit: async (habitId, communityId) => {
+    demoShares.set(habitId, new Set([...(demoShares.get(habitId) ?? []), communityId]));
+    return { shared: true };
+  },
+  unshareHabit: async (habitId, communityId) => {
+    demoShares.get(habitId)?.delete(communityId);
+    return { shared: false };
+  },
+  getSharedHabits: async (communityId) => {
+    await wait(150);
+    const mine = habits
+      .filter((h) => demoShares.get(h.id)?.has(communityId))
+      .map((h) => ({
+        habitId: h.id,
+        mine: true,
+        member: getDemoSession().name,
+        habit: h.name,
+        plan: h.cue ? `${h.cue}, ${h.response ?? ""}`.replace(/, $/, "") : h.name,
+        paused: h.status === "paused",
+        week: demoWeek(h.id),
+      }));
+    // Example members, clearly generic, like the rest of the demo.
+    const others = [
+      { habitId: "demo-o1", mine: false, member: "A member", habit: "Morning walk", plan: "After I drop the kids off, walk the long way back", paused: false, week: ["done", "done", "minimum", "none", "done", "future", "future"] as WeekDot[] },
+      { habitId: "demo-o2", mine: false, member: "Another member", habit: "Read", plan: "After dinner, read 10 pages", paused: false, week: ["done", "none", "done", "done", "rest", "future", "future"] as WeekDot[] },
+    ];
+    return { weekStart: localDateKey(), rows: [...mine, ...others] };
+  },
   restoreHabit: async (id) => {
     await wait();
     habits = habits.map((h) => (h.id === id ? { ...h, isActive: true } : h));

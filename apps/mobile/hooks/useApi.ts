@@ -45,6 +45,17 @@ function useLiveApi() {
         withToken((token) => api.archiveHabit(token, id)),
       restoreHabit: (id: string) =>
         withToken((token) => api.restoreHabit(token, id)),
+      getVoice: () => withToken(api.getVoice),
+      getAway: () => withToken(api.getAway),
+      startAway: (input: { reason: api.AwayReason; until?: string; habitIds?: string[] }) =>
+        withToken((token) => api.startAway(token, input)),
+      endAway: () => withToken(api.endAway),
+      getHabitShares: (habitId: string) => withToken((token) => api.getHabitShares(token, habitId)),
+      shareHabit: (habitId: string, communityId: string) =>
+        withToken((token) => api.shareHabit(token, habitId, communityId)),
+      unshareHabit: (habitId: string, communityId: string) =>
+        withToken((token) => api.unshareHabit(token, habitId, communityId)),
+      getSharedHabits: (communityId: string) => withToken((token) => api.getSharedHabits(token, communityId)),
       undoChatAction: (undo: Record<string, unknown>) =>
         withToken((token) => api.undoChatAction(token, undo)),
       logHabit: (input: api.LogHabitInput) =>

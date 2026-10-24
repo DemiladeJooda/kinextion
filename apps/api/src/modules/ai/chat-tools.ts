@@ -32,6 +32,7 @@ import {
   displayFields,
   habitChangeSchema,
   habitTimeWindowSchema,
+  awayReasonSchema,
   localDateKey,
   nextMondayKey,
   wellnessCategorySchema,
@@ -42,6 +43,8 @@ import { saveCheckIn } from "../checkin/save.js";
 import { statusSideEffects } from "../../lib/habit-status.js";
 import { upsertFacts } from "../../lib/memory/store.js";
 import { toStructuredSchema } from "./services/ai-service.js";
+import { habitData } from "../../lib/habit-json.js";
+import { endAway, startAway } from "../habits/away.js";
 
 /** Habits a guide may create in one reply — three being built is plenty. */
 const MAX_CREATES_PER_TURN = 3;
@@ -63,12 +66,13 @@ export const undoSpecSchema = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("drop_promise"), habitId: z.string(), forDate: z.string().date() }),
   z.object({ kind: z.literal("forget_fact"), factId: z.string() }),
+  z.object({ kind: z.literal("end_away") }),
 ]);
 
 export type UndoSpec = z.infer<typeof undoSpecSchema>;
 
 export interface ChatAction {
-  kind: "habit_created" | "habit_changed" | "habit_logged" | "checkin_saved" | "promise_made" | "remembered";
+  kind: "habit_created" | "habit_changed" | "habit_logged" | "checkin_saved" | "promise_made" | "remembered" | "away_started";
   title: string;
   detail?: string;
   /** Absent when an action can't be undone from the card (a check-in, which
@@ -107,6 +111,11 @@ const checkInInput = z.object({
 });
 
 const promiseInput = z.object({ habit_ids: z.array(z.string()).min(1).max(3) });
+
+const awayInput = z.object({
+  reason: awayReasonSchema,
+  until: z.string().date().optional(),
+});
 
 const rememberInput = z.object({
   fact: z.string().trim().min(3).max(200),
@@ -221,12 +230,24 @@ export const CHAT_TOOLS: Anthropic.Beta.BetaTool[] = [
       required: ["fact", "kind", "lasting"],
     }
   ),
+  tool(
+    "going_away",
+    "Pause their habits while they're away (travel, illness, family, a move), so nothing counts as missed. Only when they say they're going away or can't keep their routine for a while. They'll be asked whether each habit's cue still fits when they're back.",
+    {
+      type: "object",
+      properties: {
+        reason: { type: "string", enum: ["travel", "illness", "family", "move", "other"] },
+        until: { type: "string", description: "YYYY-MM-DD they expect to be back, if they said." },
+      },
+      required: ["reason"],
+    }
+  ),
 ];
 
 /** Added to the guides' system prompt whenever tools are offered. */
 export const CHAT_ACTIONS_PROMPT = [
   "## Acting in the app",
-  "You can act on what they say, not only reply: create or change a habit, log one, save a check-in, record tomorrow's promise, remember something. Habit ids are in 'Their Habits'.",
+  "You can act on what they say, not only reply: create or change a habit, log one, save a check-in, record tomorrow's promise, remember something, or pause everything while they're away. Habit ids are in 'Their Habits'.",
   "- When they ask you to do something, do it — don't describe it and leave them to do it themselves.",
   "- For anything they didn't ask for, offer first and act once they agree.",
   "- Keep habits small: an anchor to an existing moment and a tiny version that still counts on a bad day.",
@@ -290,7 +311,7 @@ export async function runChatTool(name: string, raw: unknown, ctx: ToolContext):
       const habit = await prisma.habit.create({
         data: {
           userId: ctx.userId,
-          ...input.data,
+          ...habitData(input.data),
           startsOn: i.start === "monday" && monday !== today ? dateFromKey(monday) : null,
         },
       });
@@ -435,6 +456,23 @@ export async function runChatTool(name: string, raw: unknown, ctx: ToolContext):
       };
     }
 
+    case "going_away": {
+      const p = awayInput.safeParse(raw);
+      if (!p.success) return fail(`Invalid away: ${p.error.issues.map((i) => i.message).join(", ")}`);
+      const r = await startAway(ctx.userId, today, p.data);
+      if (!r.ok) return fail(r.error);
+      const back = r.data.endsOn ? ` until ${r.data.endsOn}` : "";
+      return {
+        result: `Paused ${r.data.habits.length} habit(s)${back}. Nothing counts as missed while they're away.`,
+        action: {
+          kind: "away_started",
+          title: `Away${back ? `, back ${new Date(`${r.data.endsOn}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}` : ""}`,
+          detail: `${r.data.habits.map((h) => h.name).join(", ") || "No habits"} paused. Nothing counts as missed.`,
+          undo: { kind: "end_away" },
+        },
+      };
+    }
+
     default:
       return fail(`Unknown tool ${name}.`);
   }
@@ -503,6 +541,10 @@ export async function undoChatAction(
     case "forget_fact": {
       const r = await prisma.memoryFact.deleteMany({ where: { id: undo.factId, userId } });
       return r.count > 0;
+    }
+    case "end_away": {
+      const r = await endAway(userId, localDateKey(new Date(), timeZone));
+      return r.ok;
     }
   }
 }

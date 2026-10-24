@@ -12,6 +12,8 @@ interface TokenResponse {
 
 interface StravaActivity {
   start_date: string;
+  /** The athlete's local time — the right calendar day for them. */
+  start_date_local?: string;
   moving_time: number;
   type: string;
   distance?: number;
@@ -87,12 +89,19 @@ export const strava: ProviderAdapter = {
     if (!res.ok) throw new Error(`Strava activities fetch failed (${res.status})`);
     const activities = (await res.json()) as StravaActivity[];
 
-    return activities.map((a) => ({
+    // One row per day: two runs on the same day add up rather than the
+    // second overwriting the first.
+    const byDay = new Map<string, StravaActivity[]>();
+    for (const a of activities) {
+      const day = (a.start_date_local ?? a.start_date).slice(0, 10);
+      byDay.set(day, [...(byDay.get(day) ?? []), a]);
+    }
+    return [...byDay].map(([date, list]) => ({
       metricType: "workout",
-      date: a.start_date.slice(0, 10),
-      value: Math.round(a.moving_time / 60),
+      date,
+      value: Math.round(list.reduce((sum, a) => sum + a.moving_time, 0) / 60),
       unit: "min",
-      raw: a as unknown as Record<string, unknown>,
+      raw: { activities: list } as unknown as Record<string, unknown>,
     }));
   },
 };

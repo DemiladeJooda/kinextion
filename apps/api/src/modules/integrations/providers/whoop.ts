@@ -10,6 +10,11 @@ interface TokenResponse {
   scope?: string;
 }
 
+interface WhoopWorkoutRecord {
+  start: string;
+  end: string;
+}
+
 interface WhoopRecoveryRecord {
   created_at: string;
   score?: { hrv_rmssd_milli?: number; resting_heart_rate?: number };
@@ -25,7 +30,7 @@ export const whoop: ProviderAdapter = {
     url.searchParams.set("client_id", CLIENT_ID ?? "");
     url.searchParams.set("redirect_uri", redirectUri);
     url.searchParams.set("response_type", "code");
-    url.searchParams.set("scope", "read:recovery read:sleep read:profile offline");
+    url.searchParams.set("scope", "read:recovery read:sleep read:workout read:profile offline");
     url.searchParams.set("state", state);
     return url.toString();
   },
@@ -98,6 +103,24 @@ export const whoop: ProviderAdapter = {
           unit: "bpm",
           raw,
         });
+      }
+    }
+    // Workout minutes per day. Accounts connected before the workout scope
+    // was requested get a 401/403 here; recovery still syncs.
+    const workouts = await fetch(
+      `https://api.prod.whoop.com/developer/v1/activity/workout?start=${since.toISOString()}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    if (workouts.ok) {
+      const wb = (await workouts.json()) as { records?: WhoopWorkoutRecord[] };
+      const minutes = new Map<string, number>();
+      for (const w of wb.records ?? []) {
+        const day = w.start.slice(0, 10);
+        const mins = (Date.parse(w.end) - Date.parse(w.start)) / 60000;
+        if (mins > 0) minutes.set(day, (minutes.get(day) ?? 0) + mins);
+      }
+      for (const [date, value] of minutes) {
+        metrics.push({ metricType: "workout", date, value: Math.round(value), unit: "min" });
       }
     }
     return metrics;
