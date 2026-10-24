@@ -8,52 +8,9 @@
  */
 
 import { prisma } from "@kinextion/database";
-import { addDays, dateKeyOf, habitMetrics, localDateKey } from "@kinextion/shared";
+import { loadHabitMetrics } from "../src/lib/habit-metrics.js";
 
-const days = Number(process.argv[2] ?? 28);
-const to = addDays(localDateKey(), -1); // through yesterday: today isn't over
-const from = addDays(to, -(days - 1));
-const lookback = new Date(`${addDays(from, -70)}T00:00:00Z`);
-
-const [habits, logs, checks] = await Promise.all([
-  prisma.habit.findMany({
-    select: {
-      id: true,
-      userId: true,
-      frequency: true,
-      targetDays: true,
-      perWeekTarget: true,
-      createdAt: true,
-      startsOn: true,
-      cue: true,
-      response: true,
-      isActive: true,
-    },
-  }),
-  prisma.habitLog.findMany({
-    where: { date: { gte: lookback } },
-    select: { habitId: true, userId: true, date: true, completed: true, state: true, source: true },
-  }),
-  prisma.automaticityCheck.findMany({ select: { habitId: true, date: true, score: true } }),
-]);
-
-const m = habitMetrics(
-  habits.map((h) => ({
-    id: h.id,
-    userId: h.userId,
-    frequency: h.frequency,
-    targetDays: h.targetDays,
-    perWeekTarget: h.perWeekTarget,
-    startDate: dateKeyOf(h.startsOn ?? h.createdAt),
-    hasAnchor: Boolean(h.cue?.trim()),
-    hasTiny: Boolean(h.response?.trim()),
-    isActive: h.isActive,
-  })),
-  logs.map((l) => ({ ...l, date: dateKeyOf(l.date) })),
-  checks.map((c) => ({ ...c, date: dateKeyOf(c.date) })),
-  from,
-  to
-);
+const m = await loadHabitMetrics(Number(process.argv[2] ?? 28));
 
 const pct = (r: number | null) => (r === null ? "—" : `${Math.round(r * 100)}%`);
 const n = (x: number | null) => (x === null ? "—" : String(x));

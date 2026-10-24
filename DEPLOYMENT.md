@@ -34,6 +34,44 @@ pnpm --filter @kinextion/api build
 pnpm --filter @kinextion/api start
 ```
 
+`build` bundles the server and the workspace packages into one
+`dist/server.js` (esbuild, see `apps/api/build.mjs`). The workspace packages
+ship as TypeScript source, so the plain `tsc` build used before produced a
+server that crashed on its first import. Checked: the bundle boots and
+`/health` answers.
+
+Or as a container, from the repository root:
+
+```bash
+docker build -f apps/api/Dockerfile -t kinextion-api .
+docker run -p 3001:3001 --env-file .env.production kinextion-api
+```
+
+### Staging (for beta testers)
+
+The `preview` mobile build already points at `https://api-staging.kinextion.com`.
+To make that real:
+
+1. Create a second Neon branch or database for staging, and push the schema to it
+   (`DATABASE_URL=… pnpm --filter @kinextion/database push`).
+2. Create a service on your host (Railway or Render work well with the Dockerfile above).
+   Set the environment below with `NODE_ENV=production`, Clerk live keys for the staging
+   instance, and `API_PUBLIC_URL=https://api-staging.kinextion.com`.
+3. Point `api-staging.kinextion.com` at it, and confirm `GET /health`.
+4. Add the nightly `retention` job and the hourly community job as scheduled tasks on
+   the same host.
+5. `cd apps/mobile && eas build --profile preview`, then share the build with testers
+   through EAS internal distribution.
+
+Optional settings worth knowing:
+
+| Variable | Purpose |
+|---|---|
+| `ADMIN_USER_IDS` | Comma-separated Clerk user ids allowed to read `GET /api/admin/metrics?days=28` (the habits success measures). Everyone else gets a 404 |
+| `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ALTHEO`, `ELEVENLABS_VOICE_KAIRO` | Premium voice for the guides. Without them, the phone's voice is used |
+| `GUIDANCE_DIR` | Only if the guidance notes live somewhere other than `apps/api/guidance` |
+| Provider keys | See `docs/integrations-checklist.md` |
+
 ### Required environment
 
 The server **refuses to boot** if any of these are missing or look like

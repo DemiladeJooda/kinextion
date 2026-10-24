@@ -22,6 +22,7 @@ import { discoverRoutes } from "./modules/community/discover-routes.js";
 import { communityDevRoutes } from "./modules/community/dev-routes.js";
 import { createCommunityDeps, setSharedCommunityDeps } from "./modules/community/deps.js";
 import type { CommunityDeps } from "./modules/community/service.js";
+import { adminRoutes } from "./modules/admin/routes.js";
 
 interface BuildOptions {
   /** Tests run the real server against an in-memory community store and a manual clock. */
@@ -145,6 +146,7 @@ async function buildApp(options: BuildOptions = {}) {
   await app.register(integrationRoutes, { prefix: "/api/integrations" });
   await app.register(therapistRoutes, { prefix: "/api/therapist" });
   await app.register(nearbyRoutes, { prefix: "/api/nearby" });
+  await app.register(adminRoutes, { prefix: "/api/admin" });
   // A movable clock for walking a week in minutes. Never in production, and
   // never without asking for it.
   const communityDevTools =

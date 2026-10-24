@@ -1,0 +1,10 @@
+**/node_modules
+**/dist
+**/.next
+**/.expo
+.git
+.env
+.env.*
+secrets.txt
+apps/mobile
+apps/web

@@ -18,7 +18,7 @@
  * file is simply skipped.
  */
 
-import { readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AITask, Persona } from "@kinextion/shared";
@@ -41,8 +41,18 @@ export const GUIDANCE_FILES: Record<AITask, string[]> = {
  *  rest of the prompt. */
 const MAX_FILE_CHARS = 8000;
 
+/**
+ * apps/api/guidance, found from wherever this code runs: src/lib/ in
+ * development, or the bundled dist/server.js in production.
+ */
+let dir: string | undefined;
 function guidanceDir(): string {
-  return process.env.GUIDANCE_DIR ?? fileURLToPath(new URL("../../guidance/", import.meta.url));
+  if (process.env.GUIDANCE_DIR) return process.env.GUIDANCE_DIR;
+  dir ??=
+    ["../../guidance/", "../guidance/"]
+      .map((rel) => fileURLToPath(new URL(rel, import.meta.url)))
+      .find((d) => existsSync(join(d, "README.md"))) ?? fileURLToPath(new URL("../../guidance/", import.meta.url));
+  return dir;
 }
 
 const cache = new Map<string, { mtimeMs: number; text: string }>();

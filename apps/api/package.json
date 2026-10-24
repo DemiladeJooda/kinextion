@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=../../.env src/server.ts",
-    "build": "tsc",
+    "build": "tsc --noEmit && node build.mjs",
     "start": "node --env-file-if-exists=../../.env dist/server.js",
     "retention": "tsx --env-file-if-exists=../../.env src/jobs/retention.ts",
     "community": "tsx --env-file-if-exists=../../.env src/jobs/community.ts",
@@ -21,20 +21,22 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
     "@clerk/fastify": "^2.0.0",
-    "@kinextion/ai-core": "workspace:*",
-    "@kinextion/database": "workspace:*",
-    "@kinextion/shared": "workspace:*",
-    "fastify": "^5.2.0",
     "@fastify/cors": "^11.0.0",
     "@fastify/helmet": "^13.0.0",
     "@fastify/rate-limit": "^10.2.0",
     "@fastify/websocket": "^11.0.0",
+    "@kinextion/ai-core": "workspace:*",
+    "@kinextion/database": "workspace:*",
+    "@kinextion/shared": "workspace:*",
+    "@prisma/client": "6.19.3",
+    "fastify": "^5.2.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
+    "esbuild": "0.27.7",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
-    "vitest": "^3.0.0",
-    "@types/node": "^22.0.0"
+    "vitest": "^3.0.0"
   }
 }
