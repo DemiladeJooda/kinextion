@@ -17,7 +17,11 @@ import { z } from "zod";
 /** Units offered when setting up an amount. Free text is allowed too. */
 export const MEASURE_UNITS = ["glasses", "minutes", "pages", "km", "miles", "steps", "reps", "times"] as const;
 
-export const AUTO_LOG_PROVIDERS = ["strava", "whoop", "oura"] as const;
+/** Health data read on the phone itself, no partner API: Apple Health and Health Connect. */
+export const DEVICE_HEALTH_PROVIDERS = ["apple_health", "health_connect"] as const;
+export type DeviceHealthProvider = (typeof DEVICE_HEALTH_PROVIDERS)[number];
+
+export const AUTO_LOG_PROVIDERS = ["strava", "whoop", "oura", ...DEVICE_HEALTH_PROVIDERS] as const;
 export const AUTO_LOG_METRICS = ["workout", "steps"] as const;
 
 /** What each connected service can log, in words the setup screen shows. */
@@ -33,9 +37,19 @@ export const AUTO_LOG_OPTIONS: ReadonlyArray<{
   { provider: "strava", metric: "workout", label: "Any Strava activity", unit: "min", defaultMin: 10 },
   { provider: "whoop", metric: "workout", label: "A Whoop workout", unit: "min", defaultMin: 10 },
   { provider: "oura", metric: "steps", label: "Steps from Oura", unit: "steps", defaultMin: 5000 },
+  { provider: "apple_health", metric: "steps", label: "Steps from Apple Health", unit: "steps", defaultMin: 5000 },
+  { provider: "apple_health", metric: "workout", label: "A workout in Apple Health", unit: "min", defaultMin: 10 },
+  { provider: "health_connect", metric: "steps", label: "Steps from Health Connect", unit: "steps", defaultMin: 5000 },
+  { provider: "health_connect", metric: "workout", label: "A workout in Health Connect", unit: "min", defaultMin: 10 },
 ];
 
-export const PROVIDER_LABEL: Record<string, string> = { strava: "Strava", whoop: "Whoop", oura: "Oura" };
+export const PROVIDER_LABEL: Record<string, string> = {
+  strava: "Strava",
+  whoop: "Whoop",
+  oura: "Oura",
+  apple_health: "Apple Health",
+  health_connect: "Health Connect",
+};
 
 export const autoLogSchema = z.object({
   provider: z.enum(AUTO_LOG_PROVIDERS),

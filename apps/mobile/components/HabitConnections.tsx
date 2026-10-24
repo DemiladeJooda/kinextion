@@ -18,6 +18,7 @@ import { AUTO_LOG_OPTIONS, PROVIDER_LABEL, type AutoLog, type CommunityDetail } 
 import { Card, Chip, Label, Txt } from "./ui";
 import { useApi } from "../hooks/useApi";
 import type { IntegrationsList } from "../services";
+import { PHONE_HEALTH, healthSource } from "../lib/health";
 import { color, space } from "../theme";
 
 export function HabitConnections({
@@ -101,9 +102,12 @@ export function HabitConnections({
         </Txt>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginTop: space.md }}>
           <Chip label="Off" accent={color.text} selected={!rule} onPress={() => void chooseRule(null)} />
-          {AUTO_LOG_OPTIONS.map((o) => {
+          {AUTO_LOG_OPTIONS.filter(
+            (o) => !(o.provider === "apple_health" || o.provider === "health_connect") || o.provider === PHONE_HEALTH?.provider
+          ).map((o) => {
             const isOn = rule?.provider === o.provider && rule.metric === o.metric;
-            const ready = connected.has(o.provider);
+            const phone = o.provider === "apple_health" || o.provider === "health_connect";
+            const ready = connected.has(o.provider) && (!phone || healthSource() !== null);
             return (
               <Chip
                 key={`${o.provider}-${o.metric}`}

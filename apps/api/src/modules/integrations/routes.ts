@@ -1,4 +1,6 @@
 import type { FastifyInstance } from "fastify";
+import { registerDeviceHealthRoutes } from "./device.js";
+import { DEVICE_HEALTH_PROVIDERS } from "@kinextion/shared";
 import { autoLogFromMetrics } from "../../lib/auto-log.js";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { prisma, type Prisma } from "@kinextion/database";
@@ -59,6 +61,8 @@ function redirectUriFor(provider: string): string {
 const DEEP_LINK_BASE = process.env.MOBILE_DEEP_LINK_URL ?? "kinextion://integrations/callback";
 
 export async function integrationRoutes(app: FastifyInstance) {
+  registerDeviceHealthRoutes(app);
+
   // What's connected, and which providers are switched on server-side.
   app.get("/", { preHandler: app.requireAuth }, async (request) => {
     const integrations = await prisma.integration.findMany({
@@ -74,9 +78,11 @@ export async function integrationRoutes(app: FastifyInstance) {
       orderBy: { createdAt: "asc" },
     });
 
-    const available = Object.fromEntries(
-      Object.entries(PROVIDERS).map(([id, provider]) => [id, provider.isConfigured()])
-    );
+    const available = {
+      ...Object.fromEntries(Object.entries(PROVIDERS).map(([id, provider]) => [id, provider.isConfigured()])),
+      // On-phone health needs no server keys; the app knows if the build can read it.
+      ...Object.fromEntries(DEVICE_HEALTH_PROVIDERS.map((id) => [id, true])),
+    };
 
     return { success: true, data: { integrations, available } };
   });

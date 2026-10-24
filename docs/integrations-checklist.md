@@ -88,6 +88,20 @@ Still needed, at build time:
 
 **To check:** the Apple developer account needs App Groups enabled for the bundle id.
 
-## Apple Health and Health Connect (not started)
+## Apple Health and Health Connect
 
-These are on-device, so there's no partner deal. They need a native module (e.g. `react-native-health` / `react-native-health-connect`), HealthKit entitlements and App Store review notes. They would add steps, workouts and sleep for people without a wearable.
+No partner deal or API fees: the phone reads its own health store.
+
+Built so far:
+- **The API:** `POST /api/integrations/device/{apple_health|health_connect}/connect` and `/ingest`. Ingest takes daily totals for the last week only (steps, workout minutes, sleep minutes) and runs auto-logging.
+- **The app:** `apps/mobile/lib/health.ts` defines the reader interface, auto-sync uses it when the Habits tab opens, Profile has a "Phone health" card, and a habit can link to "Steps from Apple Health" or "A workout in Apple Health".
+
+Still needed, at build time:
+1. Install the native packages, checked against the Expo version in use at the time: `@kingstinct/react-native-healthkit` (iOS) and `react-native-health-connect` with `expo-health-connect` (Android).
+2. Add their config plugins to `app.json`, including the HealthKit entitlement and `NSHealthShareUsageDescription`, plus the Android Health Connect permissions for steps, exercise and sleep.
+3. Write a small adapter per platform. Each one calls `registerHealthSource({ provider, requestAccess, readDays })` from `lib/health.ts` and returns daily totals. Nothing else in the app changes.
+4. Rebuild the dev client.
+
+**To check**
+- App Store review rules for HealthKit apps: privacy policy wording, and no use of health data for advertising (we don't).
+- Google Play's Health Connect declaration form, and whether approval is needed before release.

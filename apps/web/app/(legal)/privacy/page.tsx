@@ -58,6 +58,7 @@ export default function PrivacyPage() {
         <List
           items={[
             "Wearables (Strava, Whoop, Oura): activity, workouts, steps, sleep, heart-rate variability and resting heart rate, on the days those services report them. If you link a habit to one of them, we use those readings to mark the habit done for you. Those days are shown as logged automatically and you can undo them.",
+            "Apple Health or Health Connect, if you connect it: daily totals only (steps, workout minutes, sleep minutes) for the last few days, read on your phone with your permission. Individual readings never leave your phone, and this data is never used for advertising.",
             "Calendars (Google, Microsoft): only the shape of your days — when your first commitment is, how many minutes are booked, and where the longest free block sits. Event titles, attendees, locations and descriptions are discarded before anything is stored, and are never sent to the AI.",
           ]}
         />

@@ -1363,6 +1363,8 @@ export const demoApi: Api = {
   // The demo guide never acts, so there is never anything to undo.
   undoChatAction: async () => ({ undone: true }),
   getVoice: async () => ({ premium: false, provider: null }),
+  connectDeviceHealth: async (provider) => ({ id: uid("int"), provider, status: "connected" }),
+  ingestDeviceHealth: async (_provider, days) => ({ synced: days.length, autoLogged: [] }),
   getAway: async () => {
     await wait(100);
     return away;
@@ -1740,6 +1742,8 @@ export const demoApi: Api = {
         spotify: true,
         google_calendar: true,
         outlook_calendar: true,
+        apple_health: true,
+        health_connect: true,
       },
     };
   },

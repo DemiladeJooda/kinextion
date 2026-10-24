@@ -33,6 +33,7 @@ import { avatarImageUrl } from "../../lib/avatar";
 import { useAppState } from "../../lib/store";
 import type { IntegrationProvider, IntegrationsList } from "../../services";
 import { color, radius, space, tint } from "../../theme";
+import { PhoneHealthCard } from "../../components/PhoneHealthCard";
 
 /**
  * Data sources not covered by the real Integrations feature below — still
@@ -380,6 +381,7 @@ export default function ProfileScreen() {
 
         {/* Wearables & fitness — the real Integrations feature */}
         <SectionTitle accent={color.amber}>Wearables & fitness</SectionTitle>
+        <PhoneHealthCard />
         <WearablesCard />
         <Txt
           variant="small"

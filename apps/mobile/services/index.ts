@@ -264,6 +264,26 @@ export function getSharedHabits(token: string | null, communityId: string) {
   return apiRequest<{ weekStart: string; rows: SharedHabitRow[] }>(`/api/habits/shared/${communityId}`, { token });
 }
 
+/** Switch on Apple Health / Health Connect for this account. */
+export function connectDeviceHealth(token: string | null, provider: "apple_health" | "health_connect") {
+  return apiRequest<{ id: string; provider: string; status: string }>(`/api/integrations/device/${provider}/connect`, {
+    method: "POST",
+    token,
+  });
+}
+
+/** Send daily totals read on the phone; habits linked to them log themselves. */
+export function ingestDeviceHealth(
+  token: string | null,
+  provider: "apple_health" | "health_connect",
+  days: { date: string; steps?: number; workoutMinutes?: number; sleepMinutes?: number }[]
+) {
+  return apiRequest<{ synced: number; autoLogged: { habitId: string; habitName: string; date: string; detail: string }[] }>(
+    `/api/integrations/device/${provider}/ingest`,
+    { method: "POST", body: { days }, token }
+  );
+}
+
 /** Whether the API has a premium voice set up for the guides. */
 export function getVoice(token: string | null) {
   return apiRequest<{ premium: boolean; provider: string | null }>(`/api/chat/me/voice`, { token });
@@ -777,6 +797,8 @@ export function getScoreHistory(token: string | null, days = 30) {
 // ─── Integrations ───────────────────────────────────────────────────────────
 
 export type IntegrationProvider =
+  | "apple_health"
+  | "health_connect"
   | "strava"
   | "whoop"
   | "oura"
