@@ -1,8 +1,9 @@
 /**
  * Talking with the guides, not typing at them.
  *
- * Listening happens on the phone (the OS speech recogniser: free, and the
- * audio never leaves the device). What the server adds is two things:
+ * Listening happens on the phone (the OS speech recogniser: free, on-device
+ * where the phone supports it, and Kinextion only receives the text). What
+ * the server adds is two things:
  *
  *   1. A spoken style. A reply that reads well as a chat bubble — bullets,
  *      bold, an emoji — sounds awful read aloud. Voice turns are told so.

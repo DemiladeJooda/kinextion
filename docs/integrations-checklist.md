@@ -61,7 +61,7 @@ How auto-logging works:
 
 | Piece | How | Cost |
 |---|---|---|
-| Listening (speech to text) | On the phone: Apple/Google speech recognition via `expo-speech-recognition` | No API bill. Audio stays on the device where the phone supports it |
+| Listening (speech to text) | On the phone: Apple/Google speech recognition via `expo-speech-recognition`, on-device where supported | No API bill. On phones without on-device recognition, audio goes to Apple's or Google's speech service (disclosed in the privacy policy). Kinextion only receives the text |
 | Speaking, default | On the phone: `expo-speech`, using the best English voice the phone has | No API bill |
 | Speaking, premium | ElevenLabs: `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ALTHEO`, `ELEVENLABS_VOICE_KAIRO`, optional `ELEVENLABS_MODEL` (default `eleven_flash_v2_5`) | Billed per character |
 

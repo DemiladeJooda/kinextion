@@ -2,7 +2,9 @@
  * Voice for the guides: hear the user, speak the reply.
  *
  * Listening uses the phone's own speech recogniser through
- * expo-speech-recognition, so audio stays on the device and costs nothing.
+ * expo-speech-recognition, so it costs nothing. Recognition runs on the
+ * phone wherever it supports that; otherwise the phone's own speech service
+ * (Apple's or Google's) does it. Kinextion only ever receives the text.
  * Speaking uses the phone's voice (expo-speech), or a premium hosted voice
  * when the API has one set up. The premium voice always falls back to the
  * device voice, so a missing key or a bad connection never leaves a guide
@@ -113,6 +115,8 @@ export function useListener({ onFinal, contextualStrings }: { onFinal: (text: st
       interimResults: true,
       continuous: false,
       addsPunctuation: true,
+      // Keep the audio on the phone when it can do recognition itself.
+      requiresOnDeviceRecognition: m.supportsOnDeviceRecognition(),
       contextualStrings: ["Altheo", "Kairo", "Kinextion", ...(contextualStrings ?? [])],
       volumeChangeEventOptions: { enabled: true, intervalMillis: 120 },
       // Play replies through the speaker, not the earpiece, after listening.

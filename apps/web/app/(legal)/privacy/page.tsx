@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 };
 
 /** Kept in one place so the page and the terms agree on the date. */
-const LAST_UPDATED = "10 September 2026";
+const LAST_UPDATED = "24 October 2026";
 
 export default function PrivacyPage() {
   return (
@@ -45,16 +45,19 @@ export default function PrivacyPage() {
           items={[
             "Account details: your email address, through our sign-in provider Clerk.",
             "Profile: display name, optional age, fitness level, goals, weekly availability, equipment, and your guide preferences.",
-            "Habits and check-offs: the habits you create and the days you mark them done.",
+            "Habits and check-offs: the habits you create, the days you mark them done, amounts you log (like glasses of water), and any stretch you mark as away (travel, illness, family, a move).",
+            "About you, only if you fill it in: gender, background (race, ethnicity or culture), where you live, what your days look like, who you live with, and anything else you choose to add, in your own words. It's used only so the guides fit their advice to your life. It's never guessed, never used to make assumptions about you, and you can clear it at any time.",
+            "Weekly answers to four short questions about how automatic a habit feels.",
             "Daily check-ins: mood, energy, stress, tags, gratitude notes and journal entries.",
-            "Conversations with the AI guides, Althea and Kairo.",
+            "Conversations with the AI guides, Altheo and Kairo, typed or spoken (see Voice below).",
+            "Communities, if you join one: your responses to the weekly question (text, or audio and video you record), reactions and comments, which members of that community can see. If you share a habit with a community, its members see the habit and which days you did it that week. No streaks or totals are shown.",
           ]}
         />
 
         <H3>Because you connected something</H3>
         <List
           items={[
-            "Wearables (Strava, Whoop, Oura): activity, sleep, heart-rate variability and resting heart rate, on the days those services report them.",
+            "Wearables (Strava, Whoop, Oura): activity, workouts, steps, sleep, heart-rate variability and resting heart rate, on the days those services report them. If you link a habit to one of them, we use those readings to mark the habit done for you. Those days are shown as logged automatically and you can undo them.",
             "Calendars (Google, Microsoft): only the shape of your days — when your first commitment is, how many minutes are booked, and where the longest free block sits. Event titles, attendees, locations and descriptions are discarded before anything is stored, and are never sent to the AI.",
           ]}
         />
@@ -76,6 +79,20 @@ export default function PrivacyPage() {
             "If your browser sends Do Not Track or Global Privacy Control, we collect no usage events from you at all.",
           ]}
         />
+      </Section>
+
+      <Section title="Voice">
+        <p>
+          When you talk to a guide, your phone&apos;s own speech recognition turns what you say into
+          text. Where your phone supports it, that happens on the phone. Otherwise your phone&apos;s
+          speech service (Apple&apos;s or Google&apos;s) does it, under their terms. Kinextion only
+          receives the text, and we never record or keep audio of your conversations.
+        </p>
+        <p className="mt-4">
+          Replies are read aloud by your phone&apos;s built-in voice. If we switch on a premium voice,
+          the text of the guide&apos;s reply is sent to that voice provider (currently ElevenLabs) to
+          be spoken. The audio is played and then deleted from your phone.
+        </p>
       </Section>
 
       <Section title="Camera">
@@ -105,6 +122,8 @@ export default function PrivacyPage() {
         <List
           items={[
             "Anthropic processes the text of your conversations and the context we send with them, in order to generate replies. It is a processor acting on our instructions.",
+            "If a premium voice is on, the voice provider (currently ElevenLabs) receives the text of guides' replies in order to speak them. Nothing you say is sent to it.",
+            "Members of a community you join see what you post there, and any habit you choose to share with it.",
             "Clerk handles sign-in and holds your email address and authentication credentials.",
             "Our database is hosted with a managed Postgres provider.",
             "Strava, Whoop, Oura, Google and Microsoft receive nothing from us. The connection is one-way: we read what you authorised, and you can revoke it at any time from their side or ours.",

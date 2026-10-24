@@ -187,13 +187,21 @@ Be accurate here; both stores audit it. The app collects and stores:
 
 - **Health & fitness** — habits, workouts, and (when the user connects a
   provider) sleep, HRV, and resting heart rate.
-- **Sensitive info** — mood scores and free-text journal entries.
+- **Sensitive info** — mood scores and free-text journal entries, and, only
+  if the user fills in About you, self-described racial/ethnic background and
+  gender. Optional, never inferred, clearable.
+- **Audio** — none stored. Speech is turned into text by the phone's own
+  recogniser (on-device where supported, otherwise Apple's/Google's speech
+  service); Kinextion receives only text.
+- **User content shared with others** — community responses (text, audio,
+  video) and any habit the user chooses to share with a community.
 - **Identifiers** — email address, via Clerk.
 - **Camera** — processed for form/referee/environment analysis. Frames are
   **not** recorded or retained; say so explicitly.
 
-Also disclose that data is shared with **Anthropic** (AI processing) and,
-only where the user connects them, **Strava / Whoop / Oura**. The Therapist
+Also disclose that data is shared with **Anthropic** (AI processing), with
+**ElevenLabs** only if the premium voice is switched on (the text of guides'
+replies), and, only where the user connects them, **Strava / Whoop / Oura**. The Therapist
 Starter Pack shares data **only** on explicit per-category opt-in and only to
 a recipient the user chooses — Kinextion never transmits it automatically.
 
