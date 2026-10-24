@@ -19,7 +19,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PanResponder, Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Stack } from "expo-router";
+import { Stack, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeIn } from "react-native-reanimated";
@@ -30,10 +30,17 @@ import {
   SIM_AUTOMATIC_AT,
   SIM_LENGTHS,
   SIM_RESEARCH,
+  addDays,
   backgroundLines,
+  daysBetween,
+  historyFromLogs,
+  isDueOn,
   lifeFromBackground,
   localDateKey,
   simulateAll,
+  simulatePersonal,
+  type DateKey,
+  type SimHabit,
   type SimDay,
   type SimLength,
   type SimLife,
@@ -42,6 +49,7 @@ import {
 
 import { AuroraBackdrop, Card, Chip, Label, ScreenHeader, Txt } from "../components/ui";
 import { useApi } from "../hooks/useApi";
+import { useAppState, type Habit } from "../lib/store";
 import { color, radius, space, tint } from "../theme";
 
 const PATH_COLORS = [color.green, color.teal, color.blue, color.purple, color.amber, color.pink];
@@ -53,9 +61,52 @@ const MAX_A = 7;
 const formatDate = (key: string) =>
   new Date(`${key}T12:00:00Z`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 
+/** A neutral life for someone who hasn't filled in About you. */
+const YOUR_LIFE: SimLife = {
+  id: "you",
+  label: "Your life",
+  location: null,
+  climate: "mild",
+  work: "office",
+  household: "alone",
+  summary: ["Add details in About you for a truer picture"],
+  own: true,
+};
+
+/** A real habit, in the words the simulator writes its days with. */
+function asSimHabit(h: Habit): SimHabit {
+  const tiny = h.display.response ?? h.response ?? h.name;
+  return {
+    id: h.id,
+    name: h.name,
+    anchor: h.display.cue ?? (h.cue || "When it's time"),
+    full: h.fullVersion ?? tiny,
+    tiny,
+    ease: 1,
+  };
+}
+
+/** What really happened each day since it started. Today counts once it's logged. */
+function realHistory(h: Habit, today: DateKey) {
+  const last = h.history.done.has(today) || h.history.rest.has(today) ? today : addDays(today, -1);
+  if (last < h.startDate) return [];
+  return historyFromLogs(h.startDate, last, (d) =>
+    h.history.minimum.has(d)
+      ? "tiny"
+      : h.history.done.has(d)
+        ? "full"
+        : h.history.rest.has(d) || h.frequency === "weekly" || !isDueOn(h, d, h.history.done)
+          ? "rest"
+          : "missed"
+  );
+}
+
 export default function SimulateScreen() {
   const api = useApi();
-  const [habitId, setHabitId] = useState(DEMO_HABITS[1].id);
+  const { habits: myHabits } = useAppState();
+  const params = useLocalSearchParams<{ habit?: string }>();
+  const mine = myHabits.filter((h) => h.status !== "paused");
+  const [habitId, setHabitId] = useState(params.habit ?? DEMO_HABITS[1].id);
   const [ownLife, setOwnLife] = useState<SimLife | null>(null);
   const [lifeId, setLifeId] = useState(EXAMPLE_LIVES[0].id);
   const [length, setLength] = useState<SimLength>("90d");
@@ -80,17 +131,46 @@ export default function SimulateScreen() {
   }, []);
 
   const lives = useMemo(() => (ownLife ? [ownLife, ...EXAMPLE_LIVES] : [...EXAMPLE_LIVES]), [ownLife]);
-  const life = lives.find((l) => l.id === lifeId) ?? lives[0];
-  const habit = DEMO_HABITS.find((h) => h.id === habitId) ?? DEMO_HABITS[0];
-  const days = SIM_LENGTHS[length];
-  const start = useMemo(() => localDateKey(), []);
+  const real = mine.find((h) => h.id === habitId) ?? null;
+  const life = real ? (ownLife ?? YOUR_LIFE) : (lives.find((l) => l.id === lifeId) ?? lives[0]);
+  const habit = real ? asSimHabit(real) : (DEMO_HABITS.find((h) => h.id === habitId) ?? DEMO_HABITS[0]);
+  const todayKey = useMemo(() => localDateKey(), []);
 
-  const runs = useMemo(() => simulateAll({ habit, life, start, days }), [habit, life, start, days]);
-  const run = runs[selected];
+  // Your own habit: real days so far, then a few futures from today.
+  const personal = useMemo(() => {
+    if (!real) return null;
+    const history = realHistory(real, todayKey);
+    const total = Math.max(SIM_LENGTHS[length], history.length + 60);
+    return simulatePersonal({
+      habit,
+      life,
+      start: real.startDate,
+      history,
+      checks: real.automaticity,
+      ahead: total - history.length,
+    });
+  }, [real, habit, life, length, todayKey]);
+
+  const start = real ? real.startDate : todayKey;
+  const runs = useMemo(
+    () => personal?.futures ?? simulateAll({ habit, life, start, days: SIM_LENGTHS[length] }),
+    [personal, habit, life, start, length]
+  );
+  const days = runs[0].days.length;
+  const run = runs[Math.min(selected, runs.length - 1)];
   const today = run.days[Math.min(day, days) - 1];
+  const hereDay = personal ? Math.max(1, personal.past.length) : null;
+  const checks = real
+    ? real.automaticity.map((c) => ({ day: daysBetween(real.startDate, c.date) + 1, score: c.score }))
+    : [];
 
-  // Keep the scrubber in range when the length changes.
+  // Keep the scrubber in range, and start your own habit at today.
   useEffect(() => setDay((d) => Math.min(d, days)), [days]);
+  useEffect(() => {
+    setSelected((s) => Math.min(s, runs.length - 1));
+    if (hereDay) setDay(hereDay);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [habitId]);
 
   // Play: the whole stretch in about ten seconds.
   useEffect(() => {
@@ -114,7 +194,7 @@ export default function SimulateScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: color.bg }} edges={["bottom"]}>
       <Stack.Screen
         options={{
-          title: "How habits form",
+          title: real ? "Where this could go" : "How habits form",
           headerStyle: { backgroundColor: color.bg },
           headerShadowVisible: false,
           headerTintColor: color.text,
@@ -128,13 +208,27 @@ export default function SimulateScreen() {
         showsVerticalScrollIndicator={false}
       >
         <ScreenHeader
-          title="More than one way there"
-          subtitle="Same life, same habit, six different people. Drag through the days."
+          title={real ? real.name : "More than one way there"}
+          subtitle={
+            real
+              ? "Your real days so far, then a few ways it could go from here. Drag through the days."
+              : "Same life, same habit, six different people. Drag through the days."
+          }
         />
 
         {/* ── Habit, life, length ───────────────────────────────────────── */}
         <View style={{ gap: space.md }}>
           <ChipRow>
+            {mine.map((h) => (
+              <Chip
+                key={h.id}
+                label={h.name}
+                icon="person-outline"
+                accent={color.green}
+                selected={h.id === habitId}
+                onPress={() => setHabitId(h.id)}
+              />
+            ))}
             {DEMO_HABITS.map((h) => (
               <Chip
                 key={h.id}
@@ -145,6 +239,7 @@ export default function SimulateScreen() {
               />
             ))}
           </ChipRow>
+          {real ? null : (
           <ChipRow>
             {lives.map((l) => (
               <Chip
@@ -157,9 +252,16 @@ export default function SimulateScreen() {
               />
             ))}
           </ChipRow>
+          )}
           <Txt variant="small" c={color.textFaint}>
-            {life.own ? "From what you shared in About you. " : "An example life, not a real person. "}
-            {life.summary.join(" · ")}
+            {real
+              ? personal?.fitted
+                ? "Fitted to your weekly check-ins. "
+                : "Uses the study's middle until you've answered a weekly check-in. "
+              : life.own
+                ? "From what you shared in About you. "
+                : "An example life, not a real person. "}
+            {real ? "" : life.summary.join(" · ")}
           </Txt>
         </View>
 
@@ -185,11 +287,18 @@ export default function SimulateScreen() {
               <Ionicons name={playing ? "pause" : "play"} size={16} color={PATH_COLORS[selected]} />
             </Pressable>
             <View style={{ marginLeft: space.md, flex: 1 }}>
-              <Txt variant="bodyStrong">Day {day}</Txt>
+              <Txt variant="bodyStrong">
+                Day {day}
+                {hereDay && day === hereDay ? " · today" : ""}
+              </Txt>
               <Txt variant="small" c={color.textMuted}>
-                {automaticNow === 0
-                  ? "Nobody's automatic yet. Everyone's still going."
-                  : `${automaticNow} of ${runs.length} feel automatic. The rest are still going.`}
+                {hereDay && day <= hereDay
+                  ? "What really happened."
+                  : automaticNow === 0
+                    ? real
+                      ? "Not automatic yet on any of these. Still going."
+                      : "Nobody's automatic yet. Everyone's still going."
+                    : `${automaticNow} of ${runs.length} feel automatic. The rest are still going.`}
               </Txt>
             </View>
             <View style={{ flexDirection: "row", gap: space.xs }}>
@@ -210,9 +319,11 @@ export default function SimulateScreen() {
 
           <FanChart
             runs={runs}
-            selected={selected}
+            selected={Math.min(selected, runs.length - 1)}
             day={day}
             days={days}
+            hereDay={hereDay}
+            checks={checks}
             onScrub={(d) => {
               setPlaying(false);
               setDay(d);
@@ -232,7 +343,7 @@ export default function SimulateScreen() {
             />
           ))}
         </ChipRow>
-        <PathSummary run={run} day={day} accent={PATH_COLORS[selected]} />
+        <PathSummary run={run} day={day} accent={PATH_COLORS[selected]} hereDay={hereDay} />
 
         {/* ── This day ─────────────────────────────────────────────────── */}
         <DayCard
@@ -281,12 +392,18 @@ function FanChart({
   selected,
   day,
   days,
+  hereDay,
+  checks = [],
   onScrub,
 }: {
   runs: SimRun[];
   selected: number;
   day: number;
   days: number;
+  /** Your own habit: where history ends and the futures begin. */
+  hereDay?: number | null;
+  /** Their weekly automaticity answers, drawn as dots. */
+  checks?: { day: number; score: number }[];
   onScrub: (day: number) => void;
 }) {
   const [width, setWidth] = useState(0);
@@ -372,6 +489,20 @@ function FanChart({
             <Path d={paths[selected]} stroke={PATH_COLORS[selected]} strokeWidth={3} fill="none" strokeLinecap="round" />
           ) : null}
 
+          {hereDay ? (
+            <>
+              <Line x1={x(hereDay)} x2={x(hereDay)} y1={PAD.top} y2={CHART_HEIGHT - PAD.bottom} stroke={color.green} strokeDasharray="2 3" />
+              <SvgText x={x(hereDay) + 4} y={PAD.top + 10} fill={color.green} fontSize={10}>
+                You are here
+              </SvgText>
+            </>
+          ) : null}
+          {checks
+            .filter((c) => c.day >= 1 && c.day <= days)
+            .map((c) => (
+              <Circle key={`c${c.day}`} cx={x(c.day)} cy={y(c.score)} r={3.5} fill={color.text} stroke={color.bg} strokeWidth={1.5} />
+            ))}
+
           {/* Today */}
           <Line x1={x(day)} x2={x(day)} y1={PAD.top} y2={CHART_HEIGHT - PAD.bottom} stroke={color.textMuted} strokeWidth={1} />
           {runs.map((r, i) => {
@@ -394,14 +525,20 @@ function FanChart({
   );
 }
 
-function PathSummary({ run, day, accent }: { run: SimRun; day: number; accent: string }) {
+function PathSummary({ run, day, accent, hereDay }: { run: SimRun; day: number; accent: string; hereDay?: number | null }) {
   const p = run.days[Math.min(day, run.days.length) - 1];
   const reached = run.automaticDay !== null && run.automaticDay <= day;
-  const status = reached
-    ? `Felt automatic on day ${run.automaticDay}.`
-    : run.automaticDay !== null
-      ? "Still building. That's normal at this point."
-      : `Still building at day ${run.days.length}, and still going. Some people take longer than this.`;
+  const fromToday = hereDay && run.automaticDay !== null ? run.automaticDay - hereDay : null;
+  const status =
+    hereDay && run.automaticDay !== null && run.automaticDay <= hereDay
+      ? `It already feels automatic. That happened around day ${run.automaticDay}.`
+      : fromToday !== null && fromToday > 0
+        ? `On this path it would feel automatic around day ${run.automaticDay}, about ${fromToday} days from today.`
+        : reached
+          ? `Felt automatic on day ${run.automaticDay}.`
+          : run.automaticDay !== null
+            ? "Still building. That's normal at this point."
+            : `Still building at day ${run.days.length}, and still going. Some people take longer than this.`;
   const sofar = run.days.slice(0, day);
   const count = (o: SimDay["outcome"]) => sofar.filter((d) => d.outcome === o).length;
   return (
@@ -438,6 +575,7 @@ const OUTCOME = {
   full: { label: "Did it", icon: "checkmark-circle" },
   tiny: { label: "Tiny version", icon: "ellipse-outline" },
   missed: { label: "Missed", icon: "remove-circle-outline" },
+  rest: { label: "Rest day", icon: "moon-outline" },
 } as const;
 
 function DayCard({ day, accent, onStep }: { day: SimDay; accent: string; onStep: (delta: number) => void }) {

@@ -8,3 +8,4 @@ export * from "./automaticity.js";
 export * from "./usage.js";
 export * from "./measure.js";
 export * from "./widget.js";
+export * from "./metrics.js";

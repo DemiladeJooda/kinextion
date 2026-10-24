@@ -33,6 +33,7 @@ import {
   AuroraBackdrop,
   Button,
   Card,
+  PressCard,
   EmptyState,
   ScreenHeader,
   Txt,
@@ -167,9 +168,27 @@ export default function EditHabitScreen() {
             subtitle={habitSummary(habit, showStreaks)}
           />
 
-          <View style={{ marginBottom: space.xxl }}>
+          <View style={{ marginBottom: space.lg }}>
             <HabitProgress habit={habit} showStreaks={showStreaks} />
           </View>
+
+          {/* Your real curve so far, and a few ways it could go from here. */}
+          <PressCard
+            onPress={() => router.push(`/simulate?habit=${habit.id}` as never)}
+            accent={categoryColor[habit.category]}
+            style={{ padding: space.lg, marginBottom: space.xxl }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+              <Ionicons name="git-branch-outline" size={20} color={categoryColor[habit.category]} />
+              <View style={{ flex: 1 }}>
+                <Txt variant="bodyStrong">Where this could go</Txt>
+                <Txt variant="small" c={color.textMuted}>
+                  Your days so far, and when it might start to feel automatic.
+                </Txt>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={color.textFaint} />
+            </View>
+          </PressCard>
 
           <HabitForm
             readings={readingsOf(habit)}

@@ -179,7 +179,8 @@ export const SIM_PATHS: readonly SimPath[] = [
 
 // ─── Running it ───────────────────────────────────────────────────────────────
 
-export type SimOutcome = "full" | "tiny" | "missed";
+/** "rest" is a planned rest day, or a day the habit wasn't due: neutral. */
+export type SimOutcome = "full" | "tiny" | "missed" | "rest";
 
 export interface SimDay {
   /** 1-based. */
@@ -199,7 +200,7 @@ export interface SimRun {
   days: SimDay[];
   /** First day it felt automatic, or null if it hadn't yet. */
   automaticDay: number | null;
-  totals: { full: number; tiny: number; missed: number; longestGap: number };
+  totals: { full: number; tiny: number; missed: number; rest: number; longestGap: number };
 }
 
 export interface SimulateInput {
@@ -208,26 +209,43 @@ export interface SimulateInput {
   path: SimPath;
   start: DateKey;
   days: number;
+  /**
+   * Carry on from a real history instead of day one: these days are kept
+   * as they are, and the simulation runs from the day after the last one.
+   * `learn` replaces the path's rate with the person's own.
+   */
+  resume?: { past: SimDay[]; learn?: number; plateau?: number };
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const pick = <T>(rand: () => number, options: readonly T[]): T => options[Math.floor(rand() * options.length)];
 const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 
-export function simulatePath({ habit, life, path, start, days }: SimulateInput, calendar = lifeCalendar(life, start, days)): SimRun {
+export function simulatePath(
+  { habit, life, path, start, days, resume }: SimulateInput,
+  calendar = lifeCalendar(life, start, days)
+): SimRun {
   const rand = seededRandom(`${path.id}:${habit.id}:${life.id}:${start}`);
-  const learn = path.learn * habit.ease;
-  let a: number = SRBAI_MIN;
+  const learn = resume?.learn ?? path.learn * habit.ease;
+  const plateau = resume?.plateau ?? path.plateau;
+  const past = resume?.past ?? [];
+  const out: SimDay[] = [...past];
+  const totals = { full: 0, tiny: 0, missed: 0, rest: 0, longestGap: 0 };
+  let a: number = past.at(-1)?.automaticity ?? SRBAI_MIN;
   let missedRun = 0;
   let longestGap = 0;
   let automaticDay: number | null = null;
-  let easier = false;
-  let firstTiny = false;
-  let firstMiss = false;
-  const totals = { full: 0, tiny: 0, missed: 0, longestGap: 0 };
-  const out: SimDay[] = [];
+  for (const d of past) {
+    totals[d.outcome]++;
+    if (d.outcome === "missed") longestGap = Math.max(longestGap, ++missedRun);
+    else if (d.outcome !== "rest") missedRun = 0;
+    if (automaticDay === null && d.automaticity >= SIM_AUTOMATIC_AT) automaticDay = d.day;
+  }
+  let easier = past.some((d) => d.automaticity >= EASIER_AT);
+  let firstTiny = past.some((d) => d.outcome === "tiny");
+  let firstMiss = past.some((d) => d.outcome === "missed");
 
-  for (let i = 0; i < days; i++) {
+  for (let i = past.length; i < days; i++) {
     const date = addDays(start, i);
     const arc = path.arcs.find((r) => i >= r.from && i <= r.to);
     const events = [...(calendar[i] ?? [])];
@@ -245,10 +263,7 @@ export function simulatePath({ habit, life, path, start, days }: SimulateInput, 
 
     // What it does to the curve.
     const before = a;
-    if (outcome === "full") a += learn * (path.plateau - a);
-    else if (outcome === "tiny") a += learn * 0.7 * (path.plateau - a);
-    else a -= 0.012 * (a - SRBAI_MIN);
-    a = round2(a);
+    a = round2(stepAutomaticity(a, outcome, learn, plateau));
 
     const comebackAfter = outcome !== "missed" && missedRun >= 3 ? missedRun : 0;
     if (outcome === "missed") {
@@ -277,6 +292,8 @@ export function simulatePath({ habit, life, path, start, days }: SimulateInput, 
       milestone = "First tiny-version day — it still counts";
     } else if (i === 0) {
       milestone = "Day one";
+    } else if (i === past.length && past.length) {
+      milestone = "Today";
     }
 
     out.push({
@@ -293,6 +310,18 @@ export function simulatePath({ habit, life, path, start, days }: SimulateInput, 
 
   totals.longestGap = longestGap;
   return { path, days: out, automaticDay, totals };
+}
+
+/**
+ * One day's effect on automaticity. A repetition closes a share of the gap
+ * to the plateau (the tiny version, a bit less); a miss lets a little slip;
+ * a rest day changes nothing.
+ */
+export function stepAutomaticity(a: number, outcome: SimOutcome, learn: number, plateau: number): number {
+  if (outcome === "full") return a + learn * (plateau - a);
+  if (outcome === "tiny") return a + learn * 0.7 * (plateau - a);
+  if (outcome === "missed") return a - 0.012 * (a - SRBAI_MIN);
+  return a;
 }
 
 /** Every path through the same life and habit. */
@@ -340,6 +369,7 @@ function nightLine(
     const what = outcome === "tiny" ? habit.tiny : habit.full;
     return pick(rand, [`Back at it: ${what}. Felt good to start again.`, `Did ${what} to restart. Easier than I expected.`]);
   }
+  if (outcome === "rest") return "Rest day. Nothing owed.";
   if (outcome === "tiny") {
     return arc?.kind === "tiny"
       ? pick(rand, [`Only ${habit.tiny} again. Still showing up.`, `${capital(habit.tiny)}. That's what today had room for.`])
