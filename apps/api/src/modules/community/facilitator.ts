@@ -7,6 +7,7 @@ import { generateStructured } from "../ai/services/ai-service.js";
  */
 export const generateTopicsWithClaude: TopicGenerator = ({ system, user, schema }) =>
   generateStructured({
+    task: "community",
     system,
     messages: [{ role: "user", content: user }],
     toolName: "propose_topics",

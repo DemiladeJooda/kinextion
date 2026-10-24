@@ -21,6 +21,8 @@ vi.mock("../src/modules/ai/services/ai-service.js", () => ({
   generateStructured: (...args: unknown[]) => generateStructured(...args),
   sendToAI: async () => "",
   streamFromAI: async () => "",
+  streamChatWithTools: async () => "",
+  toStructuredSchema: (s: unknown) => s,
 }));
 
 vi.mock("@clerk/fastify", () => ({
@@ -47,10 +49,11 @@ interface Habit {
 }
 type Row = Record<string, unknown> & { id: string };
 
-const db: { habits: Habit[]; reflections: Row[]; precommits: Row[] } = {
+const db: { habits: Habit[]; reflections: Row[]; precommits: Row[]; checks: Row[] } = {
   habits: [],
   reflections: [],
   precommits: [],
+  checks: [],
 };
 
 vi.mock("@kinextion/database", () => {
@@ -83,6 +86,19 @@ vi.mock("@kinextion/database", () => {
           return r;
         },
         findMany: async () => db.reflections,
+      },
+      automaticityCheck: {
+        upsert: async ({ create, update, where }: { create: Row; update: Row; where: { habitId_date: { habitId: string; date: Date } } }) => {
+          const k = where.habitId_date;
+          const found = db.checks.find(
+            (c) => c.habitId === k.habitId && (c.date as Date).getTime() === k.date.getTime()
+          );
+          if (found) return Object.assign(found, update);
+          const row = { ...create, id: `chk${db.checks.length + 1}` };
+          db.checks.push(row);
+          return row;
+        },
+        findMany: async () => db.checks,
       },
       precommitment: {
         upsert: async ({
@@ -147,6 +163,7 @@ beforeEach(() => {
   db.habits = [habit()];
   db.reflections = [];
   db.precommits = [];
+  db.checks = [];
   generateStructured.mockReset();
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-10-21T14:00:00Z")); // Wednesday morning in Dallas
@@ -278,5 +295,27 @@ describe("precommitments", () => {
   it("refuses the past and more than a day ahead", async () => {
     expect((await commit("2026-10-20")).statusCode).toBe(400);
     expect((await commit("2026-10-23")).statusCode).toBe(400);
+  });
+});
+
+describe("the weekly automaticity check", () => {
+  const check = (items: unknown, id = "ckpushups00000000000000") =>
+    app.inject({ method: "POST", url: `/api/habits/${id}/automaticity`, headers: DALLAS, payload: { items } });
+
+  it("stores the four answers and their mean, once per day", async () => {
+    expect((await check([7, 6, 6, 5])).statusCode).toBe(201);
+    expect((await check([7, 7, 7, 7])).statusCode).toBe(201);
+    expect(db.checks).toHaveLength(1);
+    expect(db.checks[0]).toMatchObject({ score: 7 });
+  });
+
+  it("refuses anything but four answers from 1 to 7", async () => {
+    expect((await check([7, 7, 7])).statusCode).toBe(400);
+    expect((await check([7, 7, 7, 9])).statusCode).toBe(400);
+  });
+
+  it("won't check someone else's habit", async () => {
+    db.habits = [habit({ userId: "someone-else" })];
+    expect((await check([4, 4, 4, 4])).statusCode).toBe(404);
   });
 });

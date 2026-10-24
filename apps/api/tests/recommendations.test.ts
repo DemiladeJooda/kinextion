@@ -45,6 +45,8 @@ vi.mock("../src/modules/ai/services/ai-service.js", () => ({
   generateStructured: (...args: unknown[]) => generateStructured(...args),
   sendToAI: async () => "",
   streamFromAI: async () => "",
+  streamChatWithTools: async () => "",
+  toStructuredSchema: (s: unknown) => s,
 }));
 
 vi.mock("@clerk/fastify", () => ({

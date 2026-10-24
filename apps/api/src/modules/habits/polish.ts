@@ -45,8 +45,10 @@ const SYSTEM = [
   "- Fix spelling and grammar. Drop filler, rambling and swearing.",
   "- Keep it short: under 12 words for the anchor and the tiny version, under 15 for the why and the backup plan.",
   "- The anchor reads as 'After I …' or 'When I …'. The tiny version reads as the action itself ('2 push-ups'). The backup plan reads as 'If …, I'll …'.",
-  "- The why becomes the positive reason underneath what they wrote, said kindly and concretely: 'Because I'm so lazy and I hate how I look' becomes 'To feel strong and good in my body'. Remove insults and self-criticism entirely. Never shame, never diagnose.",
-  "- If they gave no real reason, stay close to what they said rather than inventing one.",
+  "- The why becomes the positive reason underneath what they wrote, said kindly. Remove insults and self-criticism entirely. Never shame, never diagnose.",
+  "- Only use what they actually wrote. Don't add a body, a feeling, a person or a goal they didn't mention.",
+  "- If the why holds no real reason, only self-criticism, return exactly: 'To keep <habit, in lower case> going'.",
+  "- Every example in these instructions is an illustration of the shape, never wording to reuse.",
   "- If the why suggests a crisis, self-harm, disordered eating, or abuse, set concern to true and return the why exactly as written. Do not soften it.",
   "- If a field is already clean, return it unchanged.",
 ].join("\n");
@@ -62,6 +64,7 @@ export async function polishHabitText(name: string, raw: RawFields): Promise<Hab
   const given = fields.map((f) => `${LABELS[f]} (${f}): ${JSON.stringify(raw[f])}`).join("\n");
 
   const result = await generateStructured<Partial<Record<PolishedField, string>> & { concern?: boolean }>({
+    task: "polish",
     system: SYSTEM,
     messages: [{ role: "user", content: `Habit: ${JSON.stringify(name)}\n\n${given}` }],
     toolName: "polish_habit",
@@ -79,7 +82,6 @@ export async function polishHabitText(name: string, raw: RawFields): Promise<Hab
       },
       required: fields,
     },
-    maxTokens: 512,
   });
 
   const out: HabitPolish = { of, source: "ai", concern: result.concern === true };

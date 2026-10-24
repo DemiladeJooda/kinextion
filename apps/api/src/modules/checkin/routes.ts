@@ -21,6 +21,7 @@ import { checkInSchema, localTimeSchema } from "@kinextion/shared";
 import { buildHabitContext } from "../../lib/habit-context.js";
 import { recomputeTodayScore, startOfToday } from "../../lib/score.js";
 import { generateCheckInPrompt } from "./prompt.js";
+import { saveCheckIn } from "./save.js";
 
 export async function checkInRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.requireAuth);
@@ -64,34 +65,7 @@ export async function checkInRoutes(app: FastifyInstance) {
     }
 
     const userId = request.userId;
-    const existing = await prisma.moodEntry.findFirst({
-      where: { userId, createdAt: { gte: startOfToday(request.timeZone) } },
-      orderBy: { createdAt: "desc" },
-    });
-
-    /**
-     * Only write the fields the caller actually sent.
-     *
-     * A field left out of the body is left as it is; a field sent as null is
-     * cleared. Anything else and the one-tap mood strip would blank out the
-     * journal someone wrote this morning — see checkInSchema.
-     */
-    const body = parsed.data;
-    const data: Record<string, unknown> = { mood: body.mood };
-    if ("energy" in body) data.energy = body.energy ?? null;
-    if ("stress" in body) data.stress = body.stress ?? null;
-    if ("journal" in body) data.journal = body.journal ?? null;
-    if ("gratitude" in body) data.gratitude = body.gratitude ?? null;
-    if ("tags" in body) data.tags = (body.tags ?? []) as Prisma.InputJsonValue;
-
-    const entry = existing
-      ? await prisma.moodEntry.update({
-          where: { id: existing.id },
-          data: data as Prisma.MoodEntryUpdateInput,
-        })
-      : await prisma.moodEntry.create({
-          data: { userId, ...data } as unknown as Prisma.MoodEntryUncheckedCreateInput,
-        });
+    const { entry, existing } = await saveCheckIn(userId, request.timeZone, parsed.data);
 
     return reply.status(existing ? 200 : 201).send({
       success: true,

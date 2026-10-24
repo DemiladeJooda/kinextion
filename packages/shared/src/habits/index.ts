@@ -4,3 +4,5 @@ export * from "./starter.js";
 export * from "./polish.js";
 export * from "./reminders.js";
 export * from "./coach.js";
+export * from "./automaticity.js";
+export * from "./usage.js";

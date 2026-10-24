@@ -104,7 +104,10 @@ export async function loadFactsForPrompt(userId: string, limit = 25): Promise<st
  */
 export async function compactConversation(
   conversationId: string,
-  policy: RetentionPolicy = DEFAULT_RETENTION
+  policy: RetentionPolicy = DEFAULT_RETENTION,
+  /** Fold every message, not just the overflow — for a conversation that
+   *  has gone quiet. Short chats get their facts remembered too. */
+  options: { foldAll?: boolean } = {}
 ): Promise<{ compacted: number; factsFound: number }> {
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
@@ -113,7 +116,9 @@ export async function compactConversation(
   if (!conversation) return { compacted: 0, factsFound: 0 };
 
   const messageCount = await prisma.message.count({ where: { conversationId } });
-  const plan = planCompaction(messageCount, policy);
+  const plan = options.foldAll
+    ? { shouldCompact: messageCount > 0, compactCount: messageCount }
+    : planCompaction(messageCount, policy);
   if (!plan.shouldCompact) return { compacted: 0, factsFound: 0 };
 
   const overflow = await prisma.message.findMany({

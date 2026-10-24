@@ -53,8 +53,8 @@ const FALLBACK: GeneratedRecommendation = {
 function toOption(
   raw: { action?: string; why?: string; category?: string } | undefined
 ): RecommendationOption | null {
-  const action = raw?.action?.trim();
-  const why = raw?.why?.trim();
+  const action = raw?.action?.trim().slice(0, 160);
+  const why = raw?.why?.trim().slice(0, 300);
   if (!action || !why) return null;
   return {
     action,
@@ -143,6 +143,7 @@ export async function generateRecommendation(
       why?: string;
       category?: string;
     }>({
+      task: "recommendation",
       system,
       messages: [
         {
@@ -182,7 +183,6 @@ export async function generateRecommendation(
         },
         required: ["options"],
       },
-      maxTokens: 2048,
     });
 
     const options = result.options?.length ? result.options.map(toOption) : [toOption(result)];

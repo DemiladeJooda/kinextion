@@ -9,7 +9,7 @@
 import Constants from "expo-constants";
 import { fetch as expoFetch } from "expo/fetch";
 import type { GuideId } from "@kinextion/ai-core";
-import { dataApiBaseUrl } from "../services/client";
+import { dataApiBaseUrl, deviceTimeZone } from "../services/client";
 import { DEMO_MODE } from "./demo/session";
 import { demoStreamChat } from "./demo/chat";
 
@@ -43,12 +43,26 @@ export interface ChatTurn {
   content: string;
 }
 
+/**
+ * Something a guide did in the app during its reply ("Added: Push-ups"),
+ * shown as a card under the message. `undo` is opaque to the app: it goes
+ * back to the server as-is when the card's Undo is tapped.
+ */
+export interface ChatAction {
+  readonly kind: string;
+  readonly title: string;
+  readonly detail?: string;
+  readonly undo?: Record<string, unknown>;
+}
+
 export interface StreamChatOptions {
   readonly guide: GuideId;
   readonly messages: ChatTurn[];
   readonly userName?: string | null;
   /** Called with the full text so far, each time more arrives. */
   readonly onDelta: (fullText: string) => void;
+  /** Called when the guide creates, logs or saves something in the app. */
+  readonly onAction?: (action: ChatAction) => void;
   readonly signal?: AbortSignal;
   /**
    * Clerk session token. When present the request goes to the data API, which
@@ -93,6 +107,7 @@ export async function streamChat({
   messages,
   userName,
   onDelta,
+  onAction,
   signal,
   token,
   conversationId,
@@ -128,7 +143,14 @@ export async function streamChat({
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(authenticated ? { Authorization: `Bearer ${token}` } : {}),
+        ...(authenticated
+          ? {
+              Authorization: `Bearer ${token}`,
+              // Text plus action cards, so the guide can act in the app.
+              "X-Chat-Protocol": "events",
+              ...(deviceTimeZone() ? { "X-Time-Zone": deviceTimeZone()! } : {}),
+            }
+          : {}),
       },
       body: JSON.stringify(body),
       signal,
@@ -167,15 +189,46 @@ export async function streamChat({
 
   const reader = stream.getReader();
   const decoder = new TextDecoder();
+  // One JSON event per line; plain text from the web route or an older API.
+  const events = (res.headers.get("Content-Type") ?? "").includes("ndjson");
   let full = "";
+  let pending = "";
+  let cutOff: string | null = null;
+
+  const handleLine = (line: string) => {
+    if (!line.trim()) return;
+    let event: { t?: string; v?: string; action?: ChatAction };
+    try {
+      event = JSON.parse(line);
+    } catch {
+      return;
+    }
+    if (event.t === "text" && event.v) {
+      full += event.v;
+      onDelta(full);
+    } else if (event.t === "action" && event.action) {
+      onAction?.(event.action);
+    } else if (event.t === "error") {
+      cutOff = event.v ?? "The reply got cut off. Try again.";
+    }
+  };
 
   try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      full += decoder.decode(value, { stream: true });
-      onDelta(full);
+      const chunk = decoder.decode(value, { stream: true });
+      if (!events) {
+        full += chunk;
+        onDelta(full);
+        continue;
+      }
+      pending += chunk;
+      const lines = pending.split("\n");
+      pending = lines.pop() ?? "";
+      lines.forEach(handleLine);
     }
+    if (events) handleLine(pending);
   } catch (err) {
     if (signal?.aborted) return { text: full, conversationId: newConversationId };
     // Partial text is better than none — hand back what arrived.
@@ -185,5 +238,6 @@ export async function streamChat({
     void reader.cancel().catch(() => {});
   }
 
+  if (cutOff && !full) throw new ChatError(cutOff, "stream_interrupted");
   return { text: full, conversationId: newConversationId };
 }

@@ -9,18 +9,10 @@ import {
 } from "@kinextion/shared";
 import {
   addDays,
-  canRestOn,
   dateFromKey,
-  dateKeyOf,
   localHour,
   needsPolish,
-  weekStartKey,
 } from "@kinextion/shared";
-
-/** Yesterday stays editable until this local hour — long enough to catch a
- *  habit done last night but never ticked, short enough that history stays
- *  history. */
-const BACKFILL_UNTIL_HOUR = 12;
 
 /** How far ahead a habit can be scheduled to start — far enough for "next
  *  Monday" or "the 1st", not so far it's forgotten. */
@@ -39,6 +31,7 @@ import { recomputeTodayScore } from "../../lib/score.js";
 import { discoverHabits, suggestHabits } from "./assistant.js";
 import { schedulePolish } from "./polish.js";
 import { registerCoachRoutes } from "./coach-routes.js";
+import { logHabitDay } from "./log-day.js";
 import { statusSideEffects } from "../../lib/habit-status.js";
 
 /** Background polishes started per list load, so one open never fans out. */
@@ -253,75 +246,25 @@ export async function habitRoutes(app: FastifyInstance) {
     }
 
     const { habitId, date, notes, value } = parsed.data;
-    const state = parsed.data.state ?? "done";
-    // A rest day never counts as done, whatever the client sent.
-    const completed = state === "rest" ? false : parsed.data.completed;
-    const source = parsed.data.source ?? "tap";
-
-    /**
-     * `date` is the user's own calendar day, sent by the client. Nothing can
-     * be logged for a day that hasn't started yet. One day of slack, because
-     * a client too old to send X-Time-Zone is judged against UTC, and east of
-     * Greenwich the user's today is already UTC's tomorrow.
-     */
-    const today = request.localToday();
-    if (date > addDays(today, 1)) {
-      return reply.status(400).send({ success: false, error: "That day hasn't happened yet." });
-    }
-
-    if (date < today) {
-      const yesterday = addDays(today, -1);
-      if (date !== yesterday || localHour(new Date(), request.timeZone) >= BACKFILL_UNTIL_HOUR) {
-        return reply.status(400).send({
-          success: false,
-          error: "Yesterday can be changed until noon. Earlier days are locked.",
-        });
-      }
-    }
-
-    const habit = await prisma.habit.findUnique({ where: { id: habitId } });
-    if (!habit || habit.userId !== request.userId) {
-      return reply.status(404).send({ success: false, error: "Habit not found" });
-    }
-
-    // One planned rest day per habit per week, so rest stays a plan rather
-    // than a way around every miss.
-    if (state === "rest") {
-      const weekStart = weekStartKey(date);
-      const rested = await prisma.habitLog.findMany({
-        where: {
-          userId: request.userId,
-          habitId,
-          state: "rest",
-          completed: false,
-          date: { gte: dateFromKey(weekStart), lte: dateFromKey(addDays(weekStart, 6)) },
-        },
-        select: { date: true },
-      });
-      if (!canRestOn(new Set(rested.map((r) => dateKeyOf(r.date))), date)) {
-        return reply.status(400).send({
-          success: false,
-          error: "You've already taken this week's rest day for this habit.",
-        });
-      }
-    }
-
-    const day = dateFromKey(date);
-    const log = await prisma.habitLog.upsert({
-      where: { habitId_date: { habitId, date: day } },
-      create: {
-        habitId,
-        userId: habit.userId,
-        date: day,
-        completed,
-        notes,
-        state,
-        value,
-        source: date < today && source === "tap" ? "backfill" : source,
-      },
-      update: { completed, notes, state, value, loggedAt: new Date() },
+    const result = await logHabitDay({
+      userId: request.userId,
+      timeZone: request.timeZone,
+      habitId,
+      date,
+      notes,
+      value,
+      state: parsed.data.state,
+      completed: parsed.data.completed,
+      source: parsed.data.source,
     });
-
+    if (!result.ok) {
+      return reply.status(result.status).send({ success: false, error: result.error });
+    }
+    const { log } = result;
+    const state = log.state;
+    const completed = log.completed;
+    const source = log.source;
+    const today = request.localToday();
     request.log.info(
       {
         event: "habit_logged",
@@ -329,7 +272,6 @@ export async function habitRoutes(app: FastifyInstance) {
         state,
         source,
         backfill: date < today,
-        frequency: habit.frequency,
       },
       "habit event"
     );

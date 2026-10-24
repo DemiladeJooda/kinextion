@@ -519,3 +519,50 @@ export function ConcernCard({ onTalk }: { onTalk: () => void }) {
     </Card>
   );
 }
+
+// ─── Healthy use ──────────────────────────────────────────────────────────────
+
+/**
+ * Kairo checking in when the app itself looks like the compulsion. Says
+ * what was noticed, offers a conversation, and goes away when asked.
+ */
+export function UsageCard({
+  concern,
+  onTalk,
+  onDismiss,
+}: {
+  concern: { title: string; body: string };
+  onTalk: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <Card accent={color.purple}>
+      <Txt
+        variant="small"
+        c={color.purple}
+        style={{ fontWeight: "700", marginBottom: space.xs }}
+      >
+        Kairo
+      </Txt>
+      <Txt variant="bodyStrong">{concern.title}</Txt>
+      <Txt variant="small" c={color.textMuted} style={{ marginTop: 3 }}>
+        {concern.body}
+      </Txt>
+      <View
+        style={{ flexDirection: "row", gap: space.lg, marginTop: space.md }}
+      >
+        <LinkButton
+          label="Talk to Kairo →"
+          accent={color.purple}
+          onPress={onTalk}
+        />
+        <LinkButton
+          label="I'm okay"
+          accent={color.purple}
+          muted
+          onPress={onDismiss}
+        />
+      </View>
+    </Card>
+  );
+}

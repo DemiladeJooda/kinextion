@@ -254,6 +254,15 @@ export default function RootLayout() {
                 options={{ headerShown: true }}
               />
               <Stack.Screen
+                name="settings/habits"
+                options={{ headerShown: true }}
+              />
+              <Stack.Screen
+                name="settings/about"
+                options={{ headerShown: true }}
+              />
+              <Stack.Screen name="simulate" options={{ headerShown: true }} />
+              <Stack.Screen
                 name="settings/help"
                 options={{ headerShown: true }}
               />

@@ -13,7 +13,9 @@
     "nearby:seed": "tsx --env-file-if-exists=../../.env src/jobs/seed-nearby-groups.ts",
     "test": "vitest run",
     "clean": "rm -rf dist",
-    "media:smoke": "tsx --env-file-if-exists=../../.env scripts/media-smoke.ts"
+    "media:smoke": "tsx --env-file-if-exists=../../.env scripts/media-smoke.ts",
+    "ai:smoke": "tsx --env-file-if-exists=../../.env scripts/ai-smoke.ts",
+    "chat:smoke": "tsx --env-file-if-exists=../../.env scripts/chat-tools-smoke.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

@@ -6,7 +6,7 @@
  */
 
 import { apiRequest, apiRequestWithMeta } from "./client";
-import type { HabitChange } from "@kinextion/shared";
+import type { HabitChange, UserBackground } from "@kinextion/shared";
 import type {
   OnboardingInput,
   UpdateProfileInput,
@@ -62,6 +62,8 @@ export interface RemoteProfile {
   equipment: string[] | null;
   /** "someone who moves every day" — set at onboarding, editable. */
   identityGoal?: string | null;
+  /** Who they are, in their own words — read by the guides. */
+  background?: UserBackground | null;
   /** Notification and guide settings — including Kairo's spiritual dial. */
   preferences: {
     notificationsEnabled?: boolean;
@@ -70,6 +72,7 @@ export interface RemoteProfile {
     coachingIntensity?: "gentle" | "balanced" | "intense";
     scorePeriod?: "weekly" | "monthly" | "yearly";
     habitReminders?: boolean;
+    showStreaks?: boolean;
     doesTherapy?: boolean;
     doesJournal?: boolean;
     currentlyWorkingOut?: boolean;
@@ -192,6 +195,19 @@ export function updateHabit(
   return apiRequest<RemoteHabit>(`/api/habits/${id}`, {
     method: "PATCH",
     body: input,
+    token,
+  });
+}
+
+/**
+ * Reverses something a guide did in chat, from the Undo on its card. The
+ * spec comes from the server with the action, so the app never has to know
+ * how each kind of action is undone.
+ */
+export function undoChatAction(token: string | null, undo: Record<string, unknown>) {
+  return apiRequest<{ undone: boolean }>(`/api/chat/me/actions/undo`, {
+    method: "POST",
+    body: { undo },
     token,
   });
 }
@@ -368,6 +384,34 @@ export function precommit(
 
 export function listPrecommitments(token: string | null) {
   return apiRequest<RemotePrecommitment[]>("/api/habits/precommitments", {
+    token,
+  });
+}
+
+export interface RemoteAutomaticityCheck {
+  id: string;
+  habitId: string;
+  date: string;
+  score: number;
+}
+
+export function submitAutomaticity(
+  token: string | null,
+  habitId: string,
+  items: number[],
+) {
+  return apiRequest<RemoteAutomaticityCheck>(
+    `/api/habits/${habitId}/automaticity`,
+    {
+      method: "POST",
+      body: { items },
+      token,
+    },
+  );
+}
+
+export function listAutomaticity(token: string | null) {
+  return apiRequest<RemoteAutomaticityCheck[]>("/api/habits/automaticity", {
     token,
   });
 }

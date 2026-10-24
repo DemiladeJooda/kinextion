@@ -31,7 +31,7 @@ export function dataApiBaseUrl(): string {
  * is the user's today. Without it the day rolled over at UTC midnight —
  * 7pm in Dallas — and evening logs landed on tomorrow.
  */
-function deviceTimeZone(): string | undefined {
+export function deviceTimeZone(): string | undefined {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
   } catch {

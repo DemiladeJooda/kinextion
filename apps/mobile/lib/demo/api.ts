@@ -15,6 +15,7 @@ import {
   localDateKey,
   type CheckInInput,
   type CreateHabitInput,
+  type UserBackground,
 } from "@kinextion/shared";
 import type {
   AdmissionSeatView,
@@ -410,6 +411,7 @@ function seedLogs(): RemoteHabitLog[] {
 let logs = seedLogs();
 let demoReflections: Awaited<ReturnType<Api["listReflections"]>> = [];
 let demoPromises: Awaited<ReturnType<Api["listPrecommitments"]>> = [];
+let demoChecks: Awaited<ReturnType<Api["listAutomaticity"]>> = [];
 
 // ─── Check-in & score ─────────────────────────────────────────────────────────
 
@@ -1158,6 +1160,9 @@ function chest(id: string): ChestView {
 
 // ─── The API ──────────────────────────────────────────────────────────────────
 
+/** Empty until the demo viewer fills in "About you". */
+let background: UserBackground | null = null;
+
 const profile = () => {
   const s = getDemoSession();
   return {
@@ -1178,6 +1183,7 @@ const profile = () => {
       scorePeriod: "weekly" as const,
       currentlyWorkingOut: true,
     },
+    background,
     onboardingComplete: s.onboarded,
   };
 };
@@ -1276,6 +1282,7 @@ export const demoApi: Api = {
     if (input.displayName) updateDemoSession({ name: input.displayName });
     if ("avatarId" in input)
       updateDemoSession({ avatarId: input.avatarId ?? null });
+    if ("background" in input) background = input.background ?? null;
     return profile();
   },
   getDataSummary: async () => {
@@ -1335,6 +1342,8 @@ export const demoApi: Api = {
     habits = habits.map((h) => (h.id === id ? { ...h, isActive: false } : h));
     return { archived: true };
   },
+  // The demo guide never acts, so there is never anything to undo.
+  undoChatAction: async () => ({ undone: true }),
   restoreHabit: async (id) => {
     await wait();
     habits = habits.map((h) => (h.id === id ? { ...h, isActive: true } : h));
@@ -1397,6 +1406,23 @@ export const demoApi: Api = {
       ),
     ];
     return row;
+  },
+  submitAutomaticity: async (habitId, items) => {
+    await wait();
+    const score =
+      Math.round((items.reduce((a, b) => a + b, 0) / items.length) * 10) / 10;
+    const row = { id: uid("chk"), habitId, date: todayStr(), score };
+    demoChecks = [
+      ...demoChecks.filter(
+        (c) => !(c.habitId === habitId && c.date === row.date),
+      ),
+      row,
+    ];
+    return row;
+  },
+  listAutomaticity: async () => {
+    await wait();
+    return demoChecks;
   },
   listPrecommitments: async () => {
     await wait();

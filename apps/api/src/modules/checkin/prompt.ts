@@ -54,6 +54,7 @@ export async function generateCheckInPrompt(context: HabitContext): Promise<Chec
 
   try {
     const result = await generateStructured<{ prompt?: string; observation?: string }>({
+      task: "checkinPrompt",
       system,
       messages: [
         {
@@ -80,7 +81,6 @@ export async function generateCheckInPrompt(context: HabitContext): Promise<Chec
         },
         required: ["prompt"],
       },
-      maxTokens: 1024,
     });
 
     const prompt = result.prompt?.trim();

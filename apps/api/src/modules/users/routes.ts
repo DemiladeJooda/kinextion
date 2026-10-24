@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { clerkClient, getAuth } from "@clerk/fastify";
-import { prisma, type Prisma } from "@kinextion/database";
+import { prisma, Prisma } from "@kinextion/database";
 import { onboardingSchema, updateProfileSchema } from "@kinextion/shared";
 
 export async function userRoutes(app: FastifyInstance) {
@@ -101,6 +101,11 @@ export async function userRoutes(app: FastifyInstance) {
     if ("weeklyAvailability" in body) data.weeklyAvailability = body.weeklyAvailability;
     if ("equipment" in body) data.equipment = body.equipment as Prisma.InputJsonValue;
     if ("identityGoal" in body) data.identityGoal = body.identityGoal ?? null;
+    if ("background" in body) {
+      data.background = body.background
+        ? (body.background as Prisma.InputJsonValue)
+        : Prisma.DbNull;
+    }
 
     if (body.preferences) {
       const current = (existing.preferences as Record<string, unknown> | null) ?? {};

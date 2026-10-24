@@ -11,6 +11,7 @@ import { prisma } from "@kinextion/database";
 import { DEFAULT_RETENTION } from "@kinextion/shared";
 import { buildContext } from "@kinextion/ai-core";
 import { computePatterns } from "../../lib/patterns.js";
+import { habitsForChat } from "../../lib/habits-for-chat.js";
 import { loadFactsForPrompt } from "../../lib/memory/store.js";
 import { communityContextFor } from "../community/context.js";
 import { sharedCommunityDeps } from "../community/deps.js";
@@ -52,16 +53,24 @@ export async function prepareTurn(
   conversationId: string,
   persona: Persona,
   content: string,
-  topicId?: string
+  topicId?: string,
+  timeZone = "UTC"
 ): Promise<PreparedTurn> {
   await prisma.message.create({
     data: { conversationId, role: "user", content },
   });
 
-  const [conversation, profile, recentMessages, recentMood, patterns, memoryFacts] =
+  const [conversation, previous, profile, recentMessages, recentMood, patterns, memoryFacts] =
     await Promise.all([
       prisma.conversation.findUnique({
         where: { id: conversationId },
+        select: { summary: true },
+      }),
+      // The train of thought across sessions: a new chat opens with the
+      // summary of the last one with this guide, instead of starting cold.
+      prisma.conversation.findFirst({
+        where: { userId, persona, id: { not: conversationId }, summary: { not: null } },
+        orderBy: { updatedAt: "desc" },
         select: { summary: true },
       }),
       prisma.profile.findUnique({ where: { userId } }),
@@ -94,14 +103,25 @@ export async function prepareTurn(
     community = undefined;
   }
 
+  // Habits, best-effort like community: a failed read must not break a chat.
+  let habits;
+  try {
+    habits = await habitsForChat(userId, timeZone, profile?.identityGoal ?? null);
+  } catch {
+    habits = undefined;
+  }
+
   const ctx = buildContext(
     persona,
     {
       profile: profile as UserProfile | null,
       community,
+      habits,
       patterns: patterns.length ? patterns : undefined,
       memoryFacts: memoryFacts.length ? memoryFacts : undefined,
-      conversationSummary: conversation?.summary ?? undefined,
+      conversationSummary:
+        conversation?.summary ??
+        (previous?.summary ? `From your last conversation: ${previous.summary}` : undefined),
       recentMood: recentMood
         ? {
             mood: recentMood.mood,

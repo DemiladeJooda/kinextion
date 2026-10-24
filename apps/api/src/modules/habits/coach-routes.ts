@@ -7,17 +7,21 @@
  *   GET  /api/habits/reflections            recent answers (to not ask twice)
  *   POST /api/habits/:id/precommit          "Tomorrow, I'll …"
  *   GET  /api/habits/precommitments         promises for today and tomorrow
+ *   POST /api/habits/:id/automaticity       the weekly "automatic yet?" check
+ *   GET  /api/habits/automaticity           every check from the past year
  */
 
 import type { FastifyInstance } from "fastify";
 import { prisma, type Prisma } from "@kinextion/database";
 import {
   addDays,
+  automaticityCheckSchema,
   changeToUpdate,
   dateFromKey,
   habitChangeSchema,
   precommitSchema,
   reflectOnMissSchema,
+  srbaiScore,
   whatWouldItTake,
 } from "@kinextion/shared";
 import { reflectOnMiss } from "./coach.js";
@@ -164,6 +168,42 @@ export function registerCoachRoutes(app: FastifyInstance) {
       take: 100,
     });
     return { success: true, data: reflections };
+  });
+
+  /**
+   * The weekly "does this feel automatic yet?" check: four 1–7 answers,
+   * one per habit per day (a second answer the same day replaces the first).
+   */
+  app.post<{ Params: { id: string } }>("/:id/automaticity", async (request, reply) => {
+    const parsed = automaticityCheckSchema.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send(badRequest(parsed.error.issues));
+
+    const habit = await prisma.habit.findUnique({ where: { id: request.params.id } });
+    if (!habit || habit.userId !== request.userId) {
+      return reply.status(404).send({ success: false, error: "Habit not found" });
+    }
+
+    const day = dateFromKey(request.localToday());
+    const score = srbaiScore(parsed.data.items);
+    const check = await prisma.automaticityCheck.upsert({
+      where: { habitId_date: { habitId: habit.id, date: day } },
+      create: { userId: request.userId, habitId: habit.id, date: day, items: parsed.data.items, score },
+      update: { items: parsed.data.items, score },
+    });
+    request.log.info({ event: "automaticity_checked", score }, "habit event");
+    return reply.status(201).send({ success: true, data: check });
+  });
+
+  app.get("/automaticity", async (request) => {
+    const checks = await prisma.automaticityCheck.findMany({
+      where: {
+        userId: request.userId,
+        date: { gte: dateFromKey(addDays(request.localToday(), -365)) },
+      },
+      orderBy: { date: "asc" },
+      select: { id: true, habitId: true, date: true, score: true },
+    });
+    return { success: true, data: checks };
   });
 
   /** "Tomorrow, I'll …" — today or tomorrow only; saying it again replaces it. */

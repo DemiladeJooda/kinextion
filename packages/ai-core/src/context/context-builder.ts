@@ -1,4 +1,4 @@
-import type { Persona, UserProfile, ChatMessage } from "@kinextion/shared";
+import { formatBackground, type Persona, type UserProfile, type ChatMessage } from "@kinextion/shared";
 import { buildSystemPrompt } from "../personas/index";
 
 /**
@@ -24,6 +24,12 @@ export interface UserContext {
   /** Durable one-line facts distilled from past conversations — what the
    * guide still knows once the transcripts themselves are gone. */
   memoryFacts?: string[];
+  /**
+   * The user's habits as of today — plan, today's state, streak, recent
+   * consistency, their why and backup plan, what they promised and what they
+   * said after a miss. One line each, already worded for the model.
+   */
+  habits?: { identityGoal: string | null; lines: string[] };
   /**
    * Where this person sits in their community this week.
    *
@@ -83,6 +89,8 @@ function assembleSystemPrompt(
   // Tier 2: User Profile
   if (ctx.profile) {
     parts.push(formatProfileContext(ctx.profile));
+    const background = formatBackground(ctx.profile.background);
+    if (background) parts.push(`\n${background}`);
   }
 
   // Tier 3: Durable memory — what survives after transcripts are compacted.
@@ -105,6 +113,21 @@ function assembleSystemPrompt(
   const behavioralContext = formatBehavioralContext(ctx);
   if (behavioralContext) {
     parts.push(behavioralContext);
+  }
+
+  // Their habits — the product's core loop. After behavioural data so the
+  // guide reads mood and patterns first, then what the user is building.
+  if (ctx.habits && (ctx.habits.lines.length || ctx.habits.identityGoal)) {
+    const lines: string[] = [];
+    if (ctx.habits.identityGoal) {
+      lines.push(`- Who they're becoming, in their words: ${ctx.habits.identityGoal}`);
+    }
+    lines.push(...ctx.habits.lines);
+    parts.push(
+      `\n## Their Habits\n${lines.join("\n")}\n\n` +
+        "Use this to understand them, not to report on them. Bring a habit up only when it's relevant to what they're saying. " +
+        "Never list their habits back, never guilt them about a miss, and never mention streaks unless they do."
+    );
   }
 
   // Their community — participation, and the week's question if they're

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { backgroundSchema } from "../profile/index.js";
 
 // ─── Enums ───────────────────────────────────────────────────────
 
@@ -92,6 +93,8 @@ export const userPreferencesSchema = z.object({
   /** Per-habit reminders at each habit's part of the day, plus the evening
    *  last call. On by default once notifications are allowed. */
   habitReminders: z.boolean().optional(),
+  /** Streak counts shown at all. Off for people they stress. */
+  showStreaks: z.boolean().optional(),
   /** The window the displayed Kinextion Score aggregates and resets on. */
   scorePeriod: scorePeriodSchema.optional(),
   doesTherapy: z.boolean().optional(),
@@ -122,6 +125,8 @@ export const updateProfileSchema = z
     /** Null clears it. */
     identityGoal: identityGoalSchema.nullish(),
     preferences: userPreferencesSchema.optional(),
+    /** Replaces the whole section; null clears it. */
+    background: backgroundSchema.nullish(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: "Nothing to update" });
 

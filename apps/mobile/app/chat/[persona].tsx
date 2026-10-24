@@ -16,7 +16,9 @@ import * as Haptics from "expo-haptics";
 import Animated, { FadeIn, FadeInDown, Layout } from "react-native-reanimated";
 import { GUIDES, getGreeting, resolveGuideId, DEFAULT_GUIDE } from "@kinextion/ai-core";
 
-import { ChatError, streamChat, type ChatTurn } from "../../lib/api";
+import { ChatError, streamChat, type ChatAction, type ChatTurn } from "../../lib/api";
+import { useApi } from "../../hooks/useApi";
+import { useAppState } from "../../lib/store";
 import { AuroraBackdrop, Chip, Txt, TypingDots } from "../../components/ui";
 import { color, radius, space, tint, type } from "../../theme";
 
@@ -26,6 +28,13 @@ interface Message {
   content: string;
   /** Set when the turn failed — renders as a retryable error bubble. */
   error?: boolean;
+  /** What the guide did in the app during this reply. */
+  actions?: ShownAction[];
+}
+
+interface ShownAction extends ChatAction {
+  id: string;
+  undone?: boolean;
 }
 
 /** Conversation starters, tuned per guide. */
@@ -44,6 +53,8 @@ const OPENERS: Record<string, string[]> = {
 
 export default function ChatScreen() {
   const { getToken } = useAuth();
+  const api = useApi();
+  const { refresh } = useAppState();
   const { persona, topicId } = useLocalSearchParams<{
     persona: string;
     topicId?: string;
@@ -99,6 +110,8 @@ export default function ChatScreen() {
 
       const controller = new AbortController();
       abortRef.current = controller;
+      // Once the guide has changed something, Today should show it.
+      let acted = false;
 
       const settle = (content: string, error = false) =>
         setMessages((prev) => prev.map((m) => (m.id === replyId ? { ...m, content, error } : m)));
@@ -114,6 +127,23 @@ export default function ChatScreen() {
           onDelta: (full) => {
             setMessages((prev) =>
               prev.map((m) => (m.id === replyId ? { ...m, content: full } : m))
+            );
+          },
+          onAction: (action) => {
+            acted = true;
+            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === replyId
+                  ? {
+                      ...m,
+                      actions: [
+                        ...(m.actions ?? []),
+                        { ...action, id: `${replyId}-${m.actions?.length ?? 0}` },
+                      ],
+                    }
+                  : m
+              )
             );
           },
         });
@@ -132,9 +162,35 @@ export default function ChatScreen() {
         if (abortRef.current === controller) abortRef.current = null;
         setSending(false);
         scrollToEnd();
+        if (acted) void refresh();
       }
     },
-    [guideId, messages, scrollToEnd, sending, getToken]
+    [guideId, messages, scrollToEnd, sending, getToken, refresh]
+  );
+
+  /** Undo one card. The message stays; the card shows it was undone. */
+  const undo = useCallback(
+    async (messageId: string, action: ShownAction) => {
+      if (!action.undo || action.undone) return;
+      const mark = (undone: boolean) =>
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? { ...m, actions: m.actions?.map((a) => (a.id === action.id ? { ...a, undone } : a)) }
+              : m
+          )
+        );
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      mark(true);
+      try {
+        await api.undoChatAction(action.undo);
+        void refresh();
+      } catch {
+        mark(false);
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+    },
+    [api, refresh]
   );
 
   /** Drop the failed exchange and replay the user's last message. */
@@ -201,6 +257,7 @@ export default function ChatScreen() {
                 guideName={guide.name}
                 streaming={sending && index === messages.length - 1 && !item.content}
                 onRetry={item.error ? retry : undefined}
+                onUndo={(a) => undo(item.id, a)}
               />
             )}
           />
@@ -249,12 +306,14 @@ function Bubble({
   guideName,
   streaming,
   onRetry,
+  onUndo,
 }: {
   message: Message;
   guideColor: string;
   guideName: string;
   streaming: boolean;
   onRetry?: () => void;
+  onUndo: (action: ShownAction) => void;
 }) {
   const isUser = message.role === "user";
   const accent = message.error ? color.red : guideColor;
@@ -325,6 +384,10 @@ function Bubble({
         )}
       </View>
 
+      {message.actions?.map((a) => (
+        <ActionCard key={a.id} action={a} accent={guideColor} onUndo={() => onUndo(a)} />
+      ))}
+
       {onRetry ? (
         <Pressable
           onPress={onRetry}
@@ -341,6 +404,68 @@ function Bubble({
             Try again
           </Txt>
         </Pressable>
+      ) : null}
+    </Animated.View>
+  );
+}
+
+// ─── Action card ──────────────────────────────────────────────────────────────
+/** "Added: Push-ups" — what the guide just did in the app, with its Undo. */
+function ActionCard({
+  action,
+  accent,
+  onUndo,
+}: {
+  action: ShownAction;
+  accent: string;
+  onUndo: () => void;
+}) {
+  return (
+    <Animated.View
+      entering={FadeInDown.duration(240)}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: space.md,
+        marginTop: space.sm,
+        paddingHorizontal: space.md,
+        paddingVertical: space.sm,
+        borderRadius: radius.md,
+        borderWidth: 1,
+        borderColor: action.undone ? color.border : tint(accent, 0.3),
+        backgroundColor: action.undone ? "transparent" : tint(accent, 0.08),
+        opacity: action.undone ? 0.6 : 1,
+      }}
+    >
+      <Ionicons
+        name={action.undone ? "arrow-undo" : "checkmark-circle"}
+        size={18}
+        color={action.undone ? color.textFaint : accent}
+      />
+      <View style={{ flex: 1 }}>
+        <Txt
+          variant="bodyStrong"
+          c={action.undone ? color.textMuted : color.text}
+          style={{ textDecorationLine: action.undone ? "line-through" : "none" }}
+        >
+          {action.title}
+        </Txt>
+        {action.detail && !action.undone ? (
+          <Txt variant="small" c={color.textMuted}>
+            {action.detail}
+          </Txt>
+        ) : null}
+      </View>
+      {action.undo && !action.undone ? (
+        <Pressable onPress={onUndo} hitSlop={10}>
+          <Txt variant="small" c={accent}>
+            Undo
+          </Txt>
+        </Pressable>
+      ) : action.undone ? (
+        <Txt variant="small" c={color.textFaint}>
+          Undone
+        </Txt>
       ) : null}
     </Animated.View>
   );

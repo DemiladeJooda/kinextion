@@ -301,28 +301,42 @@ export function HabitForm({
       </Card>
 
       {/* ── 3. Tiny version ────────────────────────────────────────── */}
+      {/* Asked as a pair, usual version first, because people think in
+          their normal version; the tiny one only makes sense next to it.
+          A worked example closest to what they're building makes the idea
+          land without having to explain it. */}
       <Card>
         <View style={{ gap: space.md }}>
+          <View>
+            <Txt variant="bodyStrong">Make it easy on bad days</Txt>
+            <Txt variant="small" c={color.textMuted} style={{ marginTop: 2 }}>
+              Some days you&apos;ll be tired, busy or not feeling it. Decide now
+              what still counts, so a bad day never breaks the habit.
+            </Txt>
+          </View>
+          <Field
+            label="Your usual version (optional)"
+            value={values.fullVersion}
+            onChangeText={(v) => set("fullVersion", v)}
+            placeholder={tinyExampleFor(values.name).full}
+            maxLength={200}
+            accent={accent}
+          />
           <Field
             label={
-              isNew ? "The tiny version" : "The tiny version (recommended)"
+              isNew
+                ? "Your tiny version, for bad days"
+                : "Your tiny version, for bad days (recommended)"
             }
             value={values.response}
             onChangeText={(v) => set("response", v)}
-            placeholder="2 push-ups"
+            placeholder={tinyExampleFor(values.name).tiny}
             maxLength={200}
             accent={accent}
-            hint="Small enough to do on your worst day. Doing it keeps your streak."
+            hint="The easiest version that still counts. Doing it keeps your streak."
           />
           <Reading text={readingFor("response")} />
-          <Field
-            label="The full version (optional)"
-            value={values.fullVersion}
-            onChangeText={(v) => set("fullVersion", v)}
-            placeholder="3 sets of 10"
-            maxLength={200}
-            accent={accent}
-          />
+          <TinyExamples name={values.name} accent={accent} />
         </View>
       </Card>
 
@@ -594,6 +608,107 @@ function Reading({ text }: { text: string | null }) {
       >
         How Kinextion reads this: {text}
       </Txt>
+    </View>
+  );
+}
+
+// ─── Tiny version examples ────────────────────────────────────────────────────
+
+const TINY_EXAMPLES: Array<{ match: RegExp; full: string; tiny: string }> = [
+  {
+    match: /push|press/i,
+    full: "10 push-ups",
+    tiny: "5 push-ups on your knees",
+  },
+  {
+    match: /read|book|page/i,
+    full: "Read for 20 minutes",
+    tiny: "Read one page",
+  },
+  {
+    match: /walk|step/i,
+    full: "A 30-minute walk",
+    tiny: "Walk to the end of the street",
+  },
+  {
+    match: /run|jog/i,
+    full: "A 5k run",
+    tiny: "Put on your running shoes and jog one block",
+  },
+  {
+    match: /journal|write|diary/i,
+    full: "Write a page",
+    tiny: "Write one sentence",
+  },
+  {
+    match: /meditat|breath|mindful/i,
+    full: "10 minutes of meditation",
+    tiny: "Three slow breaths",
+  },
+  {
+    match: /gym|lift|train|workout|strength/i,
+    full: "A full gym session",
+    tiny: "Put on your gear and do one warm-up set",
+  },
+  {
+    match: /water|drink|hydrat/i,
+    full: "8 glasses of water",
+    tiny: "One glass when you wake up",
+  },
+  {
+    match: /stretch|yoga|mobil/i,
+    full: "20 minutes of yoga",
+    tiny: "One minute of stretching",
+  },
+  {
+    match: /sleep|bed|phone|screen/i,
+    full: "Phone away by 10pm",
+    tiny: "Phone on the charger across the room",
+  },
+];
+
+/** The example closest to what they're building, push-ups if nothing matches. */
+function tinyExampleFor(name: string) {
+  return TINY_EXAMPLES.find((e) => e.match.test(name)) ?? TINY_EXAMPLES[0];
+}
+
+/**
+ * Worked examples: the closest one to their habit first, then two others,
+ * so the idea ("the same habit, made tiny") is obvious at a glance.
+ */
+function TinyExamples({ name, accent }: { name: string; accent: string }) {
+  const first = tinyExampleFor(name);
+  const rest = TINY_EXAMPLES.filter((e) => e !== first).slice(0, 2);
+  return (
+    <View
+      style={{
+        gap: space.sm,
+        padding: space.md,
+        borderRadius: radius.md,
+        backgroundColor: tint(accent, 0.06),
+        borderWidth: 1,
+        borderColor: tint(accent, 0.18),
+      }}
+    >
+      <Label c={accent}>For example</Label>
+      {[first, ...rest].map((e) => (
+        <View
+          key={e.full}
+          style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}
+        >
+          <Txt variant="small" c={color.textMuted} style={{ flex: 1 }}>
+            {e.full}
+          </Txt>
+          <Ionicons name="arrow-forward" size={12} color={color.textFaint} />
+          <Txt
+            variant="small"
+            c={accent}
+            style={{ flex: 1, fontWeight: "600" }}
+          >
+            {e.tiny}
+          </Txt>
+        </View>
+      ))}
     </View>
   );
 }

@@ -1,3 +1,4 @@
+import type { UserBackground } from "../profile/index.js";
 // ─── AI Personas ─────────────────────────────────────────────────
 
 export type Persona = "altheo" | "kairo";
@@ -33,6 +34,8 @@ export interface UserProfile {
   equipment?: string[];
   healthConditions?: string[];
   preferences?: UserPreferences;
+  /** Who they are, in their own words. See profile/index.ts. */
+  background?: UserBackground | null;
   onboardingComplete: boolean;
 }
 

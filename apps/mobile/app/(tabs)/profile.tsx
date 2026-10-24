@@ -134,11 +134,25 @@ const SETTINGS: ReadonlyArray<{
     route: "/settings/edit",
   },
   {
+    key: "about",
+    icon: "earth-outline",
+    label: "About you",
+    accent: color.text,
+    route: "/settings/about",
+  },
+  {
     key: "notifications",
     icon: "notifications-outline",
     label: "Notifications",
     accent: color.text,
     route: "/settings/notifications",
+  },
+  {
+    key: "habits",
+    icon: "leaf-outline",
+    label: "Habits & streaks",
+    accent: color.text,
+    route: "/settings/habits",
   },
   {
     key: "privacy",

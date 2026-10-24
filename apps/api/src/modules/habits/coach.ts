@@ -101,6 +101,7 @@ export async function reflectOnMiss(
       backupPlan?: string;
       concern?: boolean;
     }>({
+      task: "coach",
       system,
       messages: [{ role: "user", content: answer.trim() || "(no answer)" }],
       toolName: "respond",
@@ -127,10 +128,10 @@ export async function reflectOnMiss(
         },
         required: ["reply", "change"],
       },
-      maxTokens: 600,
     });
 
-    const reply = result.reply?.trim();
+    // Length limits live in the schema's descriptions now; enforce them here.
+    const reply = result.reply?.trim().slice(0, 400);
     if (!reply) return FALLBACK;
     const change = habitChangeSchema.safeParse(result.change);
     const concern = result.concern === true;
@@ -138,7 +139,8 @@ export async function reflectOnMiss(
     return {
       reply,
       change: change.success && !concern ? change.data : { type: "none" },
-      backupPlan: !concern && result.backupPlan?.trim() ? result.backupPlan.trim() : null,
+      backupPlan:
+        !concern && result.backupPlan?.trim() ? result.backupPlan.trim().slice(0, 300) : null,
       concern,
     };
   } catch {

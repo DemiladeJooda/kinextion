@@ -22,6 +22,7 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import type { DisplayFields, PolishedField } from "@kinextion/shared";
+import { HabitProgress } from "../../components/ProgressCards";
 import {
   HabitForm,
   toCreateInput,
@@ -41,7 +42,7 @@ import { categoryColor, color, space } from "../../theme";
 export default function EditHabitScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { habits, editHabit, archiveHabit } = useAppState();
+  const { habits, editHabit, archiveHabit, showStreaks } = useAppState();
 
   const habit = habits.find((h) => h.id === id);
 
@@ -156,7 +157,14 @@ export default function EditHabitScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <ScreenHeader title={habit.name} subtitle={habitSummary(habit)} />
+          <ScreenHeader
+            title={habit.name}
+            subtitle={habitSummary(habit, showStreaks)}
+          />
+
+          <View style={{ marginBottom: space.xxl }}>
+            <HabitProgress habit={habit} showStreaks={showStreaks} />
+          </View>
 
           <HabitForm
             readings={readingsOf(habit)}
@@ -212,16 +220,21 @@ export default function EditHabitScreen() {
  * never drops to zero after one bad day, so it's the number that keeps
  * someone going when the streak just reset.
  */
-function habitSummary(habit: {
-  streak: number;
-  bestStreak: number;
-  streakUnit: "day" | "week";
-  month: { kept: number; due: number };
-}): string {
+function habitSummary(
+  habit: {
+    streak: number;
+    bestStreak: number;
+    streakUnit: "day" | "week";
+    month: { kept: number; due: number };
+  },
+  showStreaks = true,
+): string {
   const unit = habit.streakUnit === "week" ? "week" : "day";
   const parts: string[] = [];
-  if (habit.streak > 0) parts.push(`${habit.streak}-${unit} streak`);
-  if (habit.bestStreak > habit.streak) parts.push(`best ${habit.bestStreak}`);
+  if (showStreaks && habit.streak > 0)
+    parts.push(`${habit.streak}-${unit} streak`);
+  if (showStreaks && habit.bestStreak > habit.streak)
+    parts.push(`best ${habit.bestStreak}`);
   if (habit.month.due > 0)
     parts.push(`${habit.month.kept} of ${habit.month.due} this month`);
   return parts.length

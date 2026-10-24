@@ -76,6 +76,12 @@ model Profile {
    * Habits attach to it and progress is described in its terms.
    */
   identityGoal       String?
+  /**
+   * Who they are, in their own words — gender, background, where they live,
+   * work, household. All optional, self-described, never inferred. Lets the
+   * guides fit advice to a real life (Texas heat, night shifts, two kids).
+   */
+  background         Json?
   aiContext          Json? // evolving AI understanding of the user
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

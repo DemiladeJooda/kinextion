@@ -140,14 +140,25 @@ async function compactConversations(
   policy: RetentionPolicy,
   dryRun: boolean
 ): Promise<{ conversations: number; messages: number; errors: string[] }> {
+  const idleSince = new Date(Date.now() - policy.chatIdleDays * 86_400_000);
   const busy = await prisma.conversation.findMany({
     where: { messages: { some: {} } },
-    select: { id: true, _count: { select: { messages: true } } },
+    select: {
+      id: true,
+      _count: { select: { messages: true } },
+      messages: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
+    },
   });
 
-  const candidates = busy.filter(
-    (c) => c._count.messages > policy.chatWindowTurns + policy.chatSummaryTrigger
-  );
+  // Long conversations shed their overflow; quiet ones are folded down
+  // entirely, so no transcript outlives the few days it's useful for.
+  const candidates = busy
+    .map((c) => ({
+      id: c.id,
+      foldAll: (c.messages[0]?.createdAt ?? new Date()) < idleSince,
+      long: c._count.messages > policy.chatWindowTurns + policy.chatSummaryTrigger,
+    }))
+    .filter((c) => c.foldAll || c.long);
 
   if (dryRun) {
     return { conversations: candidates.length, messages: 0, errors: [] };
@@ -159,7 +170,7 @@ async function compactConversations(
 
   for (const candidate of candidates) {
     try {
-      const result = await compactConversation(candidate.id, policy);
+      const result = await compactConversation(candidate.id, policy, { foldAll: candidate.foldAll });
       if (result.compacted > 0) {
         conversations += 1;
         messages += result.compacted;

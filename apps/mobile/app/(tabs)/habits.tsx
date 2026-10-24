@@ -75,6 +75,12 @@ import {
 } from "../../lib/habit-reminders";
 import { requestNotificationPermission } from "../../lib/notifications";
 import {
+  AutomaticityCheckCard,
+  GraduateCard,
+} from "../../components/ProgressCards";
+import { UsageCard } from "../../components/CoachCards";
+import { useUsageConcern } from "../../lib/usage";
+import {
   ConcernCard,
   PromiseCard,
   RestartCard,
@@ -126,6 +132,8 @@ export default function TodayScreen() {
     answerMiss,
     applyReflection,
     promise,
+    submitAutomaticity,
+    showStreaks,
     score,
     periodScore,
     checkIn,
@@ -192,6 +200,13 @@ export default function TodayScreen() {
       ? allHabits.filter((h) => h.status === "paused")
       : [];
   const worrying = allHabits.some((h) => h.display.concern);
+  const usage = useUsageConcern(
+    (id) => allHabits.find((h) => h.id === id)?.name ?? "this one",
+  );
+  const [skippedChecks, setSkippedChecks] = useState<string[]>([]);
+  const checkFor =
+    habitsDone.find((h) => h.checkDue && !skippedChecks.includes(h.id)) ?? null;
+  const graduating = allHabits.find((h) => h.canGraduate) ?? null;
 
   // The check-in counts as a to-do; the workout is offered, not required,
   // so it never sits in the count as something you're behind on. A rested
@@ -319,6 +334,7 @@ export default function TodayScreen() {
               <HabitRow
                 habit={h}
                 isNext={i === 0}
+                showStreaks={showStreaks}
                 onToggle={() => toggleHabit(h.id)}
                 onMore={() => setSheetFor(h)}
               />
@@ -343,6 +359,19 @@ export default function TodayScreen() {
             </Animated.View>
           ) : null}
         </View>
+
+        {/* The weekly check, right after a tick — only when nothing else is
+            asking, so the list never stacks two questions. */}
+        {!askAbout && checkFor ? (
+          <View style={{ marginTop: space.md }}>
+            <AutomaticityCheckCard
+              key={checkFor.id}
+              habit={checkFor}
+              onSubmit={(items) => submitAutomaticity(checkFor.id, items)}
+              onSkip={() => setSkippedChecks((s) => [...s, checkFor.id])}
+            />
+          </View>
+        ) : null}
 
         {askAbout && askAbout.missedOn ? (
           <View style={{ marginTop: space.md }}>
@@ -451,6 +480,14 @@ export default function TodayScreen() {
         >
           <Label c={color.textFaint}>For you</Label>
 
+          {usage.concern ? (
+            <UsageCard
+              concern={usage.concern}
+              onTalk={() => router.push("/chat/kairo" as never)}
+              onDismiss={usage.dismiss}
+            />
+          ) : null}
+
           {worrying ? (
             <ConcernCard onTalk={() => router.push("/chat/kairo" as never)} />
           ) : null}
@@ -475,6 +512,18 @@ export default function TodayScreen() {
 
           <RemindersPrompt reminderHabits={reminderHabits} />
 
+          <SimulateCard onOpen={() => router.push("/simulate" as never)} />
+
+          {graduating ? (
+            <GraduateCard
+              key={graduating.id}
+              habit={graduating}
+              onGraduate={() =>
+                editHabit(graduating.id, { status: "established" })
+              }
+            />
+          ) : null}
+
           <FadeTip
             habits={allHabits}
             onTurnOff={(h) => void editHabit(h.id, { reminderEnabled: false })}
@@ -490,10 +539,11 @@ export default function TodayScreen() {
           <View style={{ gap: space.md }}>
             <Txt variant="bodyStrong">Your numbers</Txt>
             <StatsStrip
-              bestStreak={allHabits.reduce(
-                (m, h) => Math.max(m, h.bestStreak),
-                0,
-              )}
+              bestStreak={
+                showStreaks
+                  ? allHabits.reduce((m, h) => Math.max(m, h.bestStreak), 0)
+                  : null
+              }
               periodAverage={periodScore?.average ?? null}
               periodLabel={
                 periodScore ? PERIOD_LABEL[periodScore.period] : "This week"
@@ -619,10 +669,13 @@ function TaskRow({
 function HabitRow({
   habit,
   isNext,
+  showStreaks = true,
   onToggle,
   onMore,
 }: {
   habit: Habit;
+  /** Off in Settings → Habits & streaks: no flame, no count. */
+  showStreaks?: boolean;
   /** The top of the list: the one thing to do now, so the eye lands there. */
   isNext?: boolean;
   onToggle: () => void;
@@ -671,9 +724,13 @@ function HabitRow({
               style={{ marginTop: 1 }}
               numberOfLines={1}
             >
-              {habit.display.response
-                ? `Save your streak · even "${habit.display.response}" counts`
-                : "Save your streak today"}
+              {showStreaks
+                ? habit.display.response
+                  ? `Save your streak · even "${habit.display.response}" counts`
+                  : "Save your streak today"
+                : habit.display.response
+                  ? `Missed last time · even "${habit.display.response}" counts today`
+                  : "Missed last time · any version counts today"}
             </Txt>
           ) : habit.promiseToday ? (
             <Txt
@@ -696,7 +753,17 @@ function HabitRow({
           ) : null}
         </View>
 
-        {habit.streak > 0 ? (
+        {habit.status === "established" ? (
+          <View
+            style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
+            accessibilityLabel="Automatic"
+          >
+            <Ionicons name="leaf" size={12} color={color.teal} />
+            <Txt variant="small" c={color.teal} style={{ fontSize: 12 }}>
+              Automatic
+            </Txt>
+          </View>
+        ) : showStreaks && habit.streak > 0 ? (
           <View
             style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
             accessibilityLabel={`${habit.streak} ${habit.streakUnit} streak`}
@@ -1200,6 +1267,24 @@ function FeelingTask({
 }
 
 // ─── For you ──────────────────────────────────────────────────────────────────
+
+/** The way into the simulator: proof that there's more than one route. */
+function SimulateCard({ onOpen }: { onOpen: () => void }) {
+  return (
+    <PressCard onPress={onOpen} accent={color.blue} style={{ padding: space.lg }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+        <Ionicons name="git-branch-outline" size={20} color={color.blue} />
+        <View style={{ flex: 1 }}>
+          <Txt variant="bodyStrong">How habits form</Txt>
+          <Txt variant="small" c={color.textMuted}>
+            Six people, one habit, very different routes. Watch 90 days or 9 months play out.
+          </Txt>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={color.textFaint} />
+      </View>
+    </PressCard>
+  );
+}
 /**
  * Asks for notifications once there's something worth being reminded of,
  * rather than at launch. Hidden once allowed, or once the OS won't ask again.
@@ -1291,7 +1376,7 @@ function FadeTip({
         <Ionicons name="leaf-outline" size={18} color={color.teal} />
         <View style={{ flex: 1, gap: space.sm }}>
           <Txt variant="bodyStrong" c={color.teal}>
-            {habit.name}: {habit.streak} days running
+            {habit.name} is holding steady
           </Txt>
           <Txt variant="small" c={color.textMuted}>
             You might not need the reminder anymore. Want to try without it?
@@ -1372,17 +1457,22 @@ function StatsStrip({
   periodLabel,
   todayScore,
 }: {
-  bestStreak: number;
+  bestStreak: number | null;
   periodAverage: number | null;
   periodLabel: string;
   todayScore: number | null;
 }) {
   const tiles = [
-    {
-      label: "Best streak",
-      value: bestStreak > 0 ? `${bestStreak}d` : "—",
-      accent: color.amber,
-    },
+    ...(bestStreak === null
+      ? []
+      : [
+          {
+            label: "Best streak",
+            value: bestStreak > 0 ? `${bestStreak}d` : "—",
+            accent: color.amber,
+          },
+        ]),
+
     {
       label: periodLabel,
       value: periodAverage === null ? "—" : String(periodAverage),

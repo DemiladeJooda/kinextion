@@ -163,6 +163,7 @@ export async function suggestHabits(
   );
 
   const result = await generateStructured<{ drafts: unknown[] }>({
+    task: "habitSuggest",
     system,
     messages: [
       {
@@ -258,6 +259,7 @@ export async function discoverHabits(
     drafts?: unknown[];
     complete?: boolean;
   }>({
+    task: "habitDiscover",
     system,
     messages,
     toolName: "respond",
@@ -289,7 +291,8 @@ export async function discoverHabits(
     },
   });
 
-  const drafts = validateDrafts(result.drafts ?? []);
+  // The schema's item limit isn't enforced by structured outputs, so here.
+  const drafts = validateDrafts(result.drafts ?? []).slice(0, 4);
 
   return {
     reply: result.reply?.trim() || "Tell me a bit more about how your day usually goes.",

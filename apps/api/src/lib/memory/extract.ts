@@ -8,9 +8,18 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
-import { MEMORY_AI_CONFIG, type MemoryTier } from "@kinextion/shared";
+import { aiTask, type MemoryTier } from "@kinextion/shared";
+import { guidanceFor } from "../guidance.js";
 
 const anthropic = new Anthropic();
+
+/** The prompt plus the team's notes on memory (apps/api/guidance/memory.md). */
+function withNotes(system: string, task: "memoryExtract" | "memorySummary"): string {
+  const notes = guidanceFor(task);
+  return notes ? `${system}
+
+${notes}` : system;
+}
 
 export interface ExtractedFact {
   tier: Extract<MemoryTier, "core" | "pattern">;
@@ -73,11 +82,11 @@ export async function extractFacts(
 
   const response = await anthropic.messages.create(
     {
-      model: MEMORY_AI_CONFIG.model,
-      max_tokens: MEMORY_AI_CONFIG.maxTokens,
-      system: EXTRACTION_PROMPT,
+      model: aiTask("memoryExtract").model,
+      max_tokens: aiTask("memoryExtract").maxTokens,
+      system: withNotes(EXTRACTION_PROMPT, "memoryExtract"),
       output_config: {
-        effort: MEMORY_AI_CONFIG.effort,
+        effort: aiTask("memoryExtract").effort,
         format: { type: "json_schema", schema: FACT_SCHEMA },
       },
       messages: [{ role: "user", content: transcript }],
@@ -120,10 +129,10 @@ export async function summarizeConversation(
 
   const response = await anthropic.messages.create(
     {
-      model: MEMORY_AI_CONFIG.model,
-      max_tokens: MEMORY_AI_CONFIG.maxTokens,
-      system: SUMMARY_PROMPT,
-      output_config: { effort: MEMORY_AI_CONFIG.effort },
+      model: aiTask("memorySummary").model,
+      max_tokens: aiTask("memorySummary").maxTokens,
+      system: withNotes(SUMMARY_PROMPT, "memorySummary"),
+      output_config: { effort: aiTask("memorySummary").effort },
       messages: [{ role: "user", content: input }],
     },
     { signal }

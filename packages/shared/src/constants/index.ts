@@ -29,53 +29,94 @@ export const MAX_SCORE = 100;
 // ─── AI ──────────────────────────────────────────────────────────
 
 /**
- * Model choices.
+ * Which model does what.
  *
- * `maxTokens` bounds thinking *and* reply together on current models, where
- * adaptive thinking is on by default — the old 1024 was sized for a
- * reply-only budget and would truncate mid-sentence.
+ * Three tiers, chosen per task by how much understanding it needs:
+ *
+ *   deep      Claude Opus 5.5 — anything that has to understand the person:
+ *             the guides' conversations, designing a habit, reading a miss,
+ *             the daily recommendation.
+ *   balanced  Claude Sonnet 5.5 — real judgement on a narrower job: a
+ *             check-in question, the community's weekly topics, deciding
+ *             what's worth remembering.
+ *   light     Claude Haiku 5.5 — mechanical work: tidying wording,
+ *             compressing old chat history.
+ *
+ * To move a task, change its `tier` here; nothing else needs to change.
+ * `maxTokens` covers thinking and the reply together (thinking is on by
+ * default on all three). `effort` trades depth for cost and speed.
  */
+export const AI_MODELS = {
+  deep: "claude-opus-5-5",
+  balanced: "claude-sonnet-5-5",
+  light: "claude-haiku-5-5",
+} as const;
+
+export type AITier = keyof typeof AI_MODELS;
+export type AIEffort = "low" | "medium" | "high" | "xhigh" | "max";
+
+export const AI_TASKS = {
+  /** Altheo and Kairo in conversation. Streamed, so a large budget is safe. */
+  chat: { tier: "deep", effort: "medium", maxTokens: 16000 },
+  /** Proposing habits from what Kinextion knows. */
+  habitSuggest: { tier: "deep", effort: "medium", maxTokens: 12000 },
+  /** Working a habit out in conversation. */
+  habitDiscover: { tier: "deep", effort: "medium", maxTokens: 12000 },
+  /** "What would it take?" — reflect back, propose one change. */
+  coach: { tier: "deep", effort: "medium", maxTokens: 8000 },
+  /** The daily two-option micro-recommendation. */
+  recommendation: { tier: "deep", effort: "medium", maxTokens: 8000 },
+  /** One question to start the journal. */
+  checkinPrompt: { tier: "balanced", effort: "low", maxTokens: 4000 },
+  /** The community's weekly topic and summaries. */
+  community: { tier: "balanced", effort: "medium", maxTokens: 8000 },
+  /** Deciding which facts from a chat are worth remembering. */
+  memoryExtract: { tier: "balanced", effort: "low", maxTokens: 4000 },
+  /** Rewording a habit's text for display. Balanced, not light: the why is
+   *  shown back every day, and Haiku 5.5 kept inventing reasons the user
+   *  never gave (tested 23 Oct 2026). Runs once per habit edit, so it's cheap. */
+  polish: { tier: "balanced", effort: "low", maxTokens: 2000 },
+  /** Folding old chat turns into a summary. */
+  memorySummary: { tier: "light", effort: "low", maxTokens: 4000 },
+} as const satisfies Record<string, { tier: AITier; effort: AIEffort; maxTokens: number }>;
+
+export type AITask = keyof typeof AI_TASKS;
+
+/** The model, effort and budget for a task. */
+export function aiTask(task: AITask): { model: string; effort: AIEffort; maxTokens: number; tier: AITier } {
+  const t = AI_TASKS[task];
+  return { model: AI_MODELS[t.tier], effort: t.effort, maxTokens: t.maxTokens, tier: t.tier };
+}
+
+/** The guides' names and titles. Their model comes from `AI_TASKS.chat`. */
 export const AI_CONFIG = {
   altheo: {
     name: "Altheo",
     title: "The Coach",
     description: "Your adaptive training companion",
-    model: "claude-opus-5",
-    maxTokens: 8192,
+    model: AI_MODELS[AI_TASKS.chat.tier],
+    maxTokens: AI_TASKS.chat.maxTokens,
   },
   kairo: {
     name: "Kairo",
     title: "The Listener",
     description: "Your guide for reflection and clarity",
-    model: "claude-opus-5",
-    maxTokens: 8192,
+    model: AI_MODELS[AI_TASKS.chat.tier],
+    maxTokens: AI_TASKS.chat.maxTokens,
   },
 } as const;
 
-/**
- * Structured, user-facing generation: habit proposals, conversational habit
- * discovery, check-in prompts. Separate from the guides because the output is
- * a typed object rather than a conversation, and separate from the memory
- * jobs because a user is waiting on it.
- */
+/** @deprecated Use `aiTask(...)`. Kept for older imports. */
 export const ASSIST_AI_CONFIG = {
-  model: "claude-opus-5",
-  /** Bounds thinking and the structured reply together. A few drafts with
-   *  rationales fits comfortably; this leaves room to reason first. */
-  maxTokens: 4096,
+  model: AI_MODELS.deep,
+  maxTokens: 8000,
 } as const;
 
-/**
- * Background jobs that compress stored data — summarisation and fact
- * extraction. Separated from the guides so the cost dial for maintenance
- * work can move without touching the conversation experience.
- */
+/** @deprecated Use `aiTask("memoryExtract")` / `aiTask("memorySummary")`. */
 export const MEMORY_AI_CONFIG = {
-  model: "claude-opus-5",
-  /** Extraction returns a short JSON array; it never needs a long reply. */
-  maxTokens: 2048,
-  /** Compression is mechanical — the cheapest setting that does it well. */
-  effort: "low",
+  model: AI_MODELS[AI_TASKS.memoryExtract.tier],
+  maxTokens: AI_TASKS.memoryExtract.maxTokens,
+  effort: AI_TASKS.memoryExtract.effort,
 } as const;
 
 // ─── Onboarding ──────────────────────────────────────────────────

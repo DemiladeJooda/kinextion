@@ -18,6 +18,8 @@ import {
   isValidTimeZone,
   localDateKey,
   tallyBetween,
+  formatBackground,
+  type UserBackground,
 } from "@kinextion/shared";
 import { habitLogMaps, toScheduled } from "./score.js";
 import { computePatterns } from "./patterns.js";
@@ -114,6 +116,13 @@ export async function buildHabitContext(
       sections.push(`## Profile\n${lines.join("\n")}`);
       if (goals.length) basis.push(`${goals.length} stated goal${goals.length === 1 ? "" : "s"}`);
       if (profile.weeklyAvailability) basis.push(`${profile.weeklyAvailability} days/week available`);
+    }
+
+    // Who they are, in their words, so suggestions fit a real life.
+    const background = formatBackground(profile.background as UserBackground | null);
+    if (background) {
+      sections.push(background);
+      basis.push("what you shared about your life");
     }
   }
 

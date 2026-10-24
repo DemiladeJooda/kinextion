@@ -45,6 +45,8 @@ function useLiveApi() {
         withToken((token) => api.archiveHabit(token, id)),
       restoreHabit: (id: string) =>
         withToken((token) => api.restoreHabit(token, id)),
+      undoChatAction: (undo: Record<string, unknown>) =>
+        withToken((token) => api.undoChatAction(token, undo)),
       logHabit: (input: api.LogHabitInput) =>
         withToken((token) => api.logHabit(token, input)),
       reflectOnMiss: (
@@ -57,6 +59,9 @@ function useLiveApi() {
       precommit: (habitId: string, input: { forDate: string; text: string }) =>
         withToken((token) => api.precommit(token, habitId, input)),
       listPrecommitments: () => withToken(api.listPrecommitments),
+      submitAutomaticity: (habitId: string, items: number[]) =>
+        withToken((token) => api.submitAutomaticity(token, habitId, items)),
+      listAutomaticity: () => withToken(api.listAutomaticity),
       listHabitLogs: (range?: { from?: string; to?: string }) =>
         withToken((token) => api.listHabitLogs(token, range)),
 

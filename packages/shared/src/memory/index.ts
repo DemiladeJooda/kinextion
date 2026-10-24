@@ -35,6 +35,12 @@ export interface RetentionPolicy {
   /** Only summarise once there are this many turns above the window, so a
    *  quiet conversation isn't rewritten on every single message. */
   chatSummaryTrigger: number;
+  /**
+   * Days without a message before a conversation is folded down entirely:
+   * every remaining turn goes into its summary and facts, and the raw
+   * messages are deleted. Transcripts aren't kept; what matters is.
+   */
+  chatIdleDays: number;
   /** Days of raw wearable rows before they're rolled up and dropped. */
   rawMetricDays: number;
   /** Days before the untouched provider payload (`raw` JSON) is stripped.
@@ -54,6 +60,7 @@ export interface RetentionPolicy {
 export const DEFAULT_RETENTION: RetentionPolicy = {
   chatWindowTurns: 10,
   chatSummaryTrigger: 8,
+  chatIdleDays: 3,
   rawMetricDays: 120,
   rawPayloadDays: 30,
   rawBehaviourDays: 180,

@@ -1,11 +1,26 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { z } from "zod";
 import { prisma } from "@kinextion/database";
 import { sendMessageSchema } from "@kinextion/shared";
 import { getGreeting } from "@kinextion/ai-core";
-import { sendToAI, streamFromAI } from "./services/ai-service.js";
+import {
+  describeAIFailure,
+  sendToAI,
+  streamChatWithTools,
+  streamFromAI,
+} from "./services/ai-service.js";
+import {
+  CHAT_ACTIONS_PROMPT,
+  CHAT_TOOLS,
+  runChatTool,
+  undoChatAction,
+  undoSpecSchema,
+  type ChatAction,
+  type ToolContext,
+} from "./chat-tools.js";
 import { prepareTurn, resolveConversation } from "./conversation.js";
 import { compactConversation } from "../../lib/memory/store.js";
-import type { Persona } from "@kinextion/shared";
+import type { ChatMessage, Persona } from "@kinextion/shared";
 
 /**
  * Each call is a model request plus a background summarisation, making this
@@ -49,8 +64,24 @@ export async function chatRoutes(app: FastifyInstance) {
       return reply.status(404).send({ success: false, error: "Conversation not found" });
     }
 
-    const turn = await prepareTurn(request.userId, convo.id, persona as Persona, content, topicId);
-    const aiResponse = await sendToAI(persona as Persona, turn.systemPrompt, turn.messages);
+    const turn = await prepareTurn(
+      request.userId,
+      convo.id,
+      persona as Persona,
+      content,
+      topicId,
+      request.timeZone
+    );
+    let aiResponse: string;
+    try {
+      aiResponse = await sendToAI(persona as Persona, turn.systemPrompt, turn.messages);
+    } catch (err) {
+      const failure = describeAIFailure(err);
+      app.log.error({ err, cause: failure.cause, conversationId: convo.id }, "chat failed");
+      return reply
+        .status(failure.status)
+        .send({ success: false, error: failure.message, code: failure.code });
+    }
 
     await prisma.message.create({
       data: { conversationId: convo.id, role: "assistant", content: aiResponse },
@@ -86,42 +117,78 @@ export async function chatRoutes(app: FastifyInstance) {
       return reply.status(404).send({ success: false, error: "Conversation not found" });
     }
 
-    const turn = await prepareTurn(request.userId, convo.id, persona as Persona, content, topicId);
+    const turn = await prepareTurn(
+      request.userId,
+      convo.id,
+      persona as Persona,
+      content,
+      topicId,
+      request.timeZone
+    );
 
     // Client navigated away or hit stop → abort upstream so we stop paying
     // for tokens nobody will read.
     const controller = new AbortController();
     request.raw.on("close", () => controller.abort());
 
-    reply.raw.writeHead(200, {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-cache, no-store",
-      // Stops nginx and friends buffering the stream into one chunk.
-      "X-Accel-Buffering": "no",
-      "X-Conversation-Id": convo.id,
-    });
+    // Newer apps ask for events: text plus action cards, with the guide able
+    // to act in the app. Older builds keep the plain-text stream.
+    if (request.headers["x-chat-protocol"] === "events") {
+      return streamEvents(request, reply, convo.id, persona as Persona, turn, controller);
+    }
+
+    /**
+     * Headers wait for the first chunk of text. Committing to a 200 before
+     * the model has answered meant a failure (no credits, a bad key, an
+     * outage) arrived as a reply bubble saying "Something went wrong" — it
+     * looked like the guide talking. Until text flows, a failure can still
+     * be a real error response the app shows as one.
+     */
+    let started = false;
+    const start = () => {
+      if (started) return;
+      started = true;
+      reply.raw.writeHead(200, {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache, no-store",
+        // Stops nginx and friends buffering the stream into one chunk.
+        "X-Accel-Buffering": "no",
+        "X-Conversation-Id": convo.id,
+      });
+    };
 
     let full = "";
+    let streamed = "";
     try {
       full = await streamFromAI(
         persona as Persona,
         turn.systemPrompt,
         turn.messages,
-        (chunk) => reply.raw.write(chunk),
+        (chunk) => {
+          start();
+          streamed += chunk;
+          reply.raw.write(chunk);
+        },
         controller.signal
       );
     } catch (err) {
-      if (!controller.signal.aborted) {
-        app.log.error({ err, conversationId: convo.id }, "chat stream failed");
-        // Headers are long gone, so the only honest options are to end the
-        // stream or append a note the user can act on.
-        reply.raw.write(
-          full ? "\n\n(I got cut off there — say that again?)" : "Something went wrong — try again?"
-        );
+      if (controller.signal.aborted) {
+        if (started) reply.raw.end();
+        return reply;
       }
-    } finally {
-      reply.raw.end();
+      const failure = describeAIFailure(err);
+      app.log.error({ err, cause: failure.cause, conversationId: convo.id }, "chat stream failed");
+      if (!started) {
+        return reply
+          .status(failure.status)
+          .header("X-Conversation-Id", convo.id)
+          .send({ success: false, error: failure.message, code: failure.code });
+      }
+      // Cut off mid-reply: keep what arrived and say so.
+      reply.raw.write("\n\n(I got cut off there — say that again?)");
+      full = streamed;
     }
+    reply.raw.end();
 
     // Persist whatever actually reached the user, even a partial reply —
     // otherwise the next turn's history would contradict what's on screen.
@@ -148,6 +215,109 @@ export async function chatRoutes(app: FastifyInstance) {
     });
 
     return { success: true, data: conversations };
+  });
+
+  /**
+   * The chat as newline-delimited JSON events:
+   *   {"t":"text","v":"…"}       part of the reply
+   *   {"t":"action","action":{…}} something the guide did, with its Undo
+   *   {"t":"error","v":"…"}      it went wrong after text had started
+   *   {"t":"done"}
+   * Headers still wait for the first event, so a failure before anything is
+   * said is a real error response, as on the plain-text route.
+   */
+  async function streamEvents(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    conversationId: string,
+    persona: Persona,
+    turn: { systemPrompt: string; messages: ChatMessage[] },
+    controller: AbortController
+  ) {
+    let started = false;
+    const send = (event: Record<string, unknown>) => {
+      if (!started) {
+        started = true;
+        reply.raw.writeHead(200, {
+          "Content-Type": "application/x-ndjson; charset=utf-8",
+          "Cache-Control": "no-cache, no-store",
+          "X-Accel-Buffering": "no",
+          "X-Conversation-Id": conversationId,
+        });
+      }
+      reply.raw.write(`${JSON.stringify(event)}\n`);
+    };
+
+    const ctx: ToolContext = {
+      userId: request.userId,
+      timeZone: request.timeZone,
+      log: request.log,
+      created: 0,
+    };
+    const actions: ChatAction[] = [];
+    let streamed = "";
+
+    try {
+      const full = await streamChatWithTools({
+        persona,
+        systemPrompt: `${turn.systemPrompt}\n\n${CHAT_ACTIONS_PROMPT}`,
+        messages: turn.messages,
+        tools: CHAT_TOOLS,
+        onText: (v) => {
+          streamed += v;
+          send({ t: "text", v });
+        },
+        runTool: async (name, input) => {
+          const outcome = await runChatTool(name, input, ctx);
+          request.log.info({ event: "chat_tool", name, ok: !outcome.isError }, "chat event");
+          if (outcome.action) {
+            actions.push(outcome.action);
+            send({ t: "action", action: outcome.action });
+          }
+          return outcome;
+        },
+        signal: controller.signal,
+      });
+      streamed = full;
+    } catch (err) {
+      if (controller.signal.aborted) {
+        if (started) reply.raw.end();
+        return reply;
+      }
+      const failure = describeAIFailure(err);
+      app.log.error({ err, cause: failure.cause, conversationId }, "chat stream failed");
+      if (!started) {
+        return reply
+          .status(failure.status)
+          .header("X-Conversation-Id", conversationId)
+          .send({ success: false, error: failure.message, code: failure.code });
+      }
+      send({ t: "error", v: "I got cut off there — say that again?" });
+    }
+    send({ t: "done" });
+    reply.raw.end();
+
+    // The transcript keeps the words plus a short note of what was done, so
+    // the next turn knows ("Added: Push-ups") without storing tool traffic.
+    const note = actions.length ? `\n\n[${actions.map((a) => a.title).join("; ")}]` : "";
+    if (streamed || note) {
+      await prisma.message.create({
+        data: { conversationId, role: "assistant", content: `${streamed}${note}`.trim() },
+      });
+      compactInBackground(conversationId);
+    }
+    return reply;
+  }
+
+  /** Undo an action from its card in the chat. */
+  app.post("/me/actions/undo", async (request, reply) => {
+    const parsed = z.object({ undo: undoSpecSchema }).safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, error: "Nothing to undo." });
+    }
+    const ok = await undoChatAction(request.userId, request.timeZone, parsed.data.undo, request.log);
+    if (!ok) return reply.status(404).send({ success: false, error: "That's already gone." });
+    return { success: true, data: { undone: true } };
   });
 
   // Get greeting from a persona.

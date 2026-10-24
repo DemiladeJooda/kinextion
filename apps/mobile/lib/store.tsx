@@ -34,6 +34,9 @@ import {
   displayFields,
   describeHabitPlan,
   lastMissedOccasion,
+  checkDue,
+  readyToGraduate,
+  type AutomaticityPoint,
   type DateKey,
   type ReminderHabit,
   type DisplayFields,
@@ -44,11 +47,13 @@ import type {
   CheckInInput,
 } from "@kinextion/shared";
 import { useApi } from "../hooks/useApi";
+import { noteHabitLog } from "./usage";
 import type {
   LogWorkoutInput,
   RemoteHabit,
   RemoteHabitLog,
   RemoteMoodEntry,
+  RemoteAutomaticityCheck,
   RemotePrecommitment,
   RemoteReflection,
   ReflectResult,
@@ -115,6 +120,20 @@ export interface Habit {
   /** What they promised for today / tomorrow, if anything. */
   promiseToday: string | null;
   promiseTomorrow: string | null;
+  /** First day it was due: creation, or a later "start Monday". */
+  startDate: DateKey;
+  /** Weekly automaticity scores, oldest first. */
+  automaticity: AutomaticityPoint[];
+  /** Offer the weekly check now (done today, a week since the last). */
+  checkDue: boolean;
+  /** High and levelled off: offer to graduate it. */
+  canGraduate: boolean;
+  /** Day by day, for the habit page's calendar. */
+  history: {
+    done: ReadonlySet<DateKey>;
+    minimum: ReadonlySet<DateKey>;
+    rest: ReadonlySet<DateKey>;
+  };
 }
 
 interface AppState {
@@ -176,6 +195,11 @@ interface AppState {
   applyReflection: (reflectionId: string) => Promise<void>;
   /** "Tomorrow, I'll …" for one or more habits. */
   promise: (habitIds: string[], forDate: DateKey) => Promise<void>;
+  /** Streaks shown at all (Settings → Habits & streaks). */
+  showStreaks: boolean;
+  setShowStreaks: (show: boolean) => Promise<void>;
+  /** The weekly "does this feel automatic yet?" answers for a habit. */
+  submitAutomaticity: (habitId: string, items: number[]) => Promise<void>;
 }
 
 const Ctx = createContext<AppState | null>(null);
@@ -197,12 +221,15 @@ function addTo(map: Map<string, Set<DateKey>>, habitId: string, key: DateKey) {
 function logMaps(logs: RemoteHabitLog[]) {
   const completed = new Map<string, Set<DateKey>>();
   const rest = new Map<string, Set<DateKey>>();
+  const minimum = new Map<string, Set<DateKey>>();
   for (const l of logs) {
     const key = dateKeyOf(l.date);
-    if (l.completed) addTo(completed, l.habitId, key);
-    else if (l.state === "rest") addTo(rest, l.habitId, key);
+    if (l.completed) {
+      addTo(completed, l.habitId, key);
+      if (l.state === "minimum") addTo(minimum, l.habitId, key);
+    } else if (l.state === "rest") addTo(rest, l.habitId, key);
   }
-  return { completed, rest };
+  return { completed, rest, minimum };
 }
 
 /** First due day for a habit as the server sent it: creation, or a later start. */
@@ -221,6 +248,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [logs, setLogs] = useState<RemoteHabitLog[]>([]);
   const [reflections, setReflections] = useState<RemoteReflection[]>([]);
   const [promises, setPromises] = useState<RemotePrecommitment[]>([]);
+  const [checks, setChecks] = useState<RemoteAutomaticityCheck[]>([]);
+  const [showStreaks, setShowStreaksState] = useState(true);
   const [checkIn, setCheckIn] = useState<RemoteMoodEntry | null>(null);
   const [moodLogged, setMoodLogged] = useState(false);
   const [reflectionLogged, setReflectionLogged] = useState(false);
@@ -273,6 +302,16 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         .listPrecommitments()
         .then(setPromises)
         .catch(() => {});
+      void api
+        .listAutomaticity()
+        .then(setChecks)
+        .catch(() => {});
+      void api
+        .getMyProfile()
+        .then((me) =>
+          setShowStreaksState(me.profile?.preferences?.showStreaks !== false),
+        )
+        .catch(() => {});
       setLogs(dayLogs);
       setCheckIn(todayCheckIn.entry);
       applyScore(todayScore);
@@ -312,6 +351,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       };
       setLogs((prev) => [optimistic, ...prev.filter((l) => !sameDay(l))]);
       setError(null);
+      noteHabitLog(id);
 
       try {
         const { log, score: newScore } = await api.logHabit({
@@ -468,6 +508,35 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [api],
   );
 
+  const setShowStreaks = useCallback(
+    async (show: boolean) => {
+      setShowStreaksState(show);
+      try {
+        await api.updateProfile({ preferences: { showStreaks: show } });
+      } catch {
+        setShowStreaksState(!show);
+      }
+    },
+    [api],
+  );
+
+  const submitAutomaticity = useCallback(
+    async (habitId: string, items: number[]) => {
+      const saved = await api.submitAutomaticity(habitId, items);
+      setChecks((prev) => [
+        ...prev.filter(
+          (c) =>
+            !(
+              c.habitId === habitId &&
+              dateKeyOf(c.date) === dateKeyOf(saved.date)
+            ),
+        ),
+        saved,
+      ]);
+    },
+    [api],
+  );
+
   const habits = useMemo<Habit[]>(() => {
     const todayStr = today();
     const yesterday = addDays(todayStr, -1);
@@ -490,6 +559,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         startDate: startsOn && startsOn > created ? startsOn : created,
       };
       const progress = habitProgress(scheduled, done, todayStr, rest);
+      const points: AutomaticityPoint[] = checks
+        .filter((c) => c.habitId === h.id)
+        .map((c) => ({ date: dateKeyOf(c.date), score: c.score }));
       const missedOn =
         h.status === "paused"
           ? null
@@ -514,6 +586,24 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           ),
         promiseToday: promiseFor(h.id, todayStr),
         promiseTomorrow: promiseFor(h.id, addDays(todayStr, 1)),
+        startDate: scheduled.startDate,
+        automaticity: points,
+        checkDue: checkDue(
+          {
+            status: h.status,
+            startDate: scheduled.startDate,
+            doneToday: done.has(todayStr),
+            lastCheck: points.at(-1)?.date ?? null,
+          },
+          todayStr,
+        ),
+        canGraduate:
+          (h.status ?? "building") === "building" && readyToGraduate(points),
+        history: {
+          done,
+          minimum: maps.minimum.get(h.id) ?? none,
+          rest,
+        },
         atRisk: progress.atRisk,
         comeback: progress.comeback,
         yesterdayOpen:
@@ -552,7 +642,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         reminderEnabled: h.reminderEnabled ?? true,
       };
     });
-  }, [remoteHabits, logs, reflections, promises]);
+  }, [remoteHabits, logs, reflections, promises, checks]);
 
   const reminderHabits = useMemo<ReminderHabit[]>(() => {
     const maps = logMaps(logs);
@@ -604,6 +694,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       answerMiss,
       applyReflection,
       promise,
+      submitAutomaticity,
+      showStreaks,
+      setShowStreaks,
     }),
     [
       habits,
@@ -628,6 +721,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       answerMiss,
       applyReflection,
       promise,
+      submitAutomaticity,
+      showStreaks,
+      setShowStreaks,
     ],
   );
 
