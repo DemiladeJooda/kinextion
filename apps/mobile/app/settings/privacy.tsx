@@ -29,6 +29,8 @@ import {
 import { useApi } from "../../hooks/useApi";
 import type { DataSummary } from "../../services";
 import { color, radius, space, tint } from "../../theme";
+import { downloadMyData } from "../../lib/export";
+import { DEMO_MODE } from "../../lib/demo/session";
 
 /** Only protections that exist in the code today. */
 const PROTECTIONS = [
@@ -75,7 +77,8 @@ const COUNT_LABELS: Array<{ key: keyof DataSummary["counts"]; label: string }> =
 export default function PrivacyScreen() {
   const api = useApi();
   const router = useRouter();
-  const { signOut } = useAuth();
+  const { signOut, getToken } = useAuth();
+  const [exporting, setExporting] = useState(false);
 
   const [summary, setSummary] = useState<DataSummary | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -290,10 +293,38 @@ export default function PrivacyScreen() {
           />
         </Card>
 
-        <Txt variant="small" c={color.textFaint} style={{ marginTop: space.lg, fontSize: 11 }}>
-          A downloadable export of everything above isn&apos;t built yet. Until it is, deleting is
-          the only self-serve way to remove your data.
-        </Txt>
+        <Card style={{ marginTop: space.lg }}>
+          <Txt variant="bodyStrong">Download your data</Txt>
+          <Txt variant="small" c={color.textMuted} style={{ marginTop: 3 }}>
+            Everything above as one file: habits, check-ins, journals, conversations, what your
+            guides remember, and your community posts. Passwords and connection keys are never
+            included.
+          </Txt>
+          <Button
+            label="Download my data"
+            variant="secondary"
+            icon="download-outline"
+            accent={color.blue}
+            loading={exporting}
+            style={{ marginTop: space.lg }}
+            onPress={() => {
+              if (DEMO_MODE) {
+                Alert.alert("Demo", "In the real app this saves a file with all your data.");
+                return;
+              }
+              setExporting(true);
+              void (async () => {
+                try {
+                  await downloadMyData(await getToken());
+                } catch (err) {
+                  Alert.alert("Couldn't download", err instanceof Error ? err.message : "Try again.");
+                } finally {
+                  setExporting(false);
+                }
+              })();
+            }}
+          />
+        </Card>
       </ScrollView>
     </SafeAreaView>
   );

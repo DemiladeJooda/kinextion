@@ -75,7 +75,8 @@
           "microphonePermission": "Kinextion uses the microphone so you can talk to your guides.",
           "speechRecognitionPermission": "Kinextion turns what you say to your guides into text so they can answer you."
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true

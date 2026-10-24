@@ -161,6 +161,7 @@ export default function PrivacyPage() {
       <Section title="Your choices">
         <List
           items={[
+            "Download a copy: Profile → Privacy & data → Download my data. You get one file with your habits, check-ins, journals, conversations, remembered facts and community posts. Connection keys are never included, and neither is anything other people wrote.",
             "Delete everything: Profile → Privacy & data → Delete account, in the app. This immediately removes your habits, check-ins, journals, conversations, scores, connected accounts and remembered facts, then removes your sign-in identity. It cannot be undone.",
             "Disconnect a service: Profile → the connection → disconnect. Readings already pulled are removed with your account, or you can delete the account to remove them now.",
             "Stop sharing with a therapist: revoke consent in the app. Reports already generated and handed over are snapshots and stay as they were.",
