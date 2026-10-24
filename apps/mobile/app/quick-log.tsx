@@ -19,6 +19,16 @@ export default function QuickLog() {
   const router = useRouter();
   const done = useRef(false);
 
+  // Signed out, or nothing loads: give up after a few seconds and show Today.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (done.current) return;
+      done.current = true;
+      router.replace("/(tabs)/habits" as never);
+    }, 6000);
+    return () => clearTimeout(t);
+  }, [router]);
+
   useEffect(() => {
     if (done.current) return;
     const target = habits.find((h) => h.id === habit);

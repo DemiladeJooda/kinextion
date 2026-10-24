@@ -584,7 +584,8 @@ export default function TodayScreen() {
       <LogSheet
         habit={sheetFor}
         onClose={() => setSheetFor(null)}
-        onAmount={(h) => setAmountFor(h)}
+        // iOS won't present a sheet while another is still closing.
+        onAmount={(h) => setTimeout(() => setAmountFor(h), 450)}
         onMinimum={(h) => setHabitDay(h.id, "minimum")}
         onRest={(h) => setHabitDay(h.id, "rest")}
         onNote={(h, notes) =>

@@ -86,16 +86,25 @@ function asSimHabit(h: Habit): SimHabit {
   };
 }
 
+interface DaySets {
+  done: ReadonlySet<DateKey>;
+  minimum: ReadonlySet<DateKey>;
+  rest: ReadonlySet<DateKey>;
+}
+
+/** The app keeps this many days of logs in memory; older habits fetch their own. */
+const LOADED_DAYS = 89;
+
 /** What really happened each day since it started. Today counts once it's logged. */
-function realHistory(h: Habit, today: DateKey) {
-  const last = h.history.done.has(today) || h.history.rest.has(today) ? today : addDays(today, -1);
+function realHistory(h: Habit, today: DateKey, sets: DaySets = h.history) {
+  const last = sets.done.has(today) || sets.rest.has(today) ? today : addDays(today, -1);
   if (last < h.startDate) return [];
   return historyFromLogs(h.startDate, last, (d) =>
-    h.history.minimum.has(d)
+    sets.minimum.has(d)
       ? "tiny"
-      : h.history.done.has(d)
+      : sets.done.has(d)
         ? "full"
-        : h.history.rest.has(d) || h.frequency === "weekly" || !isDueOn(h, d, h.history.done)
+        : sets.rest.has(d) || h.frequency === "weekly" || !isDueOn(h, d, sets.done)
           ? "rest"
           : "missed"
   );
@@ -136,10 +145,35 @@ export default function SimulateScreen() {
   const habit = real ? asSimHabit(real) : (DEMO_HABITS.find((h) => h.id === habitId) ?? DEMO_HABITS[0]);
   const todayKey = useMemo(() => localDateKey(), []);
 
+  // Older than what the app keeps loaded: fetch its whole history, so early
+  // days aren't mistaken for misses.
+  const [fullSets, setFullSets] = useState<{ habitId: string; sets: DaySets } | null>(null);
+  const needsFull = real !== null && real.startDate < addDays(todayKey, -LOADED_DAYS);
+  useEffect(() => {
+    if (!real || !needsFull || fullSets?.habitId === real.id) return;
+    api
+      .listHabitLogs({ from: real.startDate })
+      .then((logs) => {
+        const sets = { done: new Set<DateKey>(), minimum: new Set<DateKey>(), rest: new Set<DateKey>() };
+        for (const l of logs) {
+          if (l.habitId !== real.id) continue;
+          const d = l.date.slice(0, 10);
+          if (l.completed) sets.done.add(d);
+          if (l.completed && l.state === "minimum") sets.minimum.add(d);
+          if (!l.completed && l.state === "rest") sets.rest.add(d);
+        }
+        setFullSets({ habitId: real.id, sets });
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [real?.id, needsFull]);
+
   // Your own habit: real days so far, then a few futures from today.
   const personal = useMemo(() => {
     if (!real) return null;
-    const history = realHistory(real, todayKey);
+    const sets = needsFull ? (fullSets?.habitId === real.id ? fullSets.sets : null) : real.history;
+    if (!sets) return null;
+    const history = realHistory(real, todayKey, sets);
     const total = Math.max(SIM_LENGTHS[length], history.length + 60);
     return simulatePersonal({
       habit,
@@ -149,7 +183,7 @@ export default function SimulateScreen() {
       checks: real.automaticity,
       ahead: total - history.length,
     });
-  }, [real, habit, life, length, todayKey]);
+  }, [real, habit, life, length, todayKey, needsFull, fullSets]);
 
   const start = real ? real.startDate : todayKey;
   const runs = useMemo(
@@ -169,8 +203,9 @@ export default function SimulateScreen() {
   useEffect(() => {
     setSelected((s) => Math.min(s, runs.length - 1));
     if (hereDay) setDay(hereDay);
+    // Also once the habit's history arrives, so a deep link opens at today.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [habitId]);
+  }, [habitId, hereDay !== null]);
 
   // Play: the whole stretch in about ten seconds.
   useEffect(() => {

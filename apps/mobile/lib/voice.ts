@@ -14,13 +14,13 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import * as Speech from "expo-speech";
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from "expo-audio";
 import { File, Paths } from "expo-file-system";
 import type { Persona } from "@kinextion/shared";
 import { dataApiBaseUrl } from "../services/client";
 
 type RecognitionModule = typeof import("expo-speech-recognition");
+type SpeechModule = typeof import("expo-speech");
 
 let recognition: RecognitionModule | null = null;
 try {
@@ -31,8 +31,20 @@ try {
   recognition = null;
 }
 
+// The device voice is a native module too; a build without it can still
+// listen and show replies, it just can't read them aloud.
+let Speech: SpeechModule | null = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  Speech = require("expo-speech") as SpeechModule;
+} catch {
+  Speech = null;
+}
+
 /** Whether this build can listen at all. */
 export const voiceSupported = recognition !== null;
+/** Whether this build can read replies aloud with the phone's voice. */
+export const deviceSpeechSupported = Speech !== null;
 
 // ─── Listening ────────────────────────────────────────────────────────────────
 
@@ -136,6 +148,7 @@ let deviceVoice: string | null | undefined;
 /** The best English voice on the phone: an enhanced one if it has it. */
 async function pickDeviceVoice(): Promise<string | null> {
   if (deviceVoice !== undefined) return deviceVoice;
+  if (!Speech) return (deviceVoice = null);
   try {
     const voices = await Speech.getAvailableVoicesAsync();
     const english = voices.filter((v) => v.language?.toLowerCase().startsWith("en-us"));
@@ -198,10 +211,12 @@ export function createSpeaker({
   };
 
   const playDevice = async (text: string) => {
+    const tts = Speech;
+    if (!tts) return;
     const voice = await pickDeviceVoice();
     await new Promise<void>((resolve) => {
       finish = resolve;
-      Speech.speak(text, {
+      tts.speak(text, {
         ...(voice ? { voice } : {}),
         ...DEVICE_STYLE[persona],
         onDone: () => resolve(),
@@ -262,7 +277,7 @@ export function createSpeaker({
     stop() {
       stopped = true;
       queue.length = 0;
-      void Speech.stop();
+      void Speech?.stop();
       player?.pause();
       player?.remove();
       player = null;
