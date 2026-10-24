@@ -64,15 +64,24 @@ export default function ChatScreen() {
   const { getToken } = useAuth();
   const api = useApi();
   const { refresh } = useAppState();
-  const { persona, topicId } = useLocalSearchParams<{
+  const { persona, topicId, intro } = useLocalSearchParams<{
     persona: string;
     topicId?: string;
+    /** "build": straight from onboarding, to make the first habit by talking. */
+    intro?: string;
   }>();
   const guideId = resolveGuideId(persona) ?? DEFAULT_GUIDE;
   const guide = GUIDES[guideId];
 
   const [messages, setMessages] = useState<Message[]>(() => [
-    { id: "greeting", role: "assistant", content: getGreeting(guideId) },
+    {
+      id: "greeting",
+      role: "assistant",
+      content:
+        intro === "build"
+          ? "Welcome. Tell me one thing you'd like to do more of, even something small, and I'll set it up with you. Say it out loud or type it, whichever's easier."
+          : getGreeting(guideId),
+    },
   ]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);

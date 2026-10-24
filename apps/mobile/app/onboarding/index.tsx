@@ -39,6 +39,7 @@ import {
   Txt,
 } from "../../components/ui";
 import { StartChoice, StarterPicker } from "../../components/StarterPicker";
+import { MiniFan } from "../../components/MiniFan";
 import { useApi } from "../../hooks/useApi";
 import { useAppState } from "../../lib/store";
 import { color, radius, space, tint, type } from "../../theme";
@@ -116,6 +117,7 @@ type Step =
       options: readonly string[];
     }
   | { key: "identity"; kind: "identity"; question: string; hint: string }
+  | { key: "possible"; kind: "possible"; question: string; hint: string }
   | { key: "starter"; kind: "starter"; question: string; hint: string };
 
 /** Lifestyle chip labels, in the order shown — mapped to preference flags at submit time. */
@@ -124,6 +126,16 @@ const LIFESTYLE_OPTIONS = [
   "I journal regularly",
   "I already work out",
 ] as const;
+
+const ONBOARDING_INPUT = {
+  backgroundColor: color.surface,
+  borderWidth: 1,
+  borderColor: color.border,
+  borderRadius: radius.lg,
+  paddingHorizontal: space.lg,
+  paddingVertical: space.md,
+  color: color.text,
+} as const;
 
 const STEPS: Step[] = [
   {
@@ -170,9 +182,15 @@ const STEPS: Step[] = [
   {
     key: "lifestyle",
     kind: "lifestyle",
-    question: "Anything already part of your life?",
-    hint: "Optional — this just tells the guides what's already in motion, so they don't suggest what you're already doing.",
+    question: "A bit about your life",
+    hint: "Optional. Where you live and what your days look like help your guides fit their advice to your real life, like the weather, your shifts, your family.",
     options: LIFESTYLE_OPTIONS,
+  },
+  {
+    key: "possible",
+    kind: "possible",
+    question: "There's more than one way there",
+    hint: "Six people, the same habit. Most take about two months for it to feel automatic. Some take three weeks, some most of a year, and a missed day doesn't send anyone back to zero.",
   },
   {
     key: "starter",
@@ -199,6 +217,8 @@ export default function OnboardingScreen() {
   const [equipmentOther, setEquipmentOther] = useState("");
   const [lifestyle, setLifestyle] = useState<string[]>([]);
   const [identity, setIdentity] = useState("");
+  const [where, setWhere] = useState("");
+  const [days, setDays] = useState("");
   const [starterIds, setStarterIds] = useState<string[]>([]);
   const [start, setStart] = useState<"today" | "monday">("today");
   const { addHabits } = useAppState();
@@ -216,6 +236,7 @@ export default function OnboardingScreen() {
           : !!single[step.key]
         : step.kind === "lifestyle" ||
             step.kind === "identity" ||
+            step.kind === "possible" ||
             step.kind === "starter"
           ? true // optional — context, never a gate
           : multi.length > 0;
@@ -225,7 +246,8 @@ export default function OnboardingScreen() {
   const identityGoal =
     identity.trim().length >= 3 ? identity.trim() : undefined;
 
-  const next = async () => {
+  /** Finish onboarding; `talk` opens Altheo to build the first habit by conversation. */
+  const next = async (talk = false) => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (!isLast) {
       setIndex((i) => i + 1);
@@ -254,6 +276,14 @@ export default function OnboardingScreen() {
           doesJournal: lifestyle.includes("I journal regularly"),
           currentlyWorkingOut: lifestyle.includes("I already work out"),
         },
+        ...(where.trim() || days.trim()
+          ? {
+              background: {
+                ...(where.trim() ? { location: where.trim() } : {}),
+                ...(days.trim() ? { work: days.trim() } : {}),
+              },
+            }
+          : {}),
       });
       // The profile is saved first, so a failure here never loses onboarding.
       const picked = starters.filter((h) => starterIds.includes(h.id));
@@ -265,6 +295,7 @@ export default function OnboardingScreen() {
         ).catch(() => {});
       }
       router.replace("/(tabs)" as never);
+      if (talk) router.push("/chat/altheo?intro=build" as never);
     } catch {
       setError("Couldn't save that. Check your connection and try again.");
     } finally {
@@ -551,6 +582,8 @@ export default function OnboardingScreen() {
                     ))}
                   </View>
                 </View>
+              ) : step.kind === "possible" ? (
+                <MiniFan />
               ) : step.kind === "starter" ? (
                 <View style={{ gap: space.xl }}>
                   <StarterPicker
@@ -613,6 +646,26 @@ export default function OnboardingScreen() {
                       </Animated.View>
                     );
                   })}
+                  <View style={{ gap: space.sm, marginTop: space.lg }}>
+                    <Label>Where you live</Label>
+                    <TextInput
+                      value={where}
+                      onChangeText={setWhere}
+                      placeholder="e.g. Houston, Texas"
+                      placeholderTextColor={color.textFaint}
+                      maxLength={80}
+                      style={[type.body, ONBOARDING_INPUT]}
+                    />
+                    <Label>What your days look like</Label>
+                    <TextInput
+                      value={days}
+                      onChangeText={setDays}
+                      placeholder="e.g. nurse on night shifts, two kids"
+                      placeholderTextColor={color.textFaint}
+                      maxLength={120}
+                      style={[type.body, ONBOARDING_INPUT]}
+                    />
+                  </View>
                 </View>
               ) : (
                 <View>
@@ -756,11 +809,21 @@ export default function OnboardingScreen() {
                   ? `Let's go${name.trim() ? `, ${name.trim()}` : ""}`
                   : "Continue"
               }
-              onPress={next}
+              onPress={() => next()}
               loading={submitting}
               disabled={!canAdvance || submitting}
               accent={color.green}
             />
+            {isLast ? (
+              <Button
+                label="Or just tell Altheo what you want to build"
+                variant="ghost"
+                icon="mic-outline"
+                accent={color.green}
+                disabled={submitting}
+                onPress={() => next(true)}
+              />
+            ) : null}
           </Animated.View>
 
           <Txt

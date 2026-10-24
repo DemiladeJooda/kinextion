@@ -46,6 +46,7 @@ export async function userRoutes(app: FastifyInstance) {
         equipment: data.equipment ?? [],
         identityGoal: data.identityGoal,
         preferences: data.preferences as Prisma.InputJsonValue | undefined,
+        background: data.background as Prisma.InputJsonValue | undefined,
         onboardingComplete: true,
       },
       update: {
@@ -57,6 +58,7 @@ export async function userRoutes(app: FastifyInstance) {
         equipment: data.equipment ?? [],
         ...(data.identityGoal ? { identityGoal: data.identityGoal } : {}),
         ...(data.preferences ? { preferences: data.preferences as Prisma.InputJsonValue } : {}),
+        ...(data.background ? { background: data.background as Prisma.InputJsonValue } : {}),
         onboardingComplete: true,
       },
     });

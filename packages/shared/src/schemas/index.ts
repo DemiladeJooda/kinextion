@@ -67,6 +67,8 @@ export const onboardingSchema = z.object({
       currentlyWorkingOut: z.boolean().optional(),
     })
     .optional(),
+  /** Optional: where they live and what their days look like, in their words. */
+  background: backgroundSchema.optional(),
 });
 
 export type OnboardingInput = z.infer<typeof onboardingSchema>;
