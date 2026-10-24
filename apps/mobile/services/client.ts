@@ -13,14 +13,23 @@ import Constants from "expo-constants";
  * instead of the Next.js app's (3000).
  */
 export function dataApiBaseUrl(): string {
-  const configured = process.env.EXPO_PUBLIC_DATA_API_URL?.trim();
-  if (configured) return configured.replace(/\/$/, "");
-
   const hostUri =
     Constants.expoConfig?.hostUri ??
     (Constants.manifest as { debuggerHost?: string } | null)?.debuggerHost;
-
   const host = typeof hostUri === "string" ? hostUri.split(":")[0] : null;
+
+  const configured = process.env.EXPO_PUBLIC_DATA_API_URL?.trim();
+  if (configured) {
+    // The development build is configured with localhost, which on a real
+    // phone is the phone. When the app was loaded from a dev machine, mean
+    // that machine instead.
+    const local = configured.match(/^(https?:\/\/)(localhost|127\.0\.0\.1)(:\d+)?/);
+    if (local && host && host !== "localhost") {
+      return configured.replace(local[2], host).replace(/\/$/, "");
+    }
+    return configured.replace(/\/$/, "");
+  }
+
   if (host) return `http://${host}:3001`;
 
   return "http://localhost:3001";
