@@ -193,6 +193,13 @@ describe("log_habit", () => {
     expect(db.logs).toHaveLength(0);
   });
 
+  it("logs an amount for a counted habit, and the habit decides what it counts as", async () => {
+    Object.assign(db.habits[0], { measureTarget: 8, measureTiny: 2, measureUnit: "glasses" });
+    const out = await runChatTool("log_habit", { habit_id: "h1", how: "done", amount: 3 }, ctx());
+    expect(db.logs[0]).toMatchObject({ completed: true, state: "minimum", value: 3, source: "chat" });
+    expect(out.action?.title).toBe("Push-ups: 3");
+  });
+
   it("follows the app's rules: yesterday is locked after noon", async () => {
     vi.setSystemTime(new Date("2026-10-23T19:00:00Z")); // 2pm in Dallas
     const out = await runChatTool("log_habit", { habit_id: "h1", how: "done", day: "yesterday" }, ctx());

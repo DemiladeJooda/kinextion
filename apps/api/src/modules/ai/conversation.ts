@@ -8,7 +8,7 @@
  */
 
 import { prisma } from "@kinextion/database";
-import { DEFAULT_RETENTION } from "@kinextion/shared";
+import { DEFAULT_RETENTION, localDateKey } from "@kinextion/shared";
 import { buildContext } from "@kinextion/ai-core";
 import { computePatterns } from "../../lib/patterns.js";
 import { habitsForChat } from "../../lib/habits-for-chat.js";
@@ -134,5 +134,16 @@ export async function prepareTurn(
     chatMessages
   );
 
-  return { systemPrompt: ctx.systemPrompt, messages: ctx.messages };
+  return { systemPrompt: `${ctx.systemPrompt}\n\n${rightNow(timeZone)}`, messages: ctx.messages };
+}
+
+/**
+ * The guides had no idea what day it was, so "tomorrow", "this evening" or
+ * "back next Sunday" couldn't be turned into anything. To the hour, in the
+ * user's own time zone — precise enough to plan with.
+ */
+export function rightNow(timeZone: string, at = new Date()): string {
+  const date = at.toLocaleDateString("en-US", { timeZone, weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  const hour = at.toLocaleTimeString("en-US", { timeZone, hour: "numeric", hour12: true });
+  return `## Right now\nIt's ${date}, around ${hour.toLowerCase().replace(" ", "")} where they are (${localDateKey(at, timeZone)}).`;
 }

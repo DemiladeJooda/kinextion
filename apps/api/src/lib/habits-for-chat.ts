@@ -25,6 +25,7 @@ import {
   habitProgress,
   isDueOn,
   localDateKey,
+  PROVIDER_LABEL,
 } from "@kinextion/shared";
 import { habitLogMaps, STREAK_LOG_FILTER, toScheduled } from "./score.js";
 
@@ -42,7 +43,7 @@ export async function habitsForChat(
   identityGoal: string | null
 ): Promise<HabitsForChat> {
   const today = localDateKey(new Date(), timeZone);
-  const [habits, logs, reflections, promises] = await Promise.all([
+  const [habits, logs, reflections, promises, away] = await Promise.all([
     prisma.habit.findMany({
       where: { userId, isActive: true },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
@@ -50,7 +51,7 @@ export async function habitsForChat(
     }),
     prisma.habitLog.findMany({
       where: { userId, ...STREAK_LOG_FILTER, date: { gte: dateFromKey(addDays(today, -60)) } },
-      select: { habitId: true, date: true, completed: true, state: true },
+      select: { habitId: true, date: true, completed: true, state: true, value: true },
     }),
     prisma.habitReflection.findMany({
       where: { userId, answer: { not: "" }, date: { gte: dateFromKey(addDays(today, -14)) } },
@@ -60,11 +61,29 @@ export async function habitsForChat(
     prisma.precommitment.findMany({
       where: { userId, forDate: dateFromKey(today) },
     }),
+    prisma.awayPeriod.findFirst({ where: { userId, endedAt: null }, orderBy: { createdAt: "desc" } }),
   ]);
+  const shared = new Set(
+    (
+      await prisma.habitShare.findMany({
+        where: { habitId: { in: habits.map((h) => h.id) } },
+        select: { habitId: true },
+      })
+    ).map((s) => s.habitId)
+  );
+  const todayValue = new Map(
+    logs.filter((l) => dateKeyOf(l.date) === today && l.value != null).map((l) => [l.habitId, l.value as number])
+  );
 
   const maps = habitLogMaps(logs);
   const none = new Set<string>();
   const lines: string[] = [];
+  if (away) {
+    const until = away.endsOn ? ` until ${dateKeyOf(away.endsOn)}` : "";
+    lines.push(
+      `- They're away (${away.reason})${until}. Their habits are paused and nothing counts as missed — don't nudge them to log. When they're back, offer to restart them (the app asks if each cue still fits).`
+    );
+  }
 
   for (const h of habits) {
     const scheduled = toScheduled(h, timeZone);
@@ -96,6 +115,13 @@ export async function habitsForChat(
         ? `${progress.streak}-${progress.unit} streak${progress.atRisk ? ", missed last time" : ""}`
         : "no current streak",
       kept30 === null ? null : `kept ${Math.round(kept30 * 100)}% of the last 30 days`,
+      h.measureTarget
+        ? `counts ${h.measureUnit ?? "an amount"}: usual ${h.measureTarget}${h.measureTiny ? `, tiny ${h.measureTiny}` : ""}${
+            todayValue.has(h.id) ? `, ${todayValue.get(h.id)} logged today` : ""
+          }`
+        : null,
+      autoLogLabel(h.autoLog),
+      shared.has(h.id) ? "shared with their community" : null,
       `id ${h.id}`,
     ].filter(Boolean);
     lines.push(parts.join("; "));
@@ -124,4 +150,10 @@ export async function habitsForChat(
   }
 
   return { identityGoal, lines };
+}
+
+function autoLogLabel(rule: unknown): string | null {
+  if (!rule || typeof rule !== "object") return null;
+  const provider = (rule as { provider?: string }).provider;
+  return provider ? `logs itself from ${PROVIDER_LABEL[provider] ?? provider}` : null;
 }

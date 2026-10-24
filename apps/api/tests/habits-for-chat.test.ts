@@ -9,7 +9,16 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const db: { habits: Record<string, unknown>[]; logs: Record<string, unknown>[]; reflections: Record<string, unknown>[]; promises: Record<string, unknown>[] } = {
+const db: {
+  habits: Record<string, unknown>[];
+  logs: Record<string, unknown>[];
+  reflections: Record<string, unknown>[];
+  promises: Record<string, unknown>[];
+  away: Record<string, unknown> | null;
+  shares: Record<string, unknown>[];
+} = {
+  away: null,
+  shares: [],
   habits: [],
   logs: [],
   reflections: [],
@@ -22,6 +31,8 @@ vi.mock("@kinextion/database", () => ({
     habitLog: { findMany: async () => db.logs },
     habitReflection: { findMany: async () => db.reflections },
     precommitment: { findMany: async () => db.promises },
+    awayPeriod: { findFirst: async () => db.away },
+    habitShare: { findMany: async () => db.shares },
   },
 }));
 
@@ -69,6 +80,8 @@ beforeEach(() => {
   ];
   db.reflections = [];
   db.promises = [];
+  db.away = null;
+  db.shares = [];
 });
 
 describe("habitsForChat", () => {
@@ -104,6 +117,27 @@ describe("habitsForChat", () => {
     const lines = (await habitsForChat("u1", TZ, null)).lines;
     expect(lines.find((l) => l.startsWith("- Push-ups"))).toContain("paused");
     expect(lines.find((l) => l.startsWith("- Walk"))).toContain("graduated");
+  });
+});
+
+describe("what's new in phase 10", () => {
+  it("tells the guide about amounts, auto-logging and sharing", async () => {
+    db.habits = [
+      habit({ name: "Water", measureTarget: 8, measureTiny: 2, measureUnit: "glasses", autoLog: { provider: "oura", metric: "steps" } }),
+    ];
+    db.logs = [{ habitId: "h1", date: new Date("2026-10-21T00:00:00Z"), completed: false, state: "done", value: 5 }];
+    db.shares = [{ habitId: "h1" }];
+    const line = (await habitsForChat("u1", TZ, null)).lines[0];
+    expect(line).toContain("counts glasses: usual 8, tiny 2, 5 logged today");
+    expect(line).toContain("logs itself from Oura");
+    expect(line).toContain("shared with their community");
+  });
+
+  it("says first when they're away, so the guide doesn't nudge", async () => {
+    db.away = { reason: "travel", endsOn: new Date("2026-10-28T00:00:00Z") };
+    const lines = (await habitsForChat("u1", TZ, null)).lines;
+    expect(lines[0]).toContain("They're away (travel) until 2026-10-28");
+    expect(lines[0]).toContain("don't nudge");
   });
 });
 

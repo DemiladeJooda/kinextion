@@ -94,6 +94,10 @@ const createInput = z.object({
   times_per_week: z.number().int().min(1).max(7).optional(),
   part_of_day: habitTimeWindowSchema,
   start: z.enum(["today", "monday"]).optional(),
+  /** Counted habits: "8" glasses, tiny "2". */
+  usual_amount: z.number().positive().max(100_000).optional(),
+  tiny_amount: z.number().positive().max(100_000).optional(),
+  unit: z.string().trim().min(1).max(20).optional(),
 });
 
 const changeInput = z.object({ habit_id: z.string(), change: habitChangeSchema });
@@ -102,6 +106,8 @@ const logInput = z.object({
   habit_id: z.string(),
   how: z.enum(["done", "tiny", "rest"]),
   day: z.enum(["today", "yesterday"]).default("today"),
+  /** For a counted habit: how much ("6" glasses). The habit's own amounts decide what it counts as. */
+  amount: z.number().min(0).max(100_000).optional(),
 });
 
 const checkInInput = z.object({
@@ -169,6 +175,9 @@ export const CHAT_TOOLS: Anthropic.Beta.BetaTool[] = [
         times_per_week: { type: "integer", description: "For weekly." },
         part_of_day: { type: "string", enum: ["morning", "midday", "evening", "anytime"] },
         start: { type: "string", enum: ["today", "monday"], description: "Default today." },
+        usual_amount: { type: "number", description: "Only when they want to count an amount each day (8 glasses, 20 pages). Most habits are yes/no; leave this out unless they talk in amounts." },
+        tiny_amount: { type: "number", description: "Counted habits only: the amount that still counts on a bad day." },
+        unit: { type: "string", description: "Counted habits only: glasses, pages, minutes, km…" },
       },
       required: ["name", "category", "anchor", "tiny_version", "frequency", "part_of_day"],
     }
@@ -191,6 +200,10 @@ export const CHAT_TOOLS: Anthropic.Beta.BetaTool[] = [
         habit_id: { type: "string" },
         how: { type: "string", enum: ["done", "tiny", "rest"] },
         day: { type: "string", enum: ["today", "yesterday"] },
+        amount: {
+          type: "number",
+          description: "Counted habits only: how much they said (6 glasses → 6). 'how' is then worked out from the habit's amounts.",
+        },
       },
       required: ["habit_id", "how"],
     }
@@ -232,7 +245,7 @@ export const CHAT_TOOLS: Anthropic.Beta.BetaTool[] = [
   ),
   tool(
     "going_away",
-    "Pause their habits while they're away (travel, illness, family, a move), so nothing counts as missed. Only when they say they're going away or can't keep their routine for a while. They'll be asked whether each habit's cue still fits when they're back.",
+    "Pause their habits while they're away (travel, illness, family, a move), so nothing counts as missed. Only when they say they're going away or can't keep their routine for a while. It starts now, not on a later date: if they're leaving in a few days, say so and suggest they tell you on the day. Work out 'until' from today's date when they say how long. They'll be asked whether each habit's cue still fits when they're back.",
     {
       type: "object",
       properties: {
@@ -302,6 +315,9 @@ export async function runChatTool(name: string, raw: unknown, ctx: ToolContext):
         targetDays: i.frequency === "custom" ? i.days : undefined,
         perWeekTarget: i.frequency === "weekly" ? (i.times_per_week ?? 1) : undefined,
         timeWindow: i.part_of_day,
+        ...(i.usual_amount
+          ? { measureTarget: i.usual_amount, measureTiny: i.tiny_amount, measureUnit: i.unit }
+          : {}),
       });
       if (!input.success) return fail(`Invalid habit: ${input.error.issues.map((x) => x.message).join(", ")}`);
       if (input.data.frequency === "custom" && !input.data.targetDays?.length) {
@@ -371,10 +387,18 @@ export async function runChatTool(name: string, raw: unknown, ctx: ToolContext):
         date,
         state,
         completed: state !== "rest",
+        value: p.data.amount,
         source: "chat",
       });
       if (!result.ok) return fail(result.error);
-      const label = state === "minimum" ? "tiny version" : state === "rest" ? "rest day" : "done";
+      const logged = result.log;
+      const amountLabel =
+        p.data.amount != null && logged.value != null
+          ? `${logged.value}${logged.completed ? "" : ", not enough to count yet"}`
+          : null;
+      const label =
+        amountLabel ??
+        (logged.state === "minimum" ? "tiny version" : logged.state === "rest" ? "rest day" : "done");
       return {
         result: `Logged "${result.habitName}" as ${label} for ${p.data.day}.`,
         action: {
