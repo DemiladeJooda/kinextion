@@ -424,6 +424,8 @@ export interface CommunityStore {
   findTopicForCycle(cycleId: string): Promise<TopicRecord | null>;
   /** The community's chosen topics before `beforeWeekKey`, newest first. */
   listRecentTopics(communityId: string, beforeWeekKey: string, limit: number): Promise<RecentTopicRow[]>;
+  /** Names of active habits current members share with the community, de-duplicated. */
+  listSharedHabitNames(communityId: string): Promise<string[]>;
 
   // ── Media ──────────────────────────────────────────────────────
   createMediaAsset(input: {

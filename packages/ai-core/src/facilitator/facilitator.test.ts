@@ -152,6 +152,14 @@ describe("the facilitator prompt", () => {
     expect(message).toMatch(/relationships several weeks running/);
     expect(message).toMatch(/at least one option is lighter/);
   });
+
+  it("mentions what members are building, without names, and only when there is something", () => {
+    const base = { communityName: "Favour House", suggestions: ["a", "b", "c"], recentTopics: [], guidance: { avoid: [], lean: null } };
+    const message = buildSynthesisMessage({ ...base, building: ["morning walk", "read 10 pages"] });
+    expect(message).toMatch(/What members are building together \(habits they chose to share, no names\): morning walk, read 10 pages\./);
+    expect(message).toMatch(/the suggestions come first/);
+    expect(buildSynthesisMessage(base)).not.toMatch(/building together/);
+  });
 });
 
 describe("rhythmGuidance", () => {

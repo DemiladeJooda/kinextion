@@ -649,6 +649,19 @@ export class PrismaCommunityStore implements CommunityStore {
     return rows.map((r) => ({ weekKey: r.cycle.weekKey, text: r.text, topicKey: r.topicKey, theme: r.theme }));
   }
 
+  async listSharedHabitNames(communityId: string): Promise<string[]> {
+    const members = await this.db.communityMembership.findMany({
+      where: { communityId, leftAt: null },
+      select: { userId: true },
+    });
+    const shares = await this.db.habitShare.findMany({
+      where: { communityId, userId: { in: members.map((m) => m.userId) }, habit: { isActive: true } },
+      select: { habit: { select: { name: true } } },
+      take: 50,
+    });
+    return [...new Set(shares.map((s) => s.habit.name.trim().toLowerCase()))].slice(0, 12);
+  }
+
   // ── Media ──────────────────────────────────────────────────────
 
   async createMediaAsset(input: {

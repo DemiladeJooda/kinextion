@@ -75,6 +75,12 @@ export interface SynthesisInput {
   suggestions: readonly string[];
   /** Newest first. */
   recentTopics: readonly { text: string; theme: string | null }[];
+  /**
+   * Habits members have chosen to share with the community, by name only,
+   * de-duplicated — what the room is building together. Context, not a
+   * source of questions in its own right.
+   */
+  building?: readonly string[];
   generate?: TopicGenerator;
   /** For picking from the prompt bank. */
   rng: () => number;
@@ -99,6 +105,7 @@ export function buildSynthesisMessage(input: {
   communityName: string;
   suggestions: readonly string[];
   recentTopics: readonly { text: string }[];
+  building?: readonly string[];
   guidance: RhythmGuidance;
 }): string {
   return [
@@ -110,6 +117,9 @@ export function buildSynthesisMessage(input: {
     input.recentTopics.length
       ? `Recent weeks' questions — don't repeat these:\n${input.recentTopics.map((t) => `- ${t.text}`).join("\n")}`
       : "This community hasn't had a topic yet.",
+    input.building?.length
+      ? `\nWhat members are building together (habits they chose to share, no names): ${input.building.join(", ")}.\nOne option may connect to this if it fits what they raised; the suggestions come first.`
+      : undefined,
     describeGuidance(input.guidance),
     "",
     `Return ${TOPIC_OPTION_COUNT + 2} options, best first. Extra options let the app drop any that repeat recent weeks.`,
@@ -169,6 +179,7 @@ export async function synthesizeTopics(input: SynthesisInput): Promise<Synthesis
           communityName: input.communityName,
           suggestions,
           recentTopics: input.recentTopics,
+          building: input.building,
           guidance,
         }),
         schema: TOPIC_OPTIONS_SCHEMA,

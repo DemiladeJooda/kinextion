@@ -99,9 +99,10 @@ export async function synthesizeCycle(
   const community = await deps.store.findCommunity(cycle.communityId);
   if (!community || community.status !== "active") return "skipped";
 
-  const [suggestions, recent] = await Promise.all([
+  const [suggestions, recent, building] = await Promise.all([
     deps.store.listSuggestionTexts(cycle.id),
     deps.store.listRecentTopics(cycle.communityId, cycle.weekKey, RECENT_TOPIC_WEEKS),
+    deps.store.listSharedHabitNames(cycle.communityId),
   ]);
 
   // Order carries no information about who said what.
@@ -115,6 +116,7 @@ export async function synthesizeCycle(
     communityName: community.name,
     suggestions: shuffled,
     recentTopics: recent.map((t) => ({ text: t.text, theme: t.theme })),
+    building,
     generate: deps.generateTopics,
     rng: deps.rng,
   });

@@ -697,6 +697,12 @@ export class MemoryCommunityStore implements CommunityStore {
       .map(({ t, cycle }) => ({ weekKey: cycle.weekKey, text: t.text, topicKey: t.topicKey, theme: t.theme }));
   }
 
+  /** Shared habits live outside the community store in tests; none by default. */
+  sharedHabitNames: string[] = [];
+  async listSharedHabitNames(_communityId: string): Promise<string[]> {
+    return [...this.sharedHabitNames];
+  }
+
   // ── Media ──────────────────────────────────────────────────────
 
   async createMediaAsset(input: {
