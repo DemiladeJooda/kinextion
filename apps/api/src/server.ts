@@ -23,6 +23,7 @@ import { communityDevRoutes } from "./modules/community/dev-routes.js";
 import { createCommunityDeps, setSharedCommunityDeps } from "./modules/community/deps.js";
 import type { CommunityDeps } from "./modules/community/service.js";
 import { adminRoutes } from "./modules/admin/routes.js";
+import { registerAIUsageContext } from "./lib/ai-usage.js";
 
 interface BuildOptions {
   /** Tests run the real server against an in-memory community store and a manual clock. */
@@ -133,6 +134,8 @@ async function buildApp(options: BuildOptions = {}) {
   }));
 
   registerTimeZone(app);
+  // Before auth and the routes, so every model call knows whose it was.
+  registerAIUsageContext(app);
   await registerAuth(app);
 
   await app.register(userRoutes, { prefix: "/api/users" });

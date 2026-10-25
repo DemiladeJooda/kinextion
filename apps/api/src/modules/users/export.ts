@@ -43,6 +43,7 @@ export async function buildExport(userId: string) {
     roomResponses,
     roomComments,
     roomReactions,
+    aiUsage,
   ] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { email: true, createdAt: true } }),
     prisma.profile.findUnique({ where }),
@@ -83,6 +84,11 @@ export async function buildExport(userId: string) {
     }),
     prisma.roomComment.findMany({ where, select: { id: true, responseId: true, body: true, createdAt: true, deletedAt: true } }),
     prisma.roomReaction.findMany({ where, select: { responseId: true, verdict: true, createdAt: true } }),
+    prisma.aiUsage.findMany({
+      where,
+      select: { task: true, model: true, inputTokens: true, outputTokens: true, createdAt: true },
+      orderBy: { createdAt: "asc" },
+    }),
   ]);
 
   return {
@@ -105,6 +111,8 @@ export async function buildExport(userId: string) {
       yourComments: roomComments,
       yourReactions: roomReactions,
     },
+    /** When a guide was used for you, and how much it read and wrote. */
+    aiUsage,
   };
 }
 

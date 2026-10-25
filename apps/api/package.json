@@ -16,7 +16,8 @@
     "media:smoke": "tsx --env-file-if-exists=../../.env scripts/media-smoke.ts",
     "ai:smoke": "tsx --env-file-if-exists=../../.env scripts/ai-smoke.ts",
     "chat:smoke": "tsx --env-file-if-exists=../../.env scripts/chat-tools-smoke.ts",
-    "habit:metrics": "tsx --env-file-if-exists=../../.env scripts/habit-metrics.ts"
+    "habit:metrics": "tsx --env-file-if-exists=../../.env scripts/habit-metrics.ts",
+    "ai:costs": "tsx --env-file-if-exists=../../.env scripts/ai-costs.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

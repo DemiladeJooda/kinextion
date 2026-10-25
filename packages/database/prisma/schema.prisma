@@ -35,6 +35,7 @@ model User {
   automaticityChecks AutomaticityCheck[]
   habitShares        HabitShare[]
   awayPeriods        AwayPeriod[]
+  aiUsage            AiUsage[]
 
   // Community
   communitiesCreated   Community[]           @relation("CommunityCreatedBy")
@@ -605,6 +606,39 @@ model AnalyticsEvent {
 
   @@index([name, createdAt])
   @@index([sessionId])
+}
+
+/**
+ * One row per model call: what it cost, and for whom. Tokens and price
+ * only — never the prompt or the reply. `userId` is null for work no one
+ * person asked for (the community facilitator), and goes null when an
+ * account is deleted, so total spend stays right without keeping anything
+ * that points at the person.
+ */
+model AiUsage {
+  id               String   @id @default(cuid())
+  userId           String?
+  user             User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  /**
+   * An AI_TASKS key: "chat" | "coach" | "recommendation" | …
+   */
+  task             String
+  /**
+   * The model that answered. A refusal fallback is priced per model it ran on.
+   */
+  model            String
+  inputTokens      Int
+  outputTokens     Int
+  cacheReadTokens  Int      @default(0)
+  cacheWriteTokens Int      @default(0)
+  /**
+   * Millionths of a dollar, at list price when the call was made.
+   */
+  costMicros       Int
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
 }
 
 // ─── Kinextion Score ─────────────────────────────────────────────

@@ -67,7 +67,7 @@ Optional settings worth knowing:
 
 | Variable | Purpose |
 |---|---|
-| `ADMIN_USER_IDS` | Comma-separated Clerk user ids allowed to read `GET /api/admin/metrics?days=28` (the habits success measures). Everyone else gets a 404 |
+| `ADMIN_USER_IDS` | Comma-separated Clerk user ids allowed to read `GET /api/admin/metrics?days=28` (the habits success measures) and `GET /api/admin/ai-costs?days=28` (what the guides cost, per user and per task; also `pnpm --filter @kinextion/api ai:costs`). Everyone else gets a 404 |
 | `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ALTHEO`, `ELEVENLABS_VOICE_KAIRO` | Premium voice for the guides. Without them, the phone's voice is used |
 | `GUIDANCE_DIR` | Only if the guidance notes live somewhere other than `apps/api/guidance` |
 | Provider keys | See `docs/integrations-checklist.md` |

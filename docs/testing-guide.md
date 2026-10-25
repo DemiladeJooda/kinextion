@@ -120,3 +120,9 @@ pnpm --filter @kinextion/api habit:metrics
 ```
 
 This prints logging days per week, recovery after a miss, 30-day survival and automaticity, once there's enough data to say anything.
+
+```
+pnpm --filter @kinextion/api ai:costs
+```
+
+This prints what the guides cost: the total, per active user per month, per task and per model. After a device session, check that the chats you had show up under `chat`.

@@ -10,6 +10,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { aiTask, type MemoryTier } from "@kinextion/shared";
 import { guidanceFor } from "../guidance.js";
+import { recordAIUsage } from "../ai-usage.js";
 
 const anthropic = new Anthropic();
 
@@ -93,6 +94,7 @@ export async function extractFacts(
     },
     { signal }
   );
+  recordAIUsage("memoryExtract", aiTask("memoryExtract").model, response);
 
   // Safety classifiers can decline; there is nothing to parse if they do.
   if (response.stop_reason === "refusal") return [];
@@ -137,6 +139,7 @@ export async function summarizeConversation(
     },
     { signal }
   );
+  recordAIUsage("memorySummary", aiTask("memorySummary").model, response);
 
   if (response.stop_reason === "refusal") return previousSummary ?? "";
 

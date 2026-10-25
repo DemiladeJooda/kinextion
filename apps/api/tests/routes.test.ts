@@ -139,6 +139,7 @@ const PROTECTED: Array<[string, string]> = [
   ["GET", "/api/chat/me/voice"],
   ["GET", "/api/users/me/export"],
   ["GET", "/api/admin/metrics"],
+  ["GET", "/api/admin/ai-costs"],
   ["POST", "/api/integrations/device/apple_health/ingest"],
   ["POST", "/api/chat/me/speech"],
   ["GET", "/api/chat/me/conversations"],

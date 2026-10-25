@@ -13,6 +13,7 @@ import {
   type RetentionPolicy,
 } from "@kinextion/shared";
 import { extractFacts, summarizeConversation, type ExtractedFact } from "./extract.js";
+import { asAIUser } from "../ai-usage.js";
 
 /**
  * Write facts, reinforcing rather than duplicating.
@@ -130,10 +131,10 @@ export async function compactConversation(
 
   const transcript = overflow.map((m) => `${m.role}: ${m.content}`).join("\n");
 
-  const [summary, facts] = await Promise.all([
-    summarizeConversation(conversation.summary, transcript),
-    extractFacts(transcript),
-  ]);
+  // Charged to the conversation's owner — the nightly job runs outside any request.
+  const [summary, facts] = await asAIUser(conversation.userId, () =>
+    Promise.all([summarizeConversation(conversation.summary, transcript), extractFacts(transcript)])
+  );
 
   // Nothing is deleted unless the summary that replaces it actually exists.
   if (!summary) return { compacted: 0, factsFound: 0 };

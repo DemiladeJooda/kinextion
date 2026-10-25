@@ -29,6 +29,8 @@ vi.mock("@anthropic-ai/sdk", () => {
   }
   return { default: Anthropic };
 });
+const recordAIUsage = vi.fn();
+vi.mock("../src/lib/ai-usage.js", () => ({ recordAIUsage: (...a: unknown[]) => recordAIUsage(...a) }));
 
 const { generateStructured, sendToAI, streamFromAI, toStructuredSchema } = await import(
   "../src/modules/ai/services/ai-service.js"
@@ -78,6 +80,20 @@ describe("model routing", () => {
     expect(haiku.model).toBe("claude-haiku-5-5");
     expect(haiku.fallbacks).toBeUndefined();
     expect(haiku.output_config.effort).toBe("low");
+  });
+
+  it("records what every call cost, under its task", async () => {
+    recordAIUsage.mockReset();
+    const reply = { stop_reason: "end_turn", content: [{ type: "text", text: '{"a":"x"}' }], usage: { input_tokens: 5 } };
+    create.mockResolvedValue(reply);
+    await structured("polish");
+    expect(recordAIUsage).toHaveBeenCalledWith("polish", "claude-sonnet-5-5", reply);
+    stream.mockReturnValue({
+      async *[Symbol.asyncIterator]() {},
+      finalMessage: async () => ({ stop_reason: "end_turn", usage: { input_tokens: 9 } }),
+    });
+    await streamFromAI("altheo", "You are Altheo.", [{ role: "user", content: "hi" }], () => {});
+    expect(recordAIUsage).toHaveBeenLastCalledWith("chat", "claude-opus-5-5", expect.objectContaining({ usage: { input_tokens: 9 } }));
   });
 
   it("runs the guides on Opus 5.5", async () => {

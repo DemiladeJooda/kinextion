@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { aiTask, type AITask, type ChatMessage, type Persona } from "@kinextion/shared";
 import { guidanceFor } from "../../../lib/guidance.js";
+import { recordAIUsage } from "../../../lib/ai-usage.js";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -114,11 +115,13 @@ export async function sendToAI(
   systemPrompt: string,
   messages: ChatMessage[]
 ): Promise<string> {
+  const request = requestFor("chat");
   const response = await anthropic.beta.messages.create({
-    ...requestFor("chat"),
+    ...request,
     system: withGuidance(systemPrompt, "chat", persona),
     messages: toApiMessages(messages),
   });
+  recordAIUsage("chat", request.model, response);
   if (response.stop_reason === "refusal") {
     return "That's not something I can help with here — but if it's weighing on you, I'm listening.";
   }
@@ -218,6 +221,7 @@ export async function generateStructured<T>(params: {
     },
     messages: toApiMessages(params.messages),
   });
+  recordAIUsage(params.task, base.model, response);
 
   if (response.stop_reason === "refusal") throw new AIRefusalError();
   if (response.stop_reason === "max_tokens") throw new Error("Structured reply was cut off");
@@ -245,9 +249,10 @@ export async function streamFromAI(
   onDelta: (chunk: string) => void,
   signal?: AbortSignal
 ): Promise<string> {
+  const request = requestFor("chat");
   const stream = anthropic.beta.messages.stream(
     {
-      ...requestFor("chat"),
+      ...request,
       cache_control: { type: "ephemeral" },
       system: withGuidance(systemPrompt, "chat", persona),
       messages: toApiMessages(messages),
@@ -264,6 +269,7 @@ export async function streamFromAI(
   }
 
   const final = await stream.finalMessage();
+  recordAIUsage("chat", request.model, final);
 
   // Safety classifiers can decline before any text is produced (and after
   // the fallback model, if it declined too).
@@ -308,12 +314,13 @@ export async function streamChatWithTools(params: {
 }): Promise<string> {
   const history: Anthropic.Beta.BetaMessageParam[] = toApiMessages(params.messages);
   const system = withGuidance(params.systemPrompt, "chat", params.persona);
+  const request = requestFor("chat");
   let full = "";
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const stream = anthropic.beta.messages.stream(
       {
-        ...requestFor("chat"),
+        ...request,
         cache_control: { type: "ephemeral" },
         system,
         tools: params.tools,
@@ -338,6 +345,8 @@ export async function streamChatWithTools(params: {
     }
 
     const final = await stream.finalMessage();
+    // Each round is its own billed call.
+    recordAIUsage("chat", request.model, final);
     if (final.stop_reason === "refusal" && !full) {
       const message =
         "That's not something I can help with here — but if it's weighing on you, I'm listening.";

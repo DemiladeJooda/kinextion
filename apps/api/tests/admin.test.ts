@@ -21,6 +21,9 @@ vi.mock("@kinextion/database", () => {
 vi.mock("../src/lib/habit-metrics.js", () => ({
   loadHabitMetrics: async (days: number) => ({ window: { days }, users: 3 }),
 }));
+vi.mock("../src/lib/ai-cost-metrics.js", () => ({
+  loadAICostMetrics: async (days: number) => ({ window: { days }, totalUsd: 1.5 }),
+}));
 
 const { buildApp } = await import("../src/server.js");
 let app: Awaited<ReturnType<typeof buildApp>>["app"];
@@ -43,6 +46,21 @@ describe("GET /api/admin/metrics", () => {
   it("is a plain 404 for everyone else", async () => {
     clerkId = "clerk_someone";
     const res = await app.inject({ method: "GET", url: "/api/admin/metrics" });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe("GET /api/admin/ai-costs", () => {
+  it("answers listed admins, 28 days by default", async () => {
+    clerkId = "clerk_other_admin";
+    const res = await app.inject({ method: "GET", url: "/api/admin/ai-costs" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toEqual({ window: { days: 28 }, totalUsd: 1.5 });
+  });
+
+  it("is a plain 404 for everyone else", async () => {
+    clerkId = "clerk_someone";
+    const res = await app.inject({ method: "GET", url: "/api/admin/ai-costs?days=90" });
     expect(res.statusCode).toBe(404);
   });
 });
