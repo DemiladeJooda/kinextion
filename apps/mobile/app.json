@@ -76,7 +76,9 @@
           "speechRecognitionPermission": "Kinextion turns what you say to your guides into text so they can answer you."
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

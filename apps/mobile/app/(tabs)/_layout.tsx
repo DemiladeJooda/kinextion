@@ -116,7 +116,8 @@ function TabIcon({
 }) {
   return (
     <View style={{ alignItems: "center", gap: 3 }}>
-      <Ionicons name={name} size={22} color={c} />
+      {/* RN 0.88's ColorValue also allows null/number, which the icon type doesn't. */}
+      <Ionicons name={name} size={22} color={c as string} />
       <View
         style={{
           width: 4,

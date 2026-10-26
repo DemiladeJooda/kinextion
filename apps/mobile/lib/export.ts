@@ -35,6 +35,6 @@ export async function downloadMyData(token: string | null): Promise<void> {
   if (!res.ok) throw new Error("Couldn't prepare your data. Try again.");
   const file = new File(Paths.cache, `kinextion-export-${new Date().toISOString().slice(0, 10)}.json`);
   if (file.exists) file.delete();
-  file.write(await res.text());
+  await file.write(await res.text());
   await Sharing.shareAsync(file.uri, { mimeType: "application/json", dialogTitle: "Your Kinextion data" });
 }

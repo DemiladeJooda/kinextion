@@ -241,7 +241,7 @@ export function createSpeaker({
       });
       if (!res.ok || stopped) return false;
       const file = new File(Paths.cache, `guide-${Date.now()}.mp3`);
-      file.write(new Uint8Array(await res.arrayBuffer()));
+      await file.write(new Uint8Array(await res.arrayBuffer()));
       await setAudioModeAsync({ playsInSilentMode: true });
       await new Promise<void>((resolve) => {
         finish = resolve;

@@ -20,7 +20,9 @@ import { color, space } from "../../theme";
 export default function CreateAvatarScreen() {
   const api = useApi();
   const router = useRouter();
-  const webviewRef = useRef<WebView>(null);
+  // react-native-webview 14 defaults its extra-props generic to `undefined`,
+  // which collapses every prop to `never`; `{}` is the 13.x default.
+  const webviewRef = useRef<WebView<{}>>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,7 +62,7 @@ export default function CreateAvatarScreen() {
         </View>
       ) : null}
       <View style={{ flex: 1 }}>
-        <WebView
+        <WebView<{}>
           ref={webviewRef}
           source={{ uri: avatarCreatorUrl() }}
           onLoad={onLoad}
