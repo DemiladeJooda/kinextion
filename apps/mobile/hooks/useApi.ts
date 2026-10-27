@@ -9,6 +9,7 @@ import { useAuth } from "@clerk/clerk-expo";
 import * as api from "../services";
 import { DEMO_MODE } from "../lib/demo/session";
 import { demoApi } from "../lib/demo/api";
+import type { HealthDay } from "../lib/health";
 
 export type Api = ReturnType<typeof useLiveApi>;
 
@@ -52,7 +53,7 @@ function useLiveApi() {
         withToken((token) => api.connectDeviceHealth(token, provider)),
       ingestDeviceHealth: (
         provider: "apple_health" | "health_connect",
-        days: { date: string; steps?: number; workoutMinutes?: number; sleepMinutes?: number }[]
+        days: HealthDay[]
       ) => withToken((token) => api.ingestDeviceHealth(token, provider, days)),
       getAway: () => withToken(api.getAway),
       startAway: (input: { reason: api.AwayReason; until?: string; habitIds?: string[] }) =>

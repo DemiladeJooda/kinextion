@@ -266,6 +266,11 @@ export const METRIC_META: Record<
     group: "body",
   },
   active_calories: { label: "Active calories", unit: "kcal", higherIsBetter: true, group: "body" },
+  blood_pressure_systolic: { label: "Blood pressure (systolic)", unit: "mmHg", higherIsBetter: null, group: "body" },
+  blood_pressure_diastolic: { label: "Blood pressure (diastolic)", unit: "mmHg", higherIsBetter: null, group: "body" },
+  weight: { label: "Weight", unit: "kg", higherIsBetter: null, group: "body" },
+  readiness: { label: "Readiness", unit: "", higherIsBetter: true, group: "body" },
+  recovery: { label: "Recovery", unit: "%", higherIsBetter: true, group: "body" },
   workout: { label: "Workout time", unit: "min", higherIsBetter: true, group: "body" },
   listening_minutes: { label: "Music listened", unit: "min", higherIsBetter: null, group: "body" },
   calendar_busy_minutes: {

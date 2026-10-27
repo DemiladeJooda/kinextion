@@ -17,7 +17,7 @@ interface WhoopWorkoutRecord {
 
 interface WhoopRecoveryRecord {
   created_at: string;
-  score?: { hrv_rmssd_milli?: number; resting_heart_rate?: number };
+  score?: { recovery_score?: number; hrv_rmssd_milli?: number; resting_heart_rate?: number };
 }
 
 export const whoop: ProviderAdapter = {
@@ -92,6 +92,9 @@ export const whoop: ProviderAdapter = {
     for (const r of body.records ?? []) {
       const date = r.created_at.slice(0, 10);
       const raw = r as unknown as Record<string, unknown>;
+      if (r.score?.recovery_score != null) {
+        metrics.push({ metricType: "recovery", date, value: r.score.recovery_score, unit: "%", raw });
+      }
       if (r.score?.hrv_rmssd_milli != null) {
         metrics.push({ metricType: "hrv", date, value: r.score.hrv_rmssd_milli, unit: "ms", raw });
       }

@@ -52,6 +52,8 @@ const PROVIDER_ACCENT: Record<string, string> = {
   oura: color.purple,
   google_calendar: color.blue,
   outlook_calendar: color.teal,
+  apple_health: color.pink,
+  health_connect: color.green,
 };
 
 const PROVIDER_LABEL: Record<string, string> = {
@@ -60,6 +62,8 @@ const PROVIDER_LABEL: Record<string, string> = {
   oura: "Oura",
   google_calendar: "Google Calendar",
   outlook_calendar: "Outlook",
+  apple_health: "Apple Health",
+  health_connect: "Health Connect",
 };
 
 /** Minutes-from-midnight rendered as a clock time. */

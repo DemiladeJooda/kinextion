@@ -17,6 +17,13 @@ export interface HealthDay {
   steps?: number;
   workoutMinutes?: number;
   sleepMinutes?: number;
+  restingHeartRate?: number;
+  hrv?: number;
+  /** The day's average reading; sent only as a pair. */
+  systolic?: number;
+  diastolic?: number;
+  weightKg?: number;
+  activeCalories?: number;
 }
 
 export interface HealthSource {

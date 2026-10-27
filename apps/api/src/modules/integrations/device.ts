@@ -9,8 +9,9 @@
  * same as any other source: stored as daily metrics, and habits linked to
  * it log themselves.
  *
- * Only daily totals are accepted (steps, workout minutes, sleep minutes),
- * never individual samples, and only for the last week.
+ * Only one figure per day is accepted (steps, workout and sleep minutes,
+ * resting heart rate, HRV, blood pressure, weight, active calories), never
+ * individual samples, and only for the last week.
  */
 
 import type { FastifyInstance } from "fastify";
@@ -29,6 +30,13 @@ const ingestSchema = z.object({
         steps: z.number().int().min(0).max(200_000).optional(),
         workoutMinutes: z.number().min(0).max(1440).optional(),
         sleepMinutes: z.number().min(0).max(1440).optional(),
+        restingHeartRate: z.number().min(20).max(250).optional(),
+        hrv: z.number().min(1).max(400).optional(),
+        /** The day's average blood pressure reading, when they took one. */
+        systolic: z.number().min(60).max(260).optional(),
+        diastolic: z.number().min(30).max(160).optional(),
+        weightKg: z.number().min(20).max(400).optional(),
+        activeCalories: z.number().min(0).max(10_000).optional(),
       })
     )
     .min(1)
@@ -76,6 +84,17 @@ export function registerDeviceHealthRoutes(app: FastifyInstance) {
         ...(d.steps != null ? [{ metricType: "steps", date: d.date, value: d.steps, unit: "steps" }] : []),
         ...(d.workoutMinutes != null ? [{ metricType: "workout", date: d.date, value: Math.round(d.workoutMinutes), unit: "min" }] : []),
         ...(d.sleepMinutes != null ? [{ metricType: "sleep_duration", date: d.date, value: Math.round(d.sleepMinutes), unit: "min" }] : []),
+        ...(d.restingHeartRate != null ? [{ metricType: "resting_heart_rate", date: d.date, value: Math.round(d.restingHeartRate), unit: "bpm" }] : []),
+        ...(d.hrv != null ? [{ metricType: "hrv", date: d.date, value: Math.round(d.hrv), unit: "ms" }] : []),
+        // Blood pressure only as a pair; half a reading means nothing.
+        ...(d.systolic != null && d.diastolic != null
+          ? [
+              { metricType: "blood_pressure_systolic", date: d.date, value: Math.round(d.systolic), unit: "mmHg" },
+              { metricType: "blood_pressure_diastolic", date: d.date, value: Math.round(d.diastolic), unit: "mmHg" },
+            ]
+          : []),
+        ...(d.weightKg != null ? [{ metricType: "weight", date: d.date, value: Math.round(d.weightKg * 10) / 10, unit: "kg" }] : []),
+        ...(d.activeCalories != null ? [{ metricType: "active_calories", date: d.date, value: Math.round(d.activeCalories), unit: "kcal" }] : []),
       ]);
 
       for (const m of metrics) {

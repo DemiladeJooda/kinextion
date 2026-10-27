@@ -4,6 +4,7 @@ import { localDateKey } from "../habits/dates.js";
 
 export * from "./insights.js";
 export * from "./preferences.js";
+export * from "./week-numbers.js";
 
 /**
  * Calculate the Kinextion Score from daily activity breakdown.

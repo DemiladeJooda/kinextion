@@ -23,7 +23,12 @@ const METRIC_LABEL: Record<string, string> = {
   resting_heart_rate: "resting heart rate",
   workout: "workout time",
   steps: "steps",
+  readiness: "readiness",
+  recovery: "recovery",
+  active_calories: "active calories",
 };
+
+const NOT_CORRELATED = new Set(["weight", "blood_pressure_systolic", "blood_pressure_diastolic"]);
 
 const MIN_ABS_R = 0.35;
 const LOOKBACK_DAYS = 60;
@@ -78,6 +83,9 @@ export async function computePatterns(userId: string): Promise<PatternInsight[]>
   const insights: PatternInsight[] = [];
 
   for (const [metricType, series] of metricsByType) {
+    // A "pattern" between weight or blood pressure and mood would read as a
+    // verdict on the person, and the sample is too small to back one up.
+    if (NOT_CORRELATED.has(metricType)) continue;
     const label = METRIC_LABEL[metricType] ?? metricType;
 
     const moodCorr = correlateByDate(series, moodSeries);

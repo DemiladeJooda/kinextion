@@ -6,6 +6,7 @@
  */
 
 import { apiRequest, apiRequestWithMeta } from "./client";
+import type { HealthDay } from "../lib/health";
 import type { AutoLog, HabitChange, UserBackground } from "@kinextion/shared";
 import type {
   OnboardingInput,
@@ -276,7 +277,7 @@ export function connectDeviceHealth(token: string | null, provider: "apple_healt
 export function ingestDeviceHealth(
   token: string | null,
   provider: "apple_health" | "health_connect",
-  days: { date: string; steps?: number; workoutMinutes?: number; sleepMinutes?: number }[]
+  days: HealthDay[]
 ) {
   return apiRequest<{ synced: number; autoLogged: { habitId: string; habitName: string; date: string; detail: string }[] }>(
     `/api/integrations/device/${provider}/ingest`,

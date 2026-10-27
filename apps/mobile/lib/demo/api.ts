@@ -52,6 +52,7 @@ import type {
   RemoteRecommendation,
   RemoteScore,
   RemoteWearableMetric,
+  RemoteWorkout,
   TherapistCategories,
   TherapistReport,
 } from "../../services";
@@ -423,6 +424,25 @@ let demoChecks: Awaited<ReturnType<Api["listAutomaticity"]>> = [];
 let todayEntry: RemoteMoodEntry | null = null;
 let workoutToday = true; // Strava synced a morning run
 
+/** Three sessions this week, two the week before. */
+let workouts: RemoteWorkout[] = (
+  [
+    [0, "Morning run", "cardio", 32],
+    [-2, "Upper body", "strength", 40],
+    [-4, "Mobility flow", "mobility", 20],
+    [-8, "Easy run", "cardio", 28],
+    [-11, "Full body", "strength", 45],
+  ] as const
+).map(([offset, name, type, duration], i) => ({
+  id: `cwk${i}`,
+  userId: USER_ID,
+  name,
+  type,
+  duration,
+  difficulty: "just_right" as const,
+  createdAt: iso(offset, 7),
+}));
+
 function streakDays() {
   return Math.max(...habits.map((h) => HABIT_SHAPE[h.id]?.streak ?? 0), 0);
 }
@@ -611,6 +631,7 @@ const recHistory: RemoteRecommendation[] = [
 const connected = new Map<IntegrationProvider, string>([
   ["strava", iso(0, 7)],
   ["oura", iso(0, 7)],
+  ["apple_health", iso(0, 7)],
   ["google_calendar", iso(0, 8)],
 ]);
 
@@ -645,6 +666,11 @@ function metrics(): RemoteWearableMetric[] {
     ...series("oura", "sleep_duration", "min", 410, 45, 2, 20),
     ...series("oura", "hrv", "ms", 48, 7, 3, 6),
     ...series("oura", "resting_heart_rate", "bpm", 61, 3, 4, -3),
+    ...series("oura", "readiness", null, 76, 8, 9, 5),
+    ...series("oura", "steps", "steps", 7200, 2400, 10, 1500),
+    ...series("apple_health", "blood_pressure_systolic", "mmHg", 121, 5, 11, -2, 2),
+    ...series("apple_health", "blood_pressure_diastolic", "mmHg", 79, 3, 12, -1, 2),
+    ...series("apple_health", "weight", "kg", 78, 0.6, 13, -0.8, 3),
     ...series("strava", "workout", "min", 38, 18, 5, 6, 2),
     ...series("strava", "active_calories", "kcal", 420, 140, 6, 40, 2),
     ...series("google_calendar", "calendar_busy_minutes", "min", 330, 110, 7),
@@ -1579,11 +1605,12 @@ export const demoApi: Api = {
       difficulty: input.difficulty ?? null,
       createdAt: new Date().toISOString(),
     };
+    workouts = [workout, ...workouts];
     return { workout, score: computeScore() };
   },
-  listWorkouts: async () => {
+  listWorkouts: async (limit = 20) => {
     await wait();
-    return [];
+    return workouts.slice(0, limit);
   },
   getLatestMood: async () => {
     await wait();

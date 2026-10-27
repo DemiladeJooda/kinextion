@@ -46,6 +46,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { MicroRecommendation } from "../../components/MicroRecommendation";
+import { YourNumbers } from "../../components/YourNumbers";
 import { AmountSheet } from "../../components/AmountSheet";
 import type { RemoteAway } from "../../services";
 import { useAutoSync } from "../../lib/auto-sync";
@@ -571,13 +572,11 @@ export default function TodayScreen() {
               }
               todayScore={score}
             />
-            <Txt variant="small" c={color.textFaint}>
-              From what you log. Connect Oura or Apple Health in Profile to add
-              biometrics.
-            </Txt>
+            <YourNumbers
+              onSeeAll={() => router.push("/metrics" as never)}
+              onConnect={() => router.push("/profile" as never)}
+            />
           </View>
-
-          <PatternsSection />
         </View>
       </ScrollView>
 
@@ -1622,52 +1621,6 @@ function StatsStrip({
           </Txt>
         </Card>
       ))}
-    </View>
-  );
-}
-
-/** Real, computed correlations between wearable data, mood, and habits.
- * Silent when there's nothing to show yet — an always-empty section reads
- * worse than no section at all. */
-function PatternsSection() {
-  const api = useApi();
-  const [patterns, setPatterns] = useState<Awaited<
-    ReturnType<typeof api.listPatterns>
-  > | null>(null);
-
-  useEffect(() => {
-    api
-      .listPatterns()
-      .then(setPatterns)
-      .catch(() => setPatterns([]));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  if (!patterns || patterns.length === 0) return null;
-
-  return (
-    <View style={{ gap: space.md }}>
-      <Txt variant="bodyStrong">Patterns</Txt>
-      <Card>
-        <View style={{ gap: space.md }}>
-          {patterns.slice(0, 3).map((p) => (
-            <View
-              key={`${p.metricType}-${p.summary}`}
-              style={{ flexDirection: "row", gap: space.md }}
-            >
-              <Ionicons
-                name="analytics-outline"
-                size={16}
-                color={color.pink}
-                style={{ marginTop: 2 }}
-              />
-              <Txt variant="small" c={color.textMuted} style={{ flex: 1 }}>
-                {p.summary}
-              </Txt>
-            </View>
-          ))}
-        </View>
-      </Card>
     </View>
   );
 }

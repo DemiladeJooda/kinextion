@@ -19,6 +19,15 @@ interface OuraDailySleep {
   score?: number;
 }
 
+/** A sleep period; the main night is `long_sleep`. */
+interface OuraSleepPeriod {
+  day: string;
+  type?: string;
+  total_sleep_duration?: number | null;
+  average_hrv?: number | null;
+  lowest_heart_rate?: number | null;
+}
+
 export const oura: ProviderAdapter = {
   id: "oura",
 
@@ -105,6 +114,35 @@ export const oura: ProviderAdapter = {
       const ab = (await activity.json()) as { data?: OuraDailyActivity[] };
       for (const a of ab.data ?? []) {
         if (a.steps != null) metrics.push({ metricType: "steps", date: a.day, value: a.steps, unit: "steps" });
+      }
+    }
+
+    // Readiness, and the night's own numbers: time asleep, overnight HRV,
+    // and the lowest heart rate (Oura's resting heart rate). Each is extra:
+    // if one call fails, the rest of the sync still lands.
+    const readiness = await fetch(
+      `https://api.ouraring.com/v2/usercollection/daily_readiness?start_date=${startDate}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    if (readiness.ok) {
+      const rb = (await readiness.json()) as { data?: OuraDailySleep[] };
+      for (const r of rb.data ?? []) {
+        if (r.score != null) metrics.push({ metricType: "readiness", date: r.day, value: r.score });
+      }
+    }
+    const sleep = await fetch(`https://api.ouraring.com/v2/usercollection/sleep?start_date=${startDate}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (sleep.ok) {
+      const sb = (await sleep.json()) as { data?: OuraSleepPeriod[] };
+      for (const s of (sb.data ?? []).filter((p) => p.type === "long_sleep")) {
+        if (s.total_sleep_duration != null) {
+          metrics.push({ metricType: "sleep_duration", date: s.day, value: Math.round(s.total_sleep_duration / 60), unit: "min" });
+        }
+        if (s.average_hrv != null) metrics.push({ metricType: "hrv", date: s.day, value: s.average_hrv, unit: "ms" });
+        if (s.lowest_heart_rate != null) {
+          metrics.push({ metricType: "resting_heart_rate", date: s.day, value: s.lowest_heart_rate, unit: "bpm" });
+        }
       }
     }
     return metrics;
