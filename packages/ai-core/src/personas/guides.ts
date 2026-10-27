@@ -33,7 +33,7 @@ export const GUIDES: Record<GuideId, GuideMeta> = {
   altheo: {
     id: "altheo",
     name: "Althea",
-    role: "The Coach",
+    role: "Health Companion",
     tagline: "Reads your body. Adapts your plan.",
     color: "#00C47A",
     emoji: "⚡",
@@ -41,7 +41,7 @@ export const GUIDES: Record<GuideId, GuideMeta> = {
   kairo: {
     id: "kairo",
     name: "Kairo",
-    role: "The Listener",
+    role: "Wellness Guide",
     tagline: "Reads your patterns. Understands your why.",
     color: "#A855F7",
     emoji: "🌊",

@@ -39,7 +39,7 @@ import {
   Txt,
 } from "../../components/ui";
 import { StartChoice, StarterPicker } from "../../components/StarterPicker";
-import { MiniFan } from "../../components/MiniFan";
+import { JourneyPath } from "../../components/JourneyPath";
 import { useApi } from "../../hooks/useApi";
 import { useAppState } from "../../lib/store";
 import { color, radius, space, tint, type } from "../../theme";
@@ -193,8 +193,8 @@ const STEPS: Step[] = [
   {
     key: "possible",
     kind: "possible",
-    question: "There's more than one way there",
-    hint: "Six people, the same habit. Most take about two months for it to feel automatic. Some take three weeks, some most of a year, and a missed day doesn't send anyone back to zero.",
+    question: "This is a journey, not a race",
+    hint: "Everyone's path to becoming better looks different. Long or short, up or down, every step still counts.",
   },
   {
     key: "starter",
@@ -666,7 +666,7 @@ export default function OnboardingScreen() {
                   </View>
                 </View>
               ) : step.kind === "possible" ? (
-                <MiniFan />
+                <JourneyPath />
               ) : step.kind === "starter" ? (
                 <View style={{ gap: space.xl }}>
                   <StarterPicker

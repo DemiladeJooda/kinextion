@@ -92,14 +92,14 @@ export function aiTask(task: AITask): { model: string; effort: AIEffort; maxToke
 export const AI_CONFIG = {
   altheo: {
     name: "Altheo",
-    title: "The Coach",
-    description: "Your adaptive training companion",
+    title: "Health Companion",
+    description: "Your adaptive health companion",
     model: AI_MODELS[AI_TASKS.chat.tier],
     maxTokens: AI_TASKS.chat.maxTokens,
   },
   kairo: {
     name: "Kairo",
-    title: "The Listener",
+    title: "Wellness Guide",
     description: "Your guide for reflection and clarity",
     model: AI_MODELS[AI_TASKS.chat.tier],
     maxTokens: AI_TASKS.chat.maxTokens,

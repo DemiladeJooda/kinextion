@@ -511,7 +511,7 @@ export function HowItWorksSection() {
                     >
                       <div className="flex items-center gap-2 mb-1">
                         <div className="h-px flex-1" style={{ background: "linear-gradient(to right, #00C47A50, transparent)" }} />
-                        <span className="text-[9px] uppercase tracking-widest font-bold" style={{ color: "#00C47A" }}>The Coach</span>
+                        <span className="text-[9px] uppercase tracking-widest font-bold" style={{ color: "#00C47A" }}>Health Companion</span>
                       </div>
                       <motion.h3
                         className="font-semibold tracking-[-0.035em] leading-[0.95]"
@@ -612,7 +612,7 @@ export function HowItWorksSection() {
                       className="mb-6 w-full"
                     >
                       <div className="flex items-center gap-2 mb-1 justify-end">
-                        <span className="text-[9px] uppercase tracking-widest font-bold" style={{ color: "#A855F7" }}>The Listener</span>
+                        <span className="text-[9px] uppercase tracking-widest font-bold" style={{ color: "#A855F7" }}>Wellness Guide</span>
                         <div className="h-px flex-1" style={{ background: "linear-gradient(to left, #A855F750, transparent)" }} />
                       </div>
                       <motion.h3

@@ -799,8 +799,8 @@ const CTX_SECTIONS = SIGNAL_CATEGORIES.map((c) => ({
 
 // Guide config
 const GUIDE_CFG = {
-  althea: { name: "Althea", role: "The Coach",    emoji: "⚡", color: "#00C47A", border: "rgba(0,196,122,0.45)", glow: "rgba(0,196,122,0.25)", dot: "rgba(0,196,122,0.55)" },
-  kairo:  { name: "Kairo",  role: "The Listener", emoji: "🌊", color: "#A855F7", border: "rgba(168,85,247,0.45)", glow: "rgba(168,85,247,0.25)", dot: "rgba(168,85,247,0.55)" },
+  althea: { name: "Althea", role: "Health Companion", emoji: "⚡", color: "#00C47A", border: "rgba(0,196,122,0.45)", glow: "rgba(0,196,122,0.25)", dot: "rgba(0,196,122,0.55)" },
+  kairo:  { name: "Kairo",  role: "Wellness Guide", emoji: "🌊", color: "#A855F7", border: "rgba(168,85,247,0.45)", glow: "rgba(168,85,247,0.25)", dot: "rgba(168,85,247,0.55)" },
 } as const;
 type Guide = keyof typeof GUIDE_CFG;
 
