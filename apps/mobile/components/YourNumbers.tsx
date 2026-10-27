@@ -32,6 +32,7 @@ import {
 
 import { Card, Txt } from "./ui";
 import { useApi } from "../hooks/useApi";
+import { sampleHealth, showsSampleHealth } from "../lib/sample-health";
 import { color, radius, space, tint } from "../theme";
 
 type Icon = keyof typeof Ionicons.glyphMap;
@@ -105,6 +106,8 @@ interface Loaded {
   stats: Record<string, WeekStat>;
   workouts: { days: number[]; count: number; previousCount: number; minutes: number };
   insights: { key: string; text: string; icon: Icon; accent: string }[];
+  /** Showing sample numbers because nothing is connected yet (development only). */
+  sample: boolean;
 }
 
 export function YourNumbers({ onSeeAll, onConnect }: { onSeeAll: () => void; onConnect: () => void }) {
@@ -114,12 +117,19 @@ export function YourNumbers({ onSeeAll, onConnect }: { onSeeAll: () => void; onC
   useEffect(() => {
     const todayKey = localDateKey();
     const from = addDays(todayKey, -14);
-    void Promise.all([
-      api.listMetrics({ from }).catch(() => []),
-      api.listWorkouts(40).catch(() => []),
-      api.listMoodEntries(30).catch(() => []),
-      api.listPatterns().catch(() => []),
-    ]).then(([metrics, logged, moods, patterns]) => {
+    void (async () => {
+      const integrations = await api.listIntegrations().catch(() => null);
+      const sample = integrations ? showsSampleHealth(integrations.integrations) : false;
+      const [metrics, realWorkouts, realMoods, patterns] = await Promise.all([
+        (sample ? sampleHealth.metrics({ from }) : api.listMetrics({ from })).catch(() => []),
+        api.listWorkouts(40).catch(() => []),
+        api.listMoodEntries(30).catch(() => []),
+        (sample ? sampleHealth.patterns() : api.listPatterns()).catch(() => []),
+      ]);
+      // What they've really logged always wins; samples only fill a blank.
+      const logged = sample && realWorkouts.length === 0 ? await sampleHealth.workouts(40) : realWorkouts;
+      const moods = sample && realMoods.length === 0 ? await sampleHealth.moods(30) : realMoods;
+
       const readings: DailyReading[] = [
         ...metrics.map((m) => ({ metricType: m.metricType, date: m.date.slice(0, 10), value: m.value })),
         ...moods.map((m) => ({ metricType: "mood", date: localDateKey(new Date(m.createdAt)), value: m.mood })),
@@ -157,8 +167,8 @@ export function YourNumbers({ onSeeAll, onConnect }: { onSeeAll: () => void; onC
         ...(INSIGHT_ICON[i.metricType] ?? { icon: "sparkles" as Icon, accent: color.teal }),
       }));
       const longer = patterns.map((p) => ({ key: p.summary, text: p.summary, icon: "git-compare" as Icon, accent: color.pink }));
-      setData({ stats, workouts, insights: [...local.slice(0, 4), ...longer.slice(0, 2)] });
-    });
+      setData({ stats, workouts, insights: [...local.slice(0, 4), ...longer.slice(0, 2)], sample });
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -177,9 +187,18 @@ export function YourNumbers({ onSeeAll, onConnect }: { onSeeAll: () => void; onC
   return (
     <Animated.View entering={FadeInDown.duration(400)} style={{ gap: space.md }}>
       <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" }}>
-        <Txt variant="small" c={color.textFaint}>
-          Past 7 days
-        </Txt>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
+          <Txt variant="small" c={color.textFaint}>
+            Past 7 days
+          </Txt>
+          {data.sample ? (
+            <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.pill, backgroundColor: tint(color.amber, 0.16) }}>
+              <Txt variant="small" c={color.amber} style={{ fontSize: 11, fontWeight: "700" }}>
+                Sample data
+              </Txt>
+            </View>
+          ) : null}
+        </View>
         <Pressable onPress={onSeeAll} hitSlop={8} accessibilityRole="button">
           <Txt variant="small" c={color.blue} style={{ fontWeight: "700" }}>
             All your data →
@@ -215,16 +234,22 @@ export function YourNumbers({ onSeeAll, onConnect }: { onSeeAll: () => void; onC
         </View>
       ) : null}
 
-      {missing.length > 0 ? (
+      {data.sample || missing.length > 0 ? (
         <Pressable onPress={onConnect} accessibilityRole="button">
           <Card style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
             <Ionicons name="link" size={18} color={color.teal} />
             <View style={{ flex: 1, gap: 2 }}>
               <Txt variant="bodyStrong">
-                {tiles.length === 0 && !hasWorkouts ? "Bring your numbers in" : `Add ${listOf(missing.map((m) => m.label.toLowerCase()))}`}
+                {data.sample
+                  ? "These are sample numbers"
+                  : tiles.length === 0 && !hasWorkouts
+                    ? "Bring your numbers in"
+                    : `Add ${listOf(missing.map((m) => m.label.toLowerCase()))}`}
               </Txt>
               <Txt variant="small" c={color.textMuted}>
-                Connect Apple Health, Health Connect, Oura or WHOOP in Profile, and they show up here.
+                {data.sample
+                  ? "Connect Apple Health, Oura, WHOOP or another source in Profile and your own replace them."
+                  : "Connect Apple Health, Health Connect, Oura or WHOOP in Profile, and they show up here."}
               </Txt>
             </View>
             <Ionicons name="chevron-forward" size={16} color={color.textFaint} />

@@ -35,6 +35,7 @@ import {
 } from "../../components/ui";
 import { useApi } from "../../hooks/useApi";
 import type { RemoteWearableMetric } from "../../services";
+import { sampleHealth, showsSampleHealth } from "../../lib/sample-health";
 import { color, radius, space, tint } from "../../theme";
 
 const WINDOWS = [
@@ -160,19 +161,24 @@ export default function MetricsScreen() {
   const [days, setDays] = useState<number>(30);
   const [refreshing, setRefreshing] = useState(false);
   const [failed, setFailed] = useState(false);
+  /** Sample numbers stand in until something is connected (development only). */
+  const [sample, setSample] = useState(false);
 
   const load = useCallback(async (windowDays: number) => {
     const from = new Date();
     from.setDate(from.getDate() - windowDays);
 
     try {
-      const [rows, integrations] = await Promise.all([
-        api.listMetrics({ from: from.toISOString().slice(0, 10) }),
-        api.listIntegrations(),
-      ]);
+      const filter = { from: from.toISOString().slice(0, 10) };
+      const integrations = await api.listIntegrations();
+      const useSample = showsSampleHealth(integrations.integrations);
+      const rows = await (useSample ? sampleHealth.metrics(filter) : api.listMetrics(filter));
+      setSample(useSample);
       setMetrics(rows);
       setConnected(
-        integrations.integrations.filter((i) => i.status === "connected").map((i) => i.provider)
+        useSample
+          ? [...new Set(rows.map((r) => r.provider))]
+          : integrations.integrations.filter((i) => i.status === "connected").map((i) => i.provider)
       );
       setFailed(false);
     } catch {
@@ -272,6 +278,15 @@ export default function MetricsScreen() {
           />
         ) : (
           <View style={{ gap: space.md }}>
+            {sample ? (
+              <Card accent={color.amber}>
+                <Txt variant="bodyStrong">These are sample numbers</Txt>
+                <Txt variant="small" c={color.textMuted} style={{ marginTop: 2 }}>
+                  Nothing is connected yet, so you&apos;re seeing made-up data to try the screen with. Connect a
+                  source in Profile and your own readings replace it.
+                </Txt>
+              </Card>
+            ) : null}
             {series.map((s, i) => (
               <Animated.View
                 key={`${s.provider}-${s.metricType}`}
