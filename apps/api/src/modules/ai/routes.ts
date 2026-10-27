@@ -18,7 +18,14 @@ import {
   type ChatAction,
   type ToolContext,
 } from "./chat-tools.js";
-import { MAX_SPEECH_CHARS, VOICE_PROMPT, premiumVoice, speakable } from "./voice.js";
+import {
+  MAX_AUDIO_BYTES,
+  MAX_SPEECH_CHARS,
+  VOICE_PROMPT,
+  premiumVoice,
+  speakable,
+  transcriber,
+} from "./voice.js";
 import { prepareTurn, resolveConversation } from "./conversation.js";
 import { compactConversation } from "../../lib/memory/store.js";
 import type { ChatMessage, Persona } from "@kinextion/shared";
@@ -311,10 +318,41 @@ export async function chatRoutes(app: FastifyInstance) {
     return reply;
   }
 
-  /** Whether a premium voice is set up; the app uses the phone's voice otherwise. */
+  /**
+   * Whether a premium voice is set up (the app uses the phone's voice
+   * otherwise), and whether the server can listen for builds without the
+   * phone's recogniser, like Expo Go.
+   */
   app.get("/me/voice", async () => {
     const provider = premiumVoice();
-    return { success: true, data: { premium: Boolean(provider), provider: provider?.id ?? null } };
+    const listener = transcriber();
+    return {
+      success: true,
+      data: { premium: Boolean(provider), provider: provider?.id ?? null, listening: Boolean(listener) },
+    };
+  });
+
+  // Raw audio clips, only on this route's scope. Fastify's default parsers
+  // don't take audio, and the global 1 MB limit is too small for speech.
+  app.addContentTypeParser(/^audio\//, { parseAs: "buffer", bodyLimit: MAX_AUDIO_BYTES }, (_req, body, done) =>
+    done(null, body)
+  );
+
+  /** A recorded clip of the user talking, as text. 501 when no listener is set up. */
+  app.post("/me/transcribe", { config: CHAT_RATE_LIMIT }, async (request, reply) => {
+    const provider = transcriber();
+    if (!provider) return reply.status(501).send({ success: false, error: "Listening isn't set up on the server." });
+    const audio = request.body;
+    if (!Buffer.isBuffer(audio) || audio.length < 1000) {
+      return reply.status(400).send({ success: false, error: "Didn't catch anything." });
+    }
+    try {
+      const text = await provider.transcribe(audio, request.headers["content-type"] ?? "audio/mp4");
+      return { success: true, data: { text } };
+    } catch (err) {
+      request.log.warn({ err, provider: provider.id }, "transcription failed");
+      return reply.status(502).send({ success: false, error: "Couldn't hear that. Try again?" });
+    }
   });
 
   /** A guide's reply, spoken in the premium voice. 501 when there isn't one. */

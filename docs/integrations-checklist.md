@@ -62,6 +62,7 @@ How auto-logging works:
 | Piece | How | Cost |
 |---|---|---|
 | Listening (speech to text) | On the phone: Apple/Google speech recognition via `expo-speech-recognition`, on-device where supported | No API bill. On phones without on-device recognition, audio goes to Apple's or Google's speech service (disclosed in the privacy policy). Kinextion only receives the text |
+| Listening, server (Expo Go and phones without the recogniser) | The app records a short clip with `expo-audio`, it ends by itself after a pause, and `POST /api/chat/me/transcribe` turns it into text. ElevenLabs Scribe with `ELEVENLABS_API_KEY` (no voice ids needed; optional `ELEVENLABS_STT_MODEL`, default `scribe_v1`), or OpenAI with `OPENAI_API_KEY` (optional `OPENAI_STT_MODEL`, default `gpt-4o-mini-transcribe`). ElevenLabs wins if both are set | Billed per minute of audio. The clip is dropped after transcription; only the text is kept, as the chat message |
 | Speaking, default | On the phone: `expo-speech`, using the best English voice the phone has | No API bill |
 | Speaking, premium | ElevenLabs: `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ALTHEO`, `ELEVENLABS_VOICE_KAIRO`, optional `ELEVENLABS_MODEL` (default `eleven_flash_v2_5`) | Billed per character |
 
@@ -73,7 +74,7 @@ voice, sentence by sentence.
 - Alternatives to compare on the same day: OpenAI TTS, Google Cloud TTS, Azure Neural voices.
 - Apple speech recognition: per-device and per-app request limits for long conversations. Does on-device recognition need iOS 17 or later for English?
 
-**Build note:** the speech recogniser is a native module. **A new dev build is needed** (`eas build --profile development`). Older builds open chat in typing mode instead of crashing.
+**Build note:** the speech recogniser is a native module that Expo Go does not include. In Expo Go, voice works through the server listener above once one of its keys is set; with neither key, chat opens in typing mode. A dev build (`eas build --profile development`) uses the free on-phone recogniser instead.
 
 ## Home-screen widgets
 

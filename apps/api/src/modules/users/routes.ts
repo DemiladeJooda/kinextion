@@ -3,10 +3,12 @@ import { clerkClient, getAuth } from "@clerk/fastify";
 import { prisma, Prisma } from "@kinextion/database";
 import { onboardingSchema, updateProfileSchema } from "@kinextion/shared";
 import { registerExportRoute } from "./export.js";
+import { registerOnboardingReadRoute } from "./onboarding-read.js";
 
 export async function userRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.requireAuth);
   registerExportRoute(app);
+  registerOnboardingReadRoute(app);
 
   // Get the authenticated user's profile
   app.get("/me/profile", async (request, reply) => {

@@ -63,3 +63,4 @@ export function formatBackground(bg: UserBackground | null | undefined): string 
   if (!lines.length) return null;
   return `## About Them, in Their Own Words\n${lines.join("\n")}\n\n${BACKGROUND_RULES}`;
 }
+export * from "./access.js";

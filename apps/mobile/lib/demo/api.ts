@@ -12,6 +12,7 @@
  */
 
 import {
+  accessOptionsFor,
   addDays,
   localDateKey,
   weekStartKey,
@@ -1362,7 +1363,12 @@ export const demoApi: Api = {
   },
   // The demo guide never acts, so there is never anything to undo.
   undoChatAction: async () => ({ undone: true }),
-  getVoice: async () => ({ premium: false, provider: null }),
+  getVoice: async () => ({ premium: false, provider: null, listening: false }),
+  readOnboarding: async ({ identity, goals }) => ({
+    identity: identity ?? null,
+    goals,
+    access: accessOptionsFor(identity, goals),
+  }),
   connectDeviceHealth: async (provider) => ({ id: uid("int"), provider, status: "connected" }),
   ingestDeviceHealth: async (_provider, days) => ({ synced: days.length, autoLogged: [] }),
   getAway: async () => {

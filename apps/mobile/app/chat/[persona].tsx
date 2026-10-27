@@ -97,25 +97,41 @@ export default function ChatScreen() {
   const [speakAloud, setSpeakAloud] = useState(true);
   const [speaking, setSpeaking] = useState(false);
   const [premium, setPremium] = useState(false);
+  // The phone's recogniser, or (in Expo Go) the API listening for it.
+  const [canListen, setCanListen] = useState(voiceSupported);
+  // Set once the saved mode and the API's voice setup are both known.
+  const [voiceReady, setVoiceReady] = useState(false);
   const speakerRef = useRef<Speaker | null>(null);
   // Once they've tapped to talk, the conversation is hands-free: after the
   // guide finishes speaking, it listens again.
   const handsFree = useRef(false);
   const sendRef = useRef<(text: string, spoken?: boolean) => void>(() => {});
 
-  const listener = useListener({ onFinal: (text) => sendRef.current(text, true) });
+  const listener = useListener({ onFinal: (text) => sendRef.current(text, true), getToken });
 
   useEffect(() => {
     void (async () => {
+      let saved: string | null = null;
+      let canHear = voiceSupported;
       try {
         const [m, s] = await Promise.all([SecureStore.getItemAsync(MODE_KEY), SecureStore.getItemAsync(SPEAK_KEY)]);
-        if (m === "type" || (m === "voice" && voiceSupported)) setMode(m);
+        saved = m;
         if (s === "off") setSpeakAloud(false);
       } catch {
         // first run, or storage unavailable: keep the defaults
       }
+      try {
+        const v = await api.getVoice();
+        setPremium(v.premium);
+        canHear = canHear || Boolean(v.listening);
+      } catch {
+        // offline: whatever this build can do on its own
+      }
+      setCanListen(canHear);
+      // Talking is the default wherever listening works; typing only when they chose it.
+      setMode(canHear && saved !== "type" ? "voice" : "type");
+      setVoiceReady(true);
     })();
-    api.getVoice().then((v) => setPremium(v.premium)).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -263,7 +279,46 @@ export default function ChatScreen() {
   sendRef.current = (text, spoken) => void send(text, spoken);
 
   const voiceState: VoiceState =
-    listener.state === "listening" ? "listening" : speaking ? "speaking" : sending ? "thinking" : "idle";
+    listener.state === "listening"
+      ? "listening"
+      : speaking
+        ? "speaking"
+        : sending || listener.state === "transcribing"
+          ? "thinking"
+          : "idle";
+
+  /**
+   * Opening a guide in voice mode starts the conversation like a call: the
+   * greeting is said out loud, then it listens. Only on a fresh chat; a
+   * conversation already under way waits for a tap.
+   */
+  const opened = useRef(false);
+  useEffect(() => {
+    if (!voiceReady || mode !== "voice" || opened.current) return;
+    opened.current = true;
+    const greeting = messages.length === 1 ? messages.find((m) => m.id === "greeting")?.content : undefined;
+    if (!greeting) return;
+    handsFree.current = true;
+    if (!speakAloud) {
+      void listener.start();
+      return;
+    }
+    const speaker = createSpeaker({
+      persona: guideId,
+      premium,
+      getToken,
+      onSpeaking: setSpeaking,
+      onIdle: () => {
+        if (speakerRef.current === speaker) speakerRef.current = null;
+        if (handsFree.current) void listener.start();
+      },
+    });
+    speakerRef.current = speaker;
+    const splitter = createSentenceSplitter();
+    [...splitter.push(greeting), ...splitter.flush()].forEach((s) => speaker.say(s));
+    speaker.end();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceReady, mode]);
 
   /** The orb: talk, finish talking, or cut in on the guide. */
   const onOrb = useCallback(() => {
@@ -425,7 +480,7 @@ export default function ChatScreen() {
               onChange={setInput}
               onSend={() => send(input)}
               onStop={() => abortRef.current?.abort()}
-              onVoice={voiceSupported ? () => switchMode("voice") : undefined}
+              onVoice={canListen ? () => switchMode("voice") : undefined}
               sending={sending}
               accent={guide.color}
               placeholder={

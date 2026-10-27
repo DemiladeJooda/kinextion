@@ -215,11 +215,27 @@ const MENU: Record<string, StarterHabit[]> = {
 /** For a goal typed in as "Something else". */
 const DEFAULT_MENU = [WATER, MOVE, ONE_LINE, BREATHE];
 
-/** The menu for a goal: 3–5 habits, skipping any that need equipment the
- *  user said they don't have. */
-export function starterHabitsFor(goal: string | null | undefined, equipment: readonly string[] = []) {
-  const menu = (goal && MENU[goal]) || DEFAULT_MENU;
-  return menu.filter((h) => !h.needs || equipment.includes(h.needs)).slice(0, 5);
+/** One goal or several, as onboarding now allows picking more than one. */
+type Goals = string | readonly string[] | null | undefined;
+const goalList = (goals: Goals): string[] =>
+  (Array.isArray(goals) ? goals : goals ? [goals] : []).filter(Boolean) as string[];
+
+/** Takes from each list in turn, so every goal gets its first picks in. */
+function interleave<T>(lists: readonly (readonly T[])[]): T[] {
+  const out: T[] = [];
+  for (let i = 0; lists.some((l) => i < l.length); i++) {
+    for (const l of lists) if (i < l.length) out.push(l[i]);
+  }
+  return out;
+}
+
+/** The menu for the chosen goals: 3–5 habits, skipping any that need
+ *  equipment the user said they don't have. */
+export function starterHabitsFor(goals: Goals, equipment: readonly string[] = []) {
+  const menus = goalList(goals).map((g) => MENU[g]).filter(Boolean);
+  const menu = menus.length ? interleave(menus) : DEFAULT_MENU;
+  const unique = [...new Map(menu.map((h) => [h.id, h])).values()];
+  return unique.filter((h) => !h.needs || equipment.includes(h.needs)).slice(0, 5);
 }
 
 /** Every starter habit, once each — for tests and analytics lookups. */
@@ -263,8 +279,10 @@ const IDENTITIES: Record<string, string[]> = {
   "Stay active": ["someone who moves every day", "someone who's always up for it"],
 };
 
-export function identitySuggestions(goal: string | null | undefined): string[] {
-  return (goal && IDENTITIES[goal]) || ["someone who shows up for myself", "someone who keeps going"];
+export function identitySuggestions(goals: Goals): string[] {
+  const lists = goalList(goals).map((g) => IDENTITIES[g]).filter(Boolean);
+  if (!lists.length) return ["someone who shows up for myself", "someone who keeps going"];
+  return [...new Set(interleave(lists))].slice(0, 4);
 }
 
 /**

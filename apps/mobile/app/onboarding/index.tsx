@@ -20,7 +20,7 @@ import Animated, {
 } from "react-native-reanimated";
 import {
   GOAL_OPTIONS,
-  EQUIPMENT_OPTIONS,
+  accessOptionsFor,
   identitySuggestions,
   nextMondayKey,
   starterHabitsFor,
@@ -83,7 +83,7 @@ type Step =
     }
   | {
       key: "goal";
-      kind: "single";
+      kind: "goals";
       question: string;
       hint: string;
       options: readonly string[];
@@ -107,7 +107,6 @@ type Step =
       kind: "multi";
       question: string;
       hint: string;
-      options: readonly string[];
     }
   | {
       key: "lifestyle";
@@ -126,6 +125,12 @@ const LIFESTYLE_OPTIONS = [
   "I journal regularly",
   "I already work out",
 ] as const;
+
+/** The profile schema takes up to five goals. */
+const MAX_GOALS = 5;
+
+/** Typed answers get the keyboard's spelling help; the AI tidies the rest. */
+const SPELL_CHECKED = { autoCorrect: true, spellCheck: true } as const;
 
 const ONBOARDING_INPUT = {
   backgroundColor: color.surface,
@@ -147,16 +152,16 @@ const STEPS: Step[] = [
   },
   {
     key: "goal",
-    kind: "single",
+    kind: "goals",
     question: "What matters most right now?",
-    hint: "You can change this whenever it changes.",
+    hint: `Pick up to ${MAX_GOALS}. You can change these whenever they change.`,
     options: GOAL_OPTIONS,
   },
   {
     key: "identity",
     kind: "identity",
-    question: "Who are you becoming?",
-    hint: "One line, in your words. Your habits will be built around it. Optional.",
+    question: "Who do you want to become?",
+    hint: "One line, in your words. Your habits, and the next few questions, will be built around it. Optional.",
   },
   {
     key: "fitness",
@@ -177,7 +182,6 @@ const STEPS: Step[] = [
     kind: "multi",
     question: "What do you have access to?",
     hint: "Pick everything that applies.",
-    options: EQUIPMENT_OPTIONS,
   },
   {
     key: "lifestyle",
@@ -210,6 +214,10 @@ export default function OnboardingScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [goals, setGoals] = useState<string[]>([]);
+  /** Options for "What do you have access to?", from who they want to become. */
+  const [accessOptions, setAccessOptions] = useState<string[] | null>(null);
+
   // "Other" free-text fallbacks — for when none of the preset options fit.
   const [showGoalOther, setShowGoalOther] = useState(false);
   const [goalOther, setGoalOther] = useState("");
@@ -227,29 +235,75 @@ export default function OnboardingScreen() {
   const step = STEPS[index];
   const isLast = index === STEPS.length - 1;
 
+  /** A typed goal still in the box counts, so nobody loses it by tapping Continue. */
+  const pendingGoal = showGoalOther ? goalOther.trim() : "";
+  const allGoals =
+    pendingGoal && !goals.includes(pendingGoal) && goals.length < MAX_GOALS ? [...goals, pendingGoal] : goals;
+
   const canAdvance =
     step.kind === "text"
       ? name.trim().length > 0
-      : step.kind === "single"
-        ? step.key === "goal" && showGoalOther
-          ? goalOther.trim().length > 0
-          : !!single[step.key]
-        : step.kind === "lifestyle" ||
-            step.kind === "identity" ||
-            step.kind === "possible" ||
-            step.kind === "starter"
-          ? true // optional — context, never a gate
-          : multi.length > 0;
+      : step.kind === "goals"
+        ? allGoals.length > 0
+        : step.kind === "single"
+          ? !!single[step.key]
+          : step.kind === "lifestyle" ||
+              step.kind === "identity" ||
+              step.kind === "possible" ||
+              step.kind === "starter"
+            ? true // optional — context, never a gate
+            : multi.length > 0;
 
-  const resolvedGoal = showGoalOther ? goalOther.trim() : single.goal;
-  const starters = starterHabitsFor(resolvedGoal, multi);
+  const starters = starterHabitsFor(allGoals, multi);
   const identityGoal =
     identity.trim().length >= 3 ? identity.trim() : undefined;
+  const access = accessOptions ?? accessOptionsFor(identityGoal, allGoals);
+
+  const addGoal = (goal: string) => {
+    const g = goal.trim();
+    if (!g) return;
+    setGoals((p) => (p.includes(g) || p.length >= MAX_GOALS ? p : [...p, g]));
+  };
+
+  const toggleGoal = (goal: string) => {
+    void Haptics.selectionAsync();
+    setGoals((p) => (p.includes(goal) ? p.filter((x) => x !== goal) : p.length >= MAX_GOALS ? p : [...p, goal]));
+  };
+
+  /**
+   * Leaving "Who do you want to become?": tidy what they typed and fetch
+   * access options for that person. Nothing waits on it; the keyword list
+   * shows until (or unless) the reading comes back.
+   */
+  const readIdentity = () => {
+    const typed = allGoals.filter((g) => !(GOAL_OPTIONS as readonly string[]).includes(g));
+    setAccessOptions(accessOptionsFor(identityGoal, allGoals));
+    api
+      .readOnboarding({ identity: identityGoal, goals: allGoals })
+      .then((read) => {
+        if (read.identity && identityGoal && read.identity !== identityGoal) {
+          setIdentity((cur) => (cur.trim() === identityGoal ? read.identity! : cur));
+        }
+        // Only goals they typed get tidied; preset labels stay exact.
+        if (typed.length && read.goals.length === allGoals.length) {
+          setGoals(allGoals.map((g, i) => (typed.includes(g) ? read.goals[i] || g : g)));
+        }
+        setAccessOptions(read.access);
+      })
+      .catch(() => {});
+  };
 
   /** Finish onboarding; `talk` opens Altheo to build the first habit by conversation. */
   const next = async (talk = false) => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (!isLast) {
+      if (step.kind === "goals") {
+        if (pendingGoal) addGoal(pendingGoal);
+        setGoalOther("");
+        setShowGoalOther(false);
+        setAccessOptions(null); // goals changed, so re-read at the identity step
+      }
+      if (step.kind === "identity") readIdentity();
       setIndex((i) => i + 1);
       return;
     }
@@ -267,7 +321,7 @@ export default function OnboardingScreen() {
       await api.completeOnboarding({
         displayName: name.trim(),
         fitnessLevel,
-        primaryGoals: resolvedGoal ? [resolvedGoal] : [],
+        primaryGoals: allGoals,
         weeklyAvailability: DAYS_TO_COUNT[daysLabel],
         equipment: multi,
         identityGoal,
@@ -386,7 +440,9 @@ export default function OnboardingScreen() {
               c={color.textMuted}
               style={{ marginTop: space.sm }}
             >
-              {step.hint}
+              {step.key === "equipment" && identityGoal
+                ? `For becoming ${identityGoal}. Pick everything that applies.`
+                : step.hint}
             </Txt>
 
             <View style={{ marginTop: space.xxl }}>
@@ -394,6 +450,9 @@ export default function OnboardingScreen() {
                 <TextInput
                   value={name}
                   onChangeText={setName}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  textContentType="givenName"
                   placeholder={step.placeholder}
                   placeholderTextColor={color.textFaint}
                   autoFocus
@@ -416,7 +475,7 @@ export default function OnboardingScreen() {
               ) : step.kind === "single" ? (
                 <View style={{ gap: space.sm }}>
                   {step.options.map((opt, i) => {
-                    const selected = !showGoalOther && single[step.key] === opt;
+                    const selected = single[step.key] === opt;
                     return (
                       <Animated.View
                         key={opt}
@@ -426,7 +485,6 @@ export default function OnboardingScreen() {
                           accent={selected ? color.green : undefined}
                           onPress={() => {
                             void Haptics.selectionAsync();
-                            if (step.key === "goal") setShowGoalOther(false);
                             setSingle((p) => ({ ...p, [step.key]: opt }));
                           }}
                           haptic="none"
@@ -462,77 +520,100 @@ export default function OnboardingScreen() {
                     );
                   })}
 
-                  {/* Free-text fallback — only the goal question offers it, since
-                      fitness level and weekly days are closed, calibrated scales. */}
-                  {step.key === "goal" ? (
-                    <Animated.View
-                      entering={FadeInDown.duration(300).delay(
-                        60 + step.options.length * 40,
-                      )}
-                    >
-                      <PressCard
-                        accent={showGoalOther ? color.green : undefined}
-                        onPress={() => {
-                          void Haptics.selectionAsync();
-                          setShowGoalOther(true);
-                          setSingle((p) => ({ ...p, goal: "" }));
-                        }}
-                        haptic="none"
-                        style={{
-                          paddingVertical: space.lg,
-                          borderColor: showGoalOther
-                            ? tint(color.green, 0.55)
-                            : color.border,
-                        }}
+                </View>
+              ) : step.kind === "goals" ? (
+                <View style={{ gap: space.sm }}>
+                  {[...step.options, ...goals.filter((g) => !step.options.includes(g))].map((opt, i) => {
+                    const selected = goals.includes(opt);
+                    const full = !selected && allGoals.length >= MAX_GOALS;
+                    return (
+                      <Animated.View
+                        key={opt}
+                        entering={FadeInDown.duration(300).delay(60 + i * 40)}
                       >
-                        <View
+                        <PressCard
+                          accent={selected ? color.green : undefined}
+                          onPress={() => toggleGoal(opt)}
+                          haptic="none"
+                          disabled={full}
                           style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                            gap: space.md,
+                            paddingVertical: space.lg,
+                            borderColor: selected
+                              ? tint(color.green, 0.55)
+                              : color.border,
                           }}
                         >
-                          <Txt variant="bodyStrong" style={{ flex: 1 }}>
-                            Something else
-                          </Txt>
-                          <Ionicons
-                            name={
-                              showGoalOther
-                                ? "checkmark-circle"
-                                : "ellipse-outline"
-                            }
-                            size={22}
-                            color={
-                              showGoalOther ? color.green : color.textFaint
-                            }
-                          />
-                        </View>
-                      </PressCard>
-                      {showGoalOther ? (
-                        <TextInput
-                          value={goalOther}
-                          onChangeText={setGoalOther}
-                          placeholder="Tell us what matters most to you"
-                          placeholderTextColor={color.textFaint}
-                          autoFocus
-                          maxLength={60}
-                          returnKeyType="done"
-                          style={[
-                            type.body,
-                            {
-                              marginTop: space.sm,
-                              backgroundColor: color.surface,
-                              borderWidth: 1,
-                              borderColor: tint(color.green, 0.4),
-                              borderRadius: radius.lg,
-                              paddingHorizontal: space.lg,
-                              paddingVertical: space.md,
-                              color: color.text,
-                            },
-                          ]}
-                        />
-                      ) : null}
-                    </Animated.View>
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: space.md,
+                            }}
+                          >
+                            <Txt variant="bodyStrong" style={{ flex: 1 }}>
+                              {opt}
+                            </Txt>
+                            <Ionicons
+                              name={selected ? "checkmark-circle" : "square-outline"}
+                              size={22}
+                              color={selected ? color.green : color.textFaint}
+                            />
+                          </View>
+                        </PressCard>
+                      </Animated.View>
+                    );
+                  })}
+
+                  {/* Free text for anything the list misses; each one joins the picks. */}
+                  {showGoalOther ? (
+                    <View style={{ flexDirection: "row", gap: space.sm }}>
+                      <TextInput
+                        value={goalOther}
+                        onChangeText={setGoalOther}
+                        placeholder="Tell us what matters to you"
+                        placeholderTextColor={color.textFaint}
+                        autoFocus
+                        maxLength={60}
+                        returnKeyType="done"
+                        autoCapitalize="sentences"
+                        {...SPELL_CHECKED}
+                        onSubmitEditing={() => {
+                          addGoal(goalOther);
+                          setGoalOther("");
+                        }}
+                        style={[
+                          type.body,
+                          ONBOARDING_INPUT,
+                          { flex: 1, borderColor: tint(color.green, 0.4) },
+                        ]}
+                      />
+                      <Pressable
+                        onPress={() => {
+                          addGoal(goalOther);
+                          setGoalOther("");
+                        }}
+                        disabled={!goalOther.trim()}
+                        accessibilityLabel="Add this goal"
+                        style={{
+                          width: 48,
+                          borderRadius: radius.lg,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          borderWidth: 1,
+                          borderColor: goalOther.trim() ? tint(color.green, 0.5) : color.border,
+                          backgroundColor: goalOther.trim() ? tint(color.green, 0.18) : "transparent",
+                        }}
+                      >
+                        <Ionicons name="add" size={20} color={goalOther.trim() ? color.green : color.textFaint} />
+                      </Pressable>
+                    </View>
+                  ) : allGoals.length < MAX_GOALS ? (
+                    <Chip
+                      label="Something else"
+                      icon="add"
+                      accent={color.green}
+                      onPress={() => setShowGoalOther(true)}
+                    />
                   ) : null}
                 </View>
               ) : step.kind === "identity" ? (
@@ -556,6 +637,8 @@ export default function OnboardingScreen() {
                     <TextInput
                       value={identity}
                       onChangeText={setIdentity}
+                      autoCapitalize="none"
+                      {...SPELL_CHECKED}
                       placeholder="someone who moves every day"
                       placeholderTextColor={color.textFaint}
                       maxLength={120}
@@ -571,7 +654,7 @@ export default function OnboardingScreen() {
                     />
                   </View>
                   <View style={{ gap: space.sm }}>
-                    {identitySuggestions(resolvedGoal).map((phrase) => (
+                    {identitySuggestions(allGoals).map((phrase) => (
                       <Chip
                         key={phrase}
                         label={phrase}
@@ -651,6 +734,8 @@ export default function OnboardingScreen() {
                     <TextInput
                       value={where}
                       onChangeText={setWhere}
+                      autoCapitalize="words"
+                      {...SPELL_CHECKED}
                       placeholder="e.g. Houston, Texas"
                       placeholderTextColor={color.textFaint}
                       maxLength={80}
@@ -660,6 +745,8 @@ export default function OnboardingScreen() {
                     <TextInput
                       value={days}
                       onChangeText={setDays}
+                      autoCapitalize="sentences"
+                      {...SPELL_CHECKED}
                       placeholder="e.g. nurse on night shifts, two kids"
                       placeholderTextColor={color.textFaint}
                       maxLength={120}
@@ -676,7 +763,7 @@ export default function OnboardingScreen() {
                       gap: space.sm,
                     }}
                   >
-                    {step.options.map((opt) => {
+                    {access.map((opt) => {
                       const selected = multi.includes(opt);
                       return (
                         <Chip
@@ -698,7 +785,7 @@ export default function OnboardingScreen() {
 
                     {/* Custom items already added — rendered as removable chips. */}
                     {multi
-                      .filter((opt) => !step.options.includes(opt))
+                      .filter((opt) => !access.includes(opt))
                       .map((opt) => (
                         <Chip
                           key={opt}
@@ -732,6 +819,8 @@ export default function OnboardingScreen() {
                       <TextInput
                         value={equipmentOther}
                         onChangeText={setEquipmentOther}
+                        autoCapitalize="sentences"
+                        {...SPELL_CHECKED}
                         placeholder="e.g. Resistance bands"
                         placeholderTextColor={color.textFaint}
                         maxLength={40}

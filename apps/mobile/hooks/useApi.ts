@@ -46,6 +46,8 @@ function useLiveApi() {
       restoreHabit: (id: string) =>
         withToken((token) => api.restoreHabit(token, id)),
       getVoice: () => withToken(api.getVoice),
+      readOnboarding: (input: { identity?: string; goals: string[] }) =>
+        withToken((token) => api.readOnboarding(token, input)),
       connectDeviceHealth: (provider: "apple_health" | "health_connect") =>
         withToken((token) => api.connectDeviceHealth(token, provider)),
       ingestDeviceHealth: (

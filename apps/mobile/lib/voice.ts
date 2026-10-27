@@ -16,8 +16,17 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from "expo-audio";
+import {
+  RecordingPresets,
+  createAudioPlayer,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+  useAudioRecorder,
+  type AudioPlayer,
+} from "expo-audio";
 import { File, Paths } from "expo-file-system";
+// Binary uploads still live in the legacy API (as in services/community.ts).
+import * as FileSystem from "expo-file-system/legacy";
 import type { Persona } from "@kinextion/shared";
 import { dataApiBaseUrl } from "../services/client";
 
@@ -43,21 +52,38 @@ try {
   Speech = null;
 }
 
-/** Whether this build can listen at all. */
+/**
+ * Whether this build can listen with the phone's own recogniser. Without it
+ * (Expo Go), voice still works when the API can transcribe: see
+ * `listening` from getVoice().
+ */
 export const voiceSupported = recognition !== null;
 /** Whether this build can read replies aloud with the phone's voice. */
 export const deviceSpeechSupported = Speech !== null;
 
 // ─── Listening ────────────────────────────────────────────────────────────────
 
-export type ListenState = "idle" | "listening";
+/** `transcribing` only happens on the server path, while the clip is read. */
+export type ListenState = "idle" | "listening" | "transcribing";
+
+interface ListenerOptions {
+  onFinal: (text: string) => void;
+  contextualStrings?: string[];
+  /** For the server path, which sends the clip to the API. */
+  getToken?: () => Promise<string | null>;
+}
 
 /**
  * Listen for one thing the user says. `onFinal` gets the whole utterance
- * once they stop talking (or `stop()` is called); `partial` shows the words
- * as they come.
+ * once they stop talking (or `stop()` is called). On the phone's recogniser
+ * `partial` shows the words as they come; on the server path (Expo Go) the
+ * clip is recorded, ends by itself after a pause, and is read by the API.
  */
-export function useListener({ onFinal, contextualStrings }: { onFinal: (text: string) => void; contextualStrings?: string[] }) {
+export const useListener: (options: ListenerOptions) => ReturnType<typeof useNativeListener> = recognition
+  ? useNativeListener
+  : useRecordedListener;
+
+function useNativeListener({ onFinal, contextualStrings }: ListenerOptions) {
   const [state, setState] = useState<ListenState>("idle");
   const [partial, setPartial] = useState("");
   const [volume, setVolume] = useState(0);
@@ -137,7 +163,168 @@ export function useListener({ onFinal, contextualStrings }: { onFinal: (text: st
     recognition?.ExpoSpeechRecognitionModule.abort();
   }, []);
 
-  return { state, partial, volume, error, start, stop, cancel, clearError: () => setError(null) };
+  return {
+    state: state as ListenState,
+    partial,
+    volume,
+    error,
+    start,
+    stop,
+    cancel,
+    clearError: () => setError(null),
+  };
+}
+
+// ─── Listening through the server (Expo Go) ──────────────────────────────────
+
+/** Louder than this (dB) counts as talking. Room noise sits well below it. */
+const SPEECH_DB = -38;
+/** How long a pause ends the turn, once they've started talking. */
+const END_OF_TURN_MS = 1300;
+/** Give up quietly if they never start. */
+const NO_SPEECH_MS = 8000;
+/** A hard stop, so a stuck clip can't run forever. */
+const MAX_TURN_MS = 90_000;
+const METER_MS = 100;
+
+const RECORDING_OPTIONS = { ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true };
+
+function useRecordedListener({ onFinal, getToken }: ListenerOptions) {
+  const recorder = useAudioRecorder(RECORDING_OPTIONS);
+  const [state, setState] = useState<ListenState>("idle");
+  const [volume, setVolume] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const final = useRef(onFinal);
+  final.current = onFinal;
+  const tokenRef = useRef(getToken);
+  tokenRef.current = getToken;
+  const meter = useRef<ReturnType<typeof setInterval> | null>(null);
+  const turn = useRef({ started: 0, heard: 0, lastLoud: 0, active: false });
+
+  const stopMeter = () => {
+    if (meter.current) clearInterval(meter.current);
+    meter.current = null;
+  };
+
+  /** Ends the clip; `send` decides whether it's read or thrown away. */
+  const finish = useCallback(
+    async (send: boolean) => {
+      if (!turn.current.active) return;
+      turn.current.active = false;
+      stopMeter();
+      setVolume(0);
+      try {
+        await recorder.stop();
+      } catch {
+        // already stopped
+      }
+      // Back to playback, so the reply comes out of the speaker.
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
+      const uri = recorder.uri;
+      if (!send || !uri || !turn.current.heard) {
+        setState("idle");
+        return;
+      }
+      setState("transcribing");
+      try {
+        const text = await transcribe(uri, (await tokenRef.current?.()) ?? null);
+        setState("idle");
+        if (text) final.current(text);
+        else setError("Didn't catch that. Try again?");
+      } catch (err) {
+        setState("idle");
+        setError(err instanceof Error ? err.message : "Couldn't hear that. Try again?");
+      } finally {
+        void FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+      }
+    },
+    [recorder],
+  );
+
+  const start = useCallback(async () => {
+    if (turn.current.active) return true;
+    const perm = await requestRecordingPermissionsAsync();
+    if (!perm.granted) {
+      setError("Microphone access is off for Kinextion. You can turn it on in Settings, or type instead.");
+      return false;
+    }
+    setError(null);
+    try {
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+    } catch {
+      setError("Couldn't start the microphone. Try again?");
+      return false;
+    }
+    const now = Date.now();
+    turn.current = { started: now, heard: 0, lastLoud: now, active: true };
+    setState("listening");
+
+    // Ends the turn the way a person would: a pause after talking.
+    meter.current = setInterval(() => {
+      const t = turn.current;
+      if (!t.active) return;
+      const db = recorder.getStatus().metering ?? -160;
+      const at = Date.now();
+      setVolume(Math.max(0, Math.min(1, (db + 60) / 50)));
+      if (db > SPEECH_DB) {
+        t.heard += 1;
+        t.lastLoud = at;
+      }
+      if (t.heard >= 3 && at - t.lastLoud > END_OF_TURN_MS) void finish(true);
+      else if (!t.heard && at - t.started > NO_SPEECH_MS) void finish(false);
+      else if (at - t.started > MAX_TURN_MS) void finish(true);
+    }, METER_MS);
+    return true;
+  }, [recorder, finish]);
+
+  useEffect(
+    () => () => {
+      stopMeter();
+      if (turn.current.active) {
+        turn.current.active = false;
+        void recorder.stop().catch(() => {});
+      }
+    },
+    [recorder],
+  );
+
+  return {
+    state,
+    // No live words on this path; the orb shows it's listening instead.
+    partial: "",
+    volume,
+    error,
+    start,
+    /** Stop and send what was heard. */
+    stop: () => void finish(true),
+    /** Stop and throw it away. */
+    cancel: () => void finish(false),
+    clearError: () => setError(null),
+  };
+}
+
+/** The recorded clip, read by the API. Throws a sentence fit to show. */
+async function transcribe(uri: string, token: string | null): Promise<string> {
+  const res = await FileSystem.uploadAsync(`${dataApiBaseUrl()}/api/chat/me/transcribe`, uri, {
+    httpMethod: "POST",
+    uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+    headers: {
+      "Content-Type": "audio/mp4",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  let body: { success?: boolean; data?: { text?: string }; error?: string } | null = null;
+  try {
+    body = JSON.parse(res.body);
+  } catch {
+    body = null;
+  }
+  if (res.status < 200 || res.status >= 300 || !body?.success) {
+    throw new Error(body?.error ?? "Couldn't hear that. Try again?");
+  }
+  return body.data?.text?.trim() ?? "";
 }
 
 // ─── Speaking ─────────────────────────────────────────────────────────────────

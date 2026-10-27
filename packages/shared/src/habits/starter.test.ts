@@ -120,3 +120,19 @@ describe("describeHabitPlan", () => {
     ]);
   });
 });
+
+describe("several goals", () => {
+  it("mixes starters from each goal without repeats", () => {
+    const menu = starterHabitsFor(["Get stronger", "Better sleep"]);
+    const ids = menu.map((h) => h.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toEqual(expect.arrayContaining([starterHabitsFor("Get stronger")[0].id, starterHabitsFor("Better sleep")[0].id]));
+    expect(menu.length).toBeLessThanOrEqual(5);
+  });
+
+  it("offers identities from each goal", () => {
+    const ids = identitySuggestions(["Get stronger", "Reduce stress"]);
+    expect(ids).toContain(identitySuggestions("Get stronger")[0]);
+    expect(ids).toContain(identitySuggestions("Reduce stress")[0]);
+  });
+});

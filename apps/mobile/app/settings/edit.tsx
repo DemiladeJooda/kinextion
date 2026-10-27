@@ -21,7 +21,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import {
   COACHING_INTENSITY_OPTIONS,
-  EQUIPMENT_OPTIONS,
+  accessOptionsFor,
   GOAL_OPTIONS,
   SCORE_PERIOD_OPTIONS,
   SPIRITUAL_DIAL_OPTIONS,
@@ -307,7 +307,8 @@ export default function EditProfileScreen() {
                     marginTop: space.md,
                   }}
                 >
-                  {EQUIPMENT_OPTIONS.map((e) => (
+                  {/* Asked about who they want to become, plus anything already picked. */}
+                  {[...new Set([...accessOptionsFor(profile?.identityGoal, goals), ...equipment])].map((e) => (
                     <Chip
                       key={e}
                       label={e}

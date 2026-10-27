@@ -197,13 +197,46 @@ describe("talking instead of typing", () => {
 
   it("reports no premium voice until one is set up, and says so on /speech", async () => {
     const voice = await app.inject({ method: "GET", url: "/api/chat/me/voice" });
-    expect(voice.json().data).toEqual({ premium: false, provider: null });
+    expect(voice.json().data).toEqual({ premium: false, provider: null, listening: false });
     const speech = await app.inject({
       method: "POST",
       url: "/api/chat/me/speech",
       payload: { persona: "kairo", text: "Take a breath." },
     });
     expect(speech.statusCode).toBe(501);
+  });
+
+  it("listens on the server once a key is set, and takes audio clips", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ text: "I slept badly" }), { status: 200 })
+    );
+    try {
+      const voice = await app.inject({ method: "GET", url: "/api/chat/me/voice" });
+      expect(voice.json().data.listening).toBe(true);
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/chat/me/transcribe",
+        headers: { "content-type": "audio/mp4" },
+        payload: Buffer.alloc(2 * 1024 * 1024, 1),
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data).toEqual({ text: "I slept badly" });
+      expect(String(fetchMock.mock.calls[0][0])).toContain("api.openai.com/v1/audio/transcriptions");
+    } finally {
+      delete process.env.OPENAI_API_KEY;
+      fetchMock.mockRestore();
+    }
+  });
+
+  it("says listening isn't set up when no key is", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/chat/me/transcribe",
+      headers: { "content-type": "audio/mp4" },
+      payload: Buffer.alloc(4000, 1),
+    });
+    expect(res.statusCode).toBe(501);
   });
 });
 

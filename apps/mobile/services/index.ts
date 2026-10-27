@@ -284,9 +284,18 @@ export function ingestDeviceHealth(
   );
 }
 
-/** Whether the API has a premium voice set up for the guides. */
+/** Whether the API has a premium voice set up, and whether it can listen for builds without the phone's recogniser. */
 export function getVoice(token: string | null) {
-  return apiRequest<{ premium: boolean; provider: string | null }>(`/api/chat/me/voice`, { token });
+  return apiRequest<{ premium: boolean; provider: string | null; listening?: boolean }>(`/api/chat/me/voice`, { token });
+}
+
+/** Onboarding answers read back tidied, with access options for who they want to become. */
+export function readOnboarding(token: string | null, input: { identity?: string; goals: string[] }) {
+  return apiRequest<{ identity: string | null; goals: string[]; access: string[] }>(`/api/users/me/onboarding/read`, {
+    method: "POST",
+    body: input,
+    token,
+  });
 }
 
 /**

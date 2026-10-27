@@ -73,4 +73,73 @@ export function premiumVoice(): SpeechProvider | null {
   return elevenLabs.isConfigured() ? elevenLabs : null;
 }
 
+// ─── Listening on the server ─────────────────────────────────────────────────
+//
+// The phone's recogniser is a native module that Expo Go doesn't include,
+// and some phones can't run it. There the app records a short clip and sends
+// it here instead. The clip is transcribed and dropped; only the text is
+// kept, as the chat message itself.
+
+/** Longest clip accepted, ~2 minutes of compressed speech. */
+export const MAX_AUDIO_BYTES = 8 * 1024 * 1024;
+
+export interface TranscriptionProvider {
+  id: string;
+  isConfigured(): boolean;
+  transcribe(audio: Buffer, contentType: string, signal?: AbortSignal): Promise<string>;
+}
+
+const fileFrom = (audio: Buffer, contentType: string) =>
+  new Blob([new Uint8Array(audio)], { type: contentType });
+const extensionFor = (contentType: string) => (contentType.includes("wav") ? "wav" : contentType.includes("webm") ? "webm" : "m4a");
+
+/** ElevenLabs Scribe. Same key as the premium voice; no voice ids needed. */
+export const elevenLabsScribe: TranscriptionProvider = {
+  id: "elevenlabs",
+  isConfigured: () => Boolean(process.env.ELEVENLABS_API_KEY),
+  async transcribe(audio, contentType, signal) {
+    const form = new FormData();
+    form.append("model_id", process.env.ELEVENLABS_STT_MODEL ?? "scribe_v1");
+    form.append("language_code", "en");
+    form.append("tag_audio_events", "false");
+    form.append("file", fileFrom(audio, contentType), `speech.${extensionFor(contentType)}`);
+    const res = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
+      method: "POST",
+      headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY ?? "" },
+      body: form,
+      signal,
+    });
+    if (!res.ok) throw new Error(`ElevenLabs transcription failed (${res.status})`);
+    const body = (await res.json()) as { text?: string };
+    return body.text?.trim() ?? "";
+  },
+};
+
+/** OpenAI's transcription model, for when that's the key on hand. */
+export const openAITranscribe: TranscriptionProvider = {
+  id: "openai",
+  isConfigured: () => Boolean(process.env.OPENAI_API_KEY),
+  async transcribe(audio, contentType, signal) {
+    const form = new FormData();
+    form.append("model", process.env.OPENAI_STT_MODEL ?? "gpt-4o-mini-transcribe");
+    form.append("language", "en");
+    form.append("prompt", "A person talking to their wellness guides, Altheo and Kairo, in the Kinextion app.");
+    form.append("file", fileFrom(audio, contentType), `speech.${extensionFor(contentType)}`);
+    const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY ?? ""}` },
+      body: form,
+      signal,
+    });
+    if (!res.ok) throw new Error(`OpenAI transcription failed (${res.status})`);
+    const body = (await res.json()) as { text?: string };
+    return body.text?.trim() ?? "";
+  },
+};
+
+/** The server-side listener in use, or null when no key is set. */
+export function transcriber(): TranscriptionProvider | null {
+  return [elevenLabsScribe, openAITranscribe].find((p) => p.isConfigured()) ?? null;
+}
+
 export { speakable };
