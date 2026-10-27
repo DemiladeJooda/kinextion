@@ -360,10 +360,16 @@ export interface Speaker {
   stop(): void;
 }
 
+/** Most text sent to the hosted voice at once (the API takes up to 600). */
+const MAX_CLIP_CHARS = 500;
+
 /**
  * Speaks queued sentences one after another. `premium` names the hosted
- * voice route when the API has one; each sentence falls back to the device
- * voice if fetching it fails.
+ * voice route when the API has one. The first sentence goes alone so the
+ * guide starts talking quickly; whatever arrives while it plays is fetched
+ * as one stretch, so the voice keeps its flow instead of restarting every
+ * sentence, and the next stretch is fetched while the current one plays.
+ * A stretch that fails to fetch is read in the device voice.
  */
 export function createSpeaker({
   persona,
@@ -378,27 +384,63 @@ export function createSpeaker({
   onSpeaking: (speaking: boolean) => void;
   onIdle: () => void;
 }): Speaker {
-  const queue: string[] = [];
-  let busy = false;
+  /** Sentences not yet sent off to be voiced. */
+  const pending: string[] = [];
+  /** Stretches waiting to play, in order; `audio` is null for the device voice. */
+  const clips: { text: string; audio: Promise<File | null> }[] = [];
+  let fetching = false;
+  let playing = false;
   let ended = false;
   let stopped = false;
   let player: AudioPlayer | null = null;
   let finish: (() => void) | null = null;
+  let clipCount = 0;
 
-  const next = async () => {
-    if (stopped) return;
-    const sentence = queue.shift();
-    if (!sentence) {
-      busy = false;
-      onSpeaking(false);
-      if (ended) onIdle();
-      return;
+  /** Starts voicing the next stretch, keeping at most one ready ahead. */
+  const prepare = () => {
+    if (stopped || fetching || pending.length === 0 || clips.length >= 2) return;
+    if (!premium) {
+      clips.push({ text: pending.shift()!, audio: Promise.resolve(null) });
+    } else {
+      let text = pending.shift()!;
+      while (pending.length && text.length + 1 + pending[0].length <= MAX_CLIP_CHARS) text += ` ${pending.shift()}`;
+      fetching = true;
+      const audio = fetchPremium(text).finally(() => {
+        fetching = false;
+        prepare();
+      });
+      clips.push({ text, audio });
     }
-    busy = true;
+    if (!playing) void play();
+  };
+
+  const play = async () => {
+    playing = true;
     onSpeaking(true);
-    const played = premium ? await playPremium(sentence) : false;
-    if (!played && !stopped) await playDevice(sentence);
-    void next();
+    while (!stopped) {
+      const clip = clips.shift();
+      if (!clip) break;
+      prepare();
+      const file = await clip.audio;
+      if (stopped) {
+        discard(file);
+        break;
+      }
+      if (!file || !(await playFile(file))) await playDevice(clip.text);
+      prepare();
+    }
+    playing = false;
+    if (stopped) return;
+    onSpeaking(false);
+    if (ended && pending.length === 0) onIdle();
+  };
+
+  const discard = (file: File | null) => {
+    try {
+      file?.delete();
+    } catch {
+      // cache is cleared by the OS anyway
+    }
   };
 
   const playDevice = async (text: string) => {
@@ -418,7 +460,8 @@ export function createSpeaker({
     finish = null;
   };
 
-  const playPremium = async (text: string): Promise<boolean> => {
+  /** The hosted voice for one stretch, saved to a file; null if it didn't come. */
+  const fetchPremium = async (text: string): Promise<File | null> => {
     try {
       const token = await getToken();
       const res = await fetch(`${dataApiBaseUrl()}/api/chat/me/speech`, {
@@ -426,10 +469,18 @@ export function createSpeaker({
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ persona, text }),
       });
-      if (!res.ok || stopped) return false;
-      const file = new File(Paths.cache, `guide-${Date.now()}.mp3`);
+      if (!res.ok || stopped) return null;
+      const file = new File(Paths.cache, `guide-${Date.now()}-${clipCount++}.mp3`);
       await file.write(new Uint8Array(await res.arrayBuffer()));
-      await setAudioModeAsync({ playsInSilentMode: true });
+      return file;
+    } catch {
+      return null;
+    }
+  };
+
+  const playFile = async (file: File): Promise<boolean> => {
+    try {
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
       await new Promise<void>((resolve) => {
         finish = resolve;
         player = createAudioPlayer(file.uri);
@@ -441,39 +492,36 @@ export function createSpeaker({
         });
         player.play();
       });
-      player?.remove();
-      player = null;
-      finish = null;
-      try {
-        file.delete();
-      } catch {
-        // cache is cleared by the OS anyway
-      }
       return true;
     } catch {
       return false;
+    } finally {
+      player?.remove();
+      player = null;
+      finish = null;
+      discard(file);
     }
   };
 
   return {
     say(sentence) {
       if (stopped || !sentence.trim()) return;
-      queue.push(sentence);
-      if (!busy) void next();
+      pending.push(sentence);
+      prepare();
     },
     end() {
       ended = true;
-      if (!busy && queue.length === 0) onIdle();
+      if (!playing && clips.length === 0 && pending.length === 0) onIdle();
     },
     stop() {
       stopped = true;
-      queue.length = 0;
+      pending.length = 0;
+      for (const clip of clips.splice(0)) void clip.audio.then(discard);
       void Speech?.stop();
       player?.pause();
       player?.remove();
       player = null;
       finish?.();
-      busy = false;
       onSpeaking(false);
     },
   };

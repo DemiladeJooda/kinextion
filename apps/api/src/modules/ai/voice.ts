@@ -8,8 +8,8 @@
  *   1. A spoken style. A reply that reads well as a chat bubble — bullets,
  *      bold, an emoji — sounds awful read aloud. Voice turns are told so.
  *   2. An optional premium voice. The phone's own voice works everywhere at
- *      no cost; a hosted voice (ElevenLabs, built here) sounds far more
- *      human but bills per character. It switches on only when its key is
+ *      no cost; a hosted voice (ElevenLabs or OpenAI) sounds far more human
+ *      but bills per use. It switches on only when its key is
  *      set, and the app falls back to the device voice whenever it's off or
  *      fails, so nothing depends on it.
  */
@@ -68,9 +68,54 @@ export const elevenLabs: SpeechProvider = {
   },
 };
 
-/** The premium voice in use, or null when none is set up. */
+/**
+ * How each guide sounds on OpenAI's voice. The model takes direction, so the
+ * tone is described rather than tuned with rate and pitch.
+ */
+const OPENAI_STYLE: Record<Persona, { voice: string; instructions: string }> = {
+  altheo: {
+    voice: "ash",
+    instructions:
+      "You're Altheo, a warm, grounded coach talking one to one with someone you like. Speak naturally, the way a friend talks, at an easy conversational pace with relaxed energy. Encouraging but never peppy, salesy or like an announcer. Let sentences flow into each other.",
+  },
+  kairo: {
+    voice: "sage",
+    instructions:
+      "You're Kairo, a calm, gentle listener. Speak softly and unhurried, with warmth and natural pauses, like someone sitting beside a friend. Never sound scripted, clinical or like a meditation app.",
+  },
+};
+
+/**
+ * OpenAI text-to-speech, on the same OPENAI_API_KEY as listening. Voices can
+ * be swapped with OPENAI_VOICE_ALTHEO / OPENAI_VOICE_KAIRO, the model with
+ * OPENAI_TTS_MODEL.
+ */
+export const openAISpeech: SpeechProvider = {
+  id: "openai",
+  isConfigured: () => Boolean(process.env.OPENAI_API_KEY),
+  async synthesize(text, persona, signal) {
+    const style = OPENAI_STYLE[persona];
+    const voice = (persona === "kairo" ? process.env.OPENAI_VOICE_KAIRO : process.env.OPENAI_VOICE_ALTHEO) || style.voice;
+    const res = await fetch("https://api.openai.com/v1/audio/speech", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY ?? ""}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: process.env.OPENAI_TTS_MODEL ?? "gpt-4o-mini-tts",
+        voice,
+        input: text,
+        instructions: style.instructions,
+        response_format: "mp3",
+      }),
+      signal,
+    });
+    if (!res.ok) throw new Error(`OpenAI speech failed (${res.status})`);
+    return { audio: Buffer.from(await res.arrayBuffer()), contentType: "audio/mpeg" };
+  },
+};
+
+/** The premium voice in use (ElevenLabs first, then OpenAI), or null when none is set up. */
 export function premiumVoice(): SpeechProvider | null {
-  return elevenLabs.isConfigured() ? elevenLabs : null;
+  return [elevenLabs, openAISpeech].find((p) => p.isConfigured()) ?? null;
 }
 
 // ─── Listening on the server ─────────────────────────────────────────────────
@@ -131,7 +176,11 @@ export const openAITranscribe: TranscriptionProvider = {
       body: form,
       signal,
     });
-    if (!res.ok) throw new Error(`OpenAI transcription failed (${res.status})`);
+    if (!res.ok) {
+      throw new Error(
+        res.status === 401 ? "OpenAI rejected the key: OPENAI_API_KEY should be the secret key, starting sk-" : `OpenAI transcription failed (${res.status})`
+      );
+    }
     const body = (await res.json()) as { text?: string };
     return body.text?.trim() ?? "";
   },

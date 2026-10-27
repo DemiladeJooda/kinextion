@@ -351,7 +351,9 @@ export async function chatRoutes(app: FastifyInstance) {
       return { success: true, data: { text } };
     } catch (err) {
       request.log.warn({ err, provider: provider.id }, "transcription failed");
-      return reply.status(502).send({ success: false, error: "Couldn't hear that. Try again?" });
+      // Outside production say why, so a wrong key doesn't look like a quiet mic.
+      const detail = process.env.NODE_ENV !== "production" && err instanceof Error ? ` (${err.message})` : "";
+      return reply.status(502).send({ success: false, error: `Couldn't hear that. Try again?${detail}` });
     }
   });
 

@@ -229,6 +229,47 @@ describe("talking instead of typing", () => {
     }
   });
 
+  it("speaks in OpenAI's voice when that's the key set, directed per guide", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(Buffer.from("ID3audio"), { status: 200 }));
+    try {
+      const voice = await app.inject({ method: "GET", url: "/api/chat/me/voice" });
+      expect(voice.json().data).toMatchObject({ premium: true, provider: "openai" });
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/chat/me/speech",
+        payload: { persona: "kairo", text: "Take a breath." },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers["content-type"]).toBe("audio/mpeg");
+      expect(String(fetchMock.mock.calls[0][0])).toContain("api.openai.com/v1/audio/speech");
+      const sent = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+      expect(sent).toMatchObject({ voice: "sage", input: "Take a breath." });
+      expect(sent.instructions).toMatch(/Kairo/);
+    } finally {
+      delete process.env.OPENAI_API_KEY;
+      fetchMock.mockRestore();
+    }
+  });
+
+  it("says when OpenAI turns the key down, outside production", async () => {
+    process.env.OPENAI_API_KEY = "key_notasecret";
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 401 }));
+    try {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/chat/me/transcribe",
+        headers: { "content-type": "audio/mp4" },
+        payload: Buffer.alloc(4000, 1),
+      });
+      expect(res.statusCode).toBe(502);
+      expect(res.json().error).toMatch(/secret key, starting sk-/);
+    } finally {
+      delete process.env.OPENAI_API_KEY;
+      fetchMock.mockRestore();
+    }
+  });
+
   it("says listening isn't set up when no key is", async () => {
     const res = await app.inject({
       method: "POST",

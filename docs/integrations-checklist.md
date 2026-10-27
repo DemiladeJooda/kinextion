@@ -64,10 +64,12 @@ How auto-logging works:
 | Listening (speech to text) | On the phone: Apple/Google speech recognition via `expo-speech-recognition`, on-device where supported | No API bill. On phones without on-device recognition, audio goes to Apple's or Google's speech service (disclosed in the privacy policy). Kinextion only receives the text |
 | Listening, server (Expo Go and phones without the recogniser) | The app records a short clip with `expo-audio`, it ends by itself after a pause, and `POST /api/chat/me/transcribe` turns it into text. ElevenLabs Scribe with `ELEVENLABS_API_KEY` (no voice ids needed; optional `ELEVENLABS_STT_MODEL`, default `scribe_v1`), or OpenAI with `OPENAI_API_KEY` (optional `OPENAI_STT_MODEL`, default `gpt-4o-mini-transcribe`). ElevenLabs wins if both are set | Billed per minute of audio. The clip is dropped after transcription; only the text is kept, as the chat message |
 | Speaking, default | On the phone: `expo-speech`, using the best English voice the phone has | No API bill |
-| Speaking, premium | ElevenLabs: `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ALTHEO`, `ELEVENLABS_VOICE_KAIRO`, optional `ELEVENLABS_MODEL` (default `eleven_flash_v2_5`) | Billed per character |
+| Speaking, premium | ElevenLabs: `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ALTHEO`, `ELEVENLABS_VOICE_KAIRO`, optional `ELEVENLABS_MODEL` (default `eleven_flash_v2_5`). Otherwise OpenAI on `OPENAI_API_KEY` alone: `gpt-4o-mini-tts` (optional `OPENAI_TTS_MODEL`), voices `ash` for Altheo and `sage` for Kairo (optional `OPENAI_VOICE_ALTHEO` / `OPENAI_VOICE_KAIRO`), each guide's tone directed in `modules/ai/voice.ts` | Billed per character (ElevenLabs) or per token of text and audio (OpenAI) |
 
 If the premium voice is missing or fails, the app falls back to the phone's
-voice, sentence by sentence.
+voice for that stretch. The first sentence is voiced alone so the guide
+starts quickly; later sentences are voiced together, fetched while the
+previous stretch plays.
 
 **To check**
 - ElevenLabs: price per character on each plan, commercial licence for app use, and picking or designing a voice for each guide.
