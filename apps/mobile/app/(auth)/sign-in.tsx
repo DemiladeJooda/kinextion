@@ -15,7 +15,9 @@ import {
   Notice,
   Txt,
 } from "../../components/ui";
+import { TestAccountButton } from "../../components/TestAccountButton";
 import { firstClerkError } from "../../lib/clerk-error";
+import { testAccountsEnabled } from "../../lib/test-account";
 import { color, space } from "../../theme";
 
 export default function SignInScreen() {
@@ -143,6 +145,7 @@ export default function SignInScreen() {
                 </Txt>
               </View>
             </Pressable>
+            {testAccountsEnabled ? <TestAccountButton /> : null}
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>

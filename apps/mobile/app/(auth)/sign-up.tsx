@@ -16,7 +16,9 @@ import {
   Notice,
   Txt,
 } from "../../components/ui";
+import { TestAccountButton } from "../../components/TestAccountButton";
 import { firstClerkError } from "../../lib/clerk-error";
+import { testAccountsEnabled } from "../../lib/test-account";
 import { color, space, tint } from "../../theme";
 
 const MIN_PASSWORD = 8;
@@ -66,7 +68,16 @@ export default function SignUpScreen() {
         // New account, no profile yet — onboarding persists it once completed.
         router.replace("/onboarding" as never);
       } else {
-        setError("That code didn't work. Try again.");
+        // The code was right but Clerk wants more than email + password
+        // (e.g. a required phone number in the dashboard). Say that, rather
+        // than blaming the code.
+        const missing = (attempt as { missingFields?: string[] }).missingFields ?? [];
+        console.warn("Clerk sign-up incomplete:", attempt.status, missing);
+        setError(
+          __DEV__ && missing.length
+            ? `Email verified, but Clerk still requires: ${missing.join(", ")}. Turn that off in the Clerk dashboard or collect it here.`
+            : "Your email is verified, but we couldn't finish setting up your account. Try again shortly.",
+        );
       }
     } catch (err) {
       fail(err, "That code didn't work. Try again.");
@@ -277,6 +288,7 @@ export default function SignUpScreen() {
                     </Txt>
                   </View>
                 </Pressable>
+                {testAccountsEnabled ? <TestAccountButton /> : null}
               </Animated.View>
             )}
           </View>
