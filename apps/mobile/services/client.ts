@@ -103,7 +103,9 @@ export async function apiRequestWithMeta<T, M = unknown>(
     res = await fetch(url.toString(), {
       method,
       headers: {
-        "Content-Type": "application/json",
+        // Only with a body: Fastify rejects a JSON content type on an empty
+        // body (FST_ERR_CTP_EMPTY_JSON_BODY), which broke body-less DELETEs.
+        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
         Authorization: `Bearer ${token}`,
         ...(deviceTimeZone() ? { "X-Time-Zone": deviceTimeZone()! } : {}),
       },
