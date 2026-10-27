@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -41,6 +42,7 @@ import {
 import { StartChoice, StarterPicker } from "../../components/StarterPicker";
 import { JourneyPath } from "../../components/JourneyPath";
 import { useApi } from "../../hooks/useApi";
+import { useAuth } from "../../lib/auth";
 import { useAppState } from "../../lib/store";
 import { color, radius, space, tint, type } from "../../theme";
 
@@ -207,6 +209,7 @@ const STEPS: Step[] = [
 export default function OnboardingScreen() {
   const router = useRouter();
   const api = useApi();
+  const { signOut } = useAuth();
   const [index, setIndex] = useState(0);
   const [name, setName] = useState("");
   const [single, setSingle] = useState<Record<string, string>>({});
@@ -372,14 +375,22 @@ export default function OnboardingScreen() {
         }}
       >
         <Pressable
-          disabled={index === 0}
           onPress={() => {
             void Haptics.selectionAsync();
-            setIndex((i) => i - 1);
+            if (index > 0) return setIndex((i) => i - 1);
+            // The first step has nowhere to go back to but out: sign out,
+            // and the auth gate returns to sign-in.
+            Alert.alert(
+              "Leave setup?",
+              "You'll be signed out. Your account stays, and setup starts again next time you sign in.",
+              [
+                { text: "Stay", style: "cancel" },
+                { text: "Sign out", style: "destructive", onPress: () => void signOut() },
+              ]
+            );
           }}
           hitSlop={10}
-          accessibilityLabel="Previous step"
-          style={{ opacity: index === 0 ? 0 : 1 }}
+          accessibilityLabel={index === 0 ? "Leave setup and sign out" : "Previous step"}
         >
           <Ionicons name="chevron-back" size={22} color={color.text} />
         </Pressable>
