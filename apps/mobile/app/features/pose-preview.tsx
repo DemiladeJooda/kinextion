@@ -14,15 +14,14 @@
  * This is deliberately separate from Form Control (features/form.tsx), which
  * asks Claude to read single frames and explain what it sees — a different,
  * already-shipped approach. This screen is the live-tracking half of what
- * was asked for (an AR-style overlay); body-scan-to-avatar is a separate,
- * unscoped problem — see memory project_nearby_discovery_feature-adjacent
- * notes from this session for why.
+ * was asked for (an AR-style overlay). The body scan that makes your avatar
+ * is at app/avatar/create.tsx, linked from this screen.
  */
 
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -85,6 +84,7 @@ export default function PosePreviewScreen() {
 }
 
 function PosePreview() {
+  const router = useRouter();
   const [keypointCount, setKeypointCount] = useState<number | null>(null);
   const [poseScore, setPoseScore] = useState<number | null>(null);
   const [reps, setReps] = useState(0);
@@ -165,6 +165,8 @@ function PosePreview() {
             </Txt>
           </View>
         )}
+
+        <Button label="Create your avatar from a scan" icon="scan-outline" variant="secondary" accent={color.teal} onPress={() => router.push("/avatar" as never)} />
       </View>
     </View>
   );

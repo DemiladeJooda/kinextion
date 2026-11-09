@@ -16,6 +16,13 @@ import { color, radius, space, tint } from "../../theme";
 
 const FEATURES = [
   {
+    icon: "person-circle-outline" as const,
+    title: "Your avatar",
+    body: "Scan yourself. See yourself doing it.",
+    accent: color.teal,
+    href: "/avatar",
+  },
+  {
     icon: "videocam-outline" as const,
     title: "Smart Referee",
     body: "Calls the game, and shows you why.",
@@ -98,7 +105,7 @@ export default function PocketScreen() {
         </View>
 
         <View style={{ alignItems: "center", marginTop: space.xl }}>
-          <Badge label="Camera stays on your device" accent={color.textFaint} />
+          <Badge label="Photos are analysed, never saved" accent={color.textFaint} />
         </View>
       </ScrollView>
     </SafeAreaView>

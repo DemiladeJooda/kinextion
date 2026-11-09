@@ -136,6 +136,16 @@ export default function NewHabitScreen() {
               <View style={{ gap: space.md }}>
                 <Animated.View entering={FadeInDown.duration(400)}>
                   <RouteCard
+                    icon="chatbubbles"
+                    accent={color.green}
+                    title="Work it out with Althea"
+                    body="Tell her what you want to try. She'll push back, shrink it or stretch it until it's the right size for you."
+                    onPress={() => router.push("/habit/negotiate" as never)}
+                  />
+                </Animated.View>
+
+                <Animated.View entering={FadeInDown.duration(400).delay(20)}>
+                  <RouteCard
                     icon="list"
                     accent={color.green}
                     title="Pick from a short list"

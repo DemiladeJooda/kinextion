@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 
 // Deterministic pseudo-random generator. The same input `n` always returns the
 // same value in [0,1), so the star layout is identical on the server and the

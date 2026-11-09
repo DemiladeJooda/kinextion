@@ -24,6 +24,16 @@ if (fs.existsSync(rootEnv)) {
 const nextConfig: NextConfig = {
   transpilePackages: ["@kinextion/shared", "@kinextion/ui", "@kinextion/ai-core"],
   reactStrictMode: false,
+  // Without this Next.js can pick a lockfile above the repo as the root.
+  outputFileTracingRoot: path.resolve(process.cwd(), "../.."),
+  webpack: (config) => {
+    // packages/shared uses Node-style "./x.js" imports for .ts files. Turbopack
+    // can't resolve those, which is why dev runs on webpack.
+    config.resolve.extensionAlias = {
+      ".js": [".ts", ".tsx", ".js"],
+    };
+    return config;
+  },
 };
 
 export default nextConfig;

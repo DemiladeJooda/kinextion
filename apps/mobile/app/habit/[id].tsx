@@ -1,3 +1,4 @@
+import { activityFor } from "@kinextion/shared";
 /**
  * Edit a habit, or retire it.
  *
@@ -74,6 +75,7 @@ export default function EditHabitScreen() {
         }
       : null,
   );
+  const activity = habit ? activityFor(habit.name) : null;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -167,6 +169,17 @@ export default function EditHabitScreen() {
             title={habit.name}
             subtitle={habitSummary(habit, showStreaks)}
           />
+
+          {activity ? (
+            <Button
+              label="See yourself doing this"
+              icon="person-circle-outline"
+              variant="secondary"
+              accent={color.teal}
+              style={{ marginBottom: space.lg }}
+              onPress={() => router.push(`/avatar?activity=${activity.id}` as never)}
+            />
+          ) : null}
 
           <View style={{ marginBottom: space.lg }}>
             <HabitProgress habit={habit} showStreaks={showStreaks} />

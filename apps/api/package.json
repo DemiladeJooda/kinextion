@@ -15,6 +15,7 @@
     "clean": "rm -rf dist",
     "media:smoke": "tsx --env-file-if-exists=../../.env scripts/media-smoke.ts",
     "ai:smoke": "tsx --env-file-if-exists=../../.env scripts/ai-smoke.ts",
+    "onboarding:smoke": "tsx --env-file-if-exists=../../.env scripts/onboarding-smoke.ts",
     "chat:smoke": "tsx --env-file-if-exists=../../.env scripts/chat-tools-smoke.ts",
     "habit:metrics": "tsx --env-file-if-exists=../../.env scripts/habit-metrics.ts",
     "ai:costs": "tsx --env-file-if-exists=../../.env scripts/ai-costs.ts"

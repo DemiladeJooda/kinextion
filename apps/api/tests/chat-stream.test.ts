@@ -244,8 +244,8 @@ describe("talking instead of typing", () => {
       expect(res.headers["content-type"]).toBe("audio/mpeg");
       expect(String(fetchMock.mock.calls[0][0])).toContain("api.openai.com/v1/audio/speech");
       const sent = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
-      expect(sent).toMatchObject({ voice: "sage", input: "Take a breath." });
-      expect(sent.instructions).toMatch(/Kairo/);
+      expect(sent).toMatchObject({ voice: "cedar", input: "Take a breath." });
+      expect(sent.instructions).toMatch(/calm man/);
     } finally {
       delete process.env.OPENAI_API_KEY;
       fetchMock.mockRestore();

@@ -1,156 +1,123 @@
 /**
- * The signal taxonomy — one shared vocabulary for everything Kinextion reads.
+ * The signal taxonomy: one vocabulary for everything Kinextion reads.
  *
- * Two independent axes, and keeping them independent is the whole point:
+ * The rule for being on this list is that a signal has a real source: an
+ * integration in apps/api/src/modules/integrations, or something the person
+ * tells the app. If nothing can supply it, it doesn't belong here, however
+ * good it would sound on the website.
  *
- *   CATEGORY (below) — what *kind* of signal it is. Body, mind, habits, life,
- *   world. Carried by colour everywhere it appears.
+ * `status` keeps the website honest about timing:
+ *   live  the app reads this today
+ *   next  an integration can supply it and it's on the list in
+ *         docs/website-to-mobile.md, but the app doesn't read it yet
  *
- *   TIER (further down) — how much of Kinextion's finite attention that signal
- *   earns: how long it's held, at what resolution, and whether it's loaded into
- *   every reply or fetched only when something asks for it. Carried by
- *   position — closer to the centre means held closer.
- *
- * Both pages read from here, so the Solution page's orbit, the chat sidebar,
- * and the How It Works taxonomy can never drift into three vocabularies.
+ * Colour says what kind of signal it is. Distance from the centre says how
+ * much of Kinextion's finite attention it earns.
  */
 
 export const SIGNAL_CATEGORIES = [
-  {
-    id: "body",
-    label: "Body",
-    icon: "⚡",
-    color: "#00C47A",
-    /** One line, used as the ring caption and the sidebar subtitle. */
-    blurb: "What your body is doing right now.",
-    /** Longer form, used on How It Works. */
-    detail:
-      "Wearables, sleep, fuel, and the physiological baselines that decide what today can actually hold.",
-  },
-  {
-    id: "mind",
-    label: "Mind & Mood",
-    icon: "🌊",
-    color: "#A855F7",
-    blurb: "How you're feeling — and what you're not saying.",
-    detail:
-      "Mood, behaviour drift, and the long memory of what you've told us. This is where Kairo lives.",
-  },
-  {
-    id: "habits",
-    label: "Habits & History",
-    icon: "🔄",
-    color: "#EC4899",
-    blurb: "What you've done before, and what usually happens next.",
-    detail:
-      "Streaks, training load, and three years of pattern memory — so the system recognises a spiral before you name it.",
-  },
-  {
-    id: "context",
-    label: "Life Context",
-    icon: "📅",
-    color: "#3B82F6",
-    blurb: "The week you're actually living in.",
-    detail:
-      "Calendar, family, travel, and constraints. A plan that ignores your Thursday was never built for your life.",
-  },
-  {
-    id: "world",
-    label: "World & Pod",
-    icon: "🫂",
-    color: "#0ABAB5",
-    blurb: "Your environment and the people around you.",
-    detail:
-      "Air quality, daylight, green space, and your pod. The conditions you move through, and who notices when you go quiet.",
-  },
+  { id: "body", label: "Body", color: "#00C47A" },
+  { id: "mind", label: "Mind & mood", color: "#A855F7" },
+  { id: "habits", label: "Habits & history", color: "#EC4899" },
+  { id: "context", label: "Your life", color: "#3B82F6" },
+  { id: "people", label: "People", color: "#0ABAB5" },
 ] as const;
 
 export type SignalCategory = (typeof SIGNAL_CATEGORIES)[number];
 export type CategoryId = SignalCategory["id"];
 
-/**
- * Attention tiers — ordered innermost (most held) → outermost (most disposable).
- *
- * Kinextion does not have unlimited context, unlimited storage, or unlimited
- * inference budget, and pretending otherwise is how systems end up treating a
- * disclosed eating-disorder history with the same weight as yesterday's air
- * quality. So every signal is assigned a tier, and the tier decides three
- * things: how long the raw value survives, what resolution it survives at, and
- * whether it is resident in every single reply or fetched on demand.
- *
- * The rule for placement is deliberately simple — the more a signal would hurt
- * to be forgotten, the closer in it sits.
- */
 export const SIGNAL_TIERS = [
-  {
-    id: "core",
-    label: "Core",
-    /** Sub-heading on the tier rail. */
-    kicker: "Never forgotten",
-    /** Orbit radius in px, and the size of the orbs on that ring. */
-    radius: 92,
-    orbSize: 54,
-    /** 0–1. Drives ring brightness, orb glow, and the weight bar. */
-    weight: 1,
-    retention: "Held permanently · resident in every reply",
-    detail:
-      "Constraints and identity. An injury, a diagnosis, a cycle phase, three years of your own history — things that change what is safe or true for you. These are loaded before Kinextion says a single word, every time.",
-  },
-  {
-    id: "daily",
-    label: "Daily",
-    kicker: "Read fresh every morning",
-    radius: 150,
-    orbSize: 46,
-    weight: 0.72,
-    retention: "Full resolution for 14 days, then summarised",
-    detail:
-      "The state of today. Last night's sleep, this morning's HRV, what your Thursday actually looks like. Kept at full fidelity while it can still change a decision, then compressed into a trend line rather than kept forever.",
-  },
-  {
-    id: "pattern",
-    label: "Pattern",
-    kicker: "Kept as shape, not as points",
-    radius: 210,
-    orbSize: 38,
-    weight: 0.46,
-    retention: "Rolling trends · raw points age out at 90 days",
-    detail:
-      "Signals that only mean something in aggregate. One 4,800-step day says nothing; a fortnight of them says a lot. Kinextion stores the slope and drops the individual readings — cheaper to hold, and closer to what actually matters.",
-  },
-  {
-    id: "ambient",
-    label: "Ambient",
-    kicker: "Fetched, used, released",
-    radius: 268,
-    orbSize: 32,
-    weight: 0.24,
-    retention: "Read on demand · nothing stored",
-    detail:
-      "Conditions rather than history. Today's air quality, the daylight, which city you're in. Cheap to look up the moment it's relevant, and pointless to keep — so it is never written down at all.",
-  },
+  { id: "core", label: "Core", kicker: "Never forgotten", radius: 92, orbSize: 52, weight: 1, speed: 132 },
+  { id: "daily", label: "Daily", kicker: "Read fresh each day", radius: 150, orbSize: 44, weight: 0.72, speed: 96 },
+  { id: "pattern", label: "Pattern", kicker: "Kept as a trend", radius: 208, orbSize: 38, weight: 0.46, speed: 68 },
+  { id: "ambient", label: "Ambient", kicker: "Read when it matters", radius: 262, orbSize: 34, weight: 0.24, speed: 44 },
 ] as const;
 
 export type SignalTier = (typeof SIGNAL_TIERS)[number];
 export type TierId = SignalTier["id"];
 
-const TIER_BY_ID = Object.fromEntries(
-  SIGNAL_TIERS.map((t) => [t.id, t])
-) as Record<TierId, SignalTier>;
+/** Where a signal's data actually comes from. */
+export const SIGNAL_SOURCES = [
+  { id: "you", label: "You, in the app" },
+  { id: "guides", label: "Your guides" },
+  { id: "habits", label: "Your habits" },
+  { id: "community", label: "Community" },
+  { id: "whoop", label: "Whoop" },
+  { id: "oura", label: "Oura" },
+  { id: "strava", label: "Strava" },
+  { id: "health", label: "Apple Health / Health Connect" },
+  { id: "calendar", label: "Google / Outlook Calendar" },
+] as const;
+
+export type SourceId = (typeof SIGNAL_SOURCES)[number]["id"];
+
+export type SignalStatus = "live" | "next";
+
+export interface SignalDef {
+  readonly id: string;
+  readonly label: string;
+  /** Sample reading, shown as an example member. Never real data. */
+  readonly example: string;
+  /** One line on what it changes. */
+  readonly does: string;
+  readonly category: CategoryId;
+  readonly tier: TierId;
+  readonly sources: readonly SourceId[];
+  readonly status: SignalStatus;
+}
+
+export const SIGNALS: readonly SignalDef[] = [
+  // Core: constraints and identity.
+  { id: "limits", label: "Injuries & limits", example: "Left knee · no deep squats", does: "Every suggestion passes through it first.", category: "context", tier: "core", sources: ["guides", "you"], status: "live" },
+  { id: "becoming", label: "Who you're becoming", example: "Someone who moves every day", does: "Your habits and progress are told in these terms.", category: "mind", tier: "core", sources: ["you"], status: "live" },
+  { id: "memory", label: "What worked before", example: "Morning walks stuck. 6am gym didn't.", does: "It starts from your history, not day one.", category: "habits", tier: "core", sources: ["guides", "habits"], status: "live" },
+  { id: "conversations", label: "What you've said", example: "You never re-explain yourself", does: "Althea and Kairo share one memory of you.", category: "mind", tier: "core", sources: ["guides"], status: "live" },
+  { id: "cycle", label: "Cycle phase", example: "Luteal · lighter week", does: "It affects people differently, so it learns your pattern.", category: "body", tier: "core", sources: ["health"], status: "next" },
+
+  // Daily: the state of today.
+  { id: "oura", label: "Oura sleep", example: "Sleep 71 · readiness 64", does: "Last night reshapes today's plan.", category: "body", tier: "daily", sources: ["oura"], status: "live" },
+  { id: "whoop", label: "Whoop recovery", example: "Recovery 62% · HRV 41 ms", does: "Today's effort moves with your recovery.", category: "body", tier: "daily", sources: ["whoop"], status: "live" },
+  { id: "checkin", label: "Mood check-in", example: "Mood 4 · stress up · slept badly", does: "Kairo sees a hard week while it's still this week.", category: "mind", tier: "daily", sources: ["you"], status: "live" },
+  { id: "people", label: "Your days & people", example: "Night shifts · two kids", does: "Advice fits the life you actually have.", category: "context", tier: "daily", sources: ["you"], status: "live" },
+  { id: "watch", label: "Apple Watch", example: "Resting HR 58 · 42 active min", does: "Heart and workout data with no manual logging.", category: "body", tier: "daily", sources: ["health"], status: "next" },
+  { id: "calendar", label: "Calendar", example: "Packed Thursday · free 7am", does: "The habit lands where your week has room.", category: "context", tier: "daily", sources: ["calendar"], status: "next" },
+  { id: "temperature", label: "Skin temperature", example: "+0.4°C above your baseline", does: "A nudge to ease off before you feel run down.", category: "body", tier: "daily", sources: ["oura", "health"], status: "next" },
+
+  // Pattern: only meaningful in aggregate.
+  { id: "momentum", label: "Habit momentum", example: "18 of 21 days · miss forgiven", does: "One slip never resets you to zero.", category: "habits", tier: "pattern", sources: ["habits"], status: "live" },
+  { id: "strava", label: "Strava", example: "94 workout minutes this week", does: "Logs your habit for you when the run happens.", category: "habits", tier: "pattern", sources: ["strava"], status: "live" },
+  { id: "steps", label: "Steps", example: "4,820 today · 6,000 usual", does: "The walk with the dog counts.", category: "habits", tier: "pattern", sources: ["oura", "health"], status: "live" },
+  { id: "sleep-rhythm", label: "Sleep rhythm", example: "Bedtime drifts 43 minutes", does: "Regularity, not just hours slept.", category: "habits", tier: "pattern", sources: ["oura", "health"], status: "next" },
+  { id: "mindful", label: "Mindful minutes", example: "Last session 6 days ago", does: "Surfaces the reset you've been skipping.", category: "mind", tier: "pattern", sources: ["health"], status: "next" },
+  { id: "nutrition", label: "Nutrition", example: "Protein 64 g · 1,842 kcal", does: "Read from the food app you already use.", category: "body", tier: "pattern", sources: ["health"], status: "next" },
+
+  // Ambient: read when it's relevant.
+  { id: "community", label: "Your community", example: "This week's room is open", does: "Connects your room to your week.", category: "people", tier: "ambient", sources: ["community"], status: "live" },
+  { id: "away", label: "Away mode", example: "Travelling Tue–Thu", does: "Life happens. Your streak waits.", category: "context", tier: "ambient", sources: ["you"], status: "live" },
+  { id: "hydration", label: "Water", example: "48 oz logged today", does: "Read from whatever already logs it.", category: "body", tier: "ambient", sources: ["health"], status: "next" },
+  { id: "daylight", label: "Time in daylight", example: "22 minutes today", does: "Apple Watch only. A simple anchor for sleep.", category: "context", tier: "ambient", sources: ["health"], status: "next" },
+];
+
+const CATEGORY_BY_ID = Object.fromEntries(SIGNAL_CATEGORIES.map((c) => [c.id, c])) as Record<CategoryId, SignalCategory>;
+const TIER_BY_ID = Object.fromEntries(SIGNAL_TIERS.map((t) => [t.id, t])) as Record<TierId, SignalTier>;
+const SOURCE_LABEL = Object.fromEntries(SIGNAL_SOURCES.map((s) => [s.id, s.label])) as Record<SourceId, string>;
+
+export function category(id: CategoryId): SignalCategory {
+  return CATEGORY_BY_ID[id];
+}
+
+export function categoryColor(id: CategoryId): string {
+  return CATEGORY_BY_ID[id].color;
+}
 
 export function tier(id: TierId): SignalTier {
   return TIER_BY_ID[id];
 }
 
-const BY_ID = Object.fromEntries(
-  SIGNAL_CATEGORIES.map((c) => [c.id, c])
-) as Record<CategoryId, SignalCategory>;
-
-export function category(id: CategoryId): SignalCategory {
-  return BY_ID[id];
+export function sourceLabel(id: SourceId): string {
+  return SOURCE_LABEL[id];
 }
 
-/** Convenience for styling — avoids `category(id).color` noise at call sites. */
-export function categoryColor(id: CategoryId): string {
-  return BY_ID[id].color;
+export function signalsIn(id: TierId): readonly SignalDef[] {
+  return SIGNALS.filter((s) => s.tier === id);
 }

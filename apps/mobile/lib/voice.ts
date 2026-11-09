@@ -143,7 +143,7 @@ function useNativeListener({ onFinal, contextualStrings }: ListenerOptions) {
       addsPunctuation: true,
       // Keep the audio on the phone when it can do recognition itself.
       requiresOnDeviceRecognition: m.supportsOnDeviceRecognition(),
-      contextualStrings: ["Altheo", "Kairo", "Kinextion", ...(contextualStrings ?? [])],
+      contextualStrings: ["Althea", "Kairo", "Kinextion", ...(contextualStrings ?? [])],
       volumeChangeEventOptions: { enabled: true, intervalMillis: 120 },
       // Play replies through the speaker, not the earpiece, after listening.
       iosCategory: {
@@ -363,12 +363,16 @@ export interface Speaker {
 /** Most text sent to the hosted voice at once (the API takes up to 600). */
 const MAX_CLIP_CHARS = 500;
 
+/** The opening clip waits for this much text, so it has a full thought to perform. */
+const MIN_FIRST_CLIP_CHARS = 130;
+
 /**
  * Speaks queued sentences one after another. `premium` names the hosted
- * voice route when the API has one. The first sentence goes alone so the
- * guide starts talking quickly; whatever arrives while it plays is fetched
- * as one stretch, so the voice keeps its flow instead of restarting every
- * sentence, and the next stretch is fetched while the current one plays.
+ * voice route when the API has one. Speech models phrase a thought as a
+ * whole, so nothing is voiced a sentence at a time: the opening clip waits
+ * for a couple of sentences (the text streams faster than the voice speaks,
+ * so it costs little), and whatever arrives while it plays is fetched as one
+ * stretch. The next stretch is fetched while the current one plays.
  * A stretch that fails to fetch is read in the device voice.
  */
 export function createSpeaker({
@@ -395,6 +399,7 @@ export function createSpeaker({
   let player: AudioPlayer | null = null;
   let finish: (() => void) | null = null;
   let clipCount = 0;
+  let started = false;
 
   /** Starts voicing the next stretch, keeping at most one ready ahead. */
   const prepare = () => {
@@ -402,6 +407,8 @@ export function createSpeaker({
     if (!premium) {
       clips.push({ text: pending.shift()!, audio: Promise.resolve(null) });
     } else {
+      if (!started && !ended && pending.join(" ").length < MIN_FIRST_CLIP_CHARS) return;
+      started = true;
       let text = pending.shift()!;
       while (pending.length && text.length + 1 + pending[0].length <= MAX_CLIP_CHARS) text += ` ${pending.shift()}`;
       fetching = true;
@@ -511,6 +518,7 @@ export function createSpeaker({
     },
     end() {
       ended = true;
+      prepare();
       if (!playing && clips.length === 0 && pending.length === 0) onIdle();
     },
     stop() {

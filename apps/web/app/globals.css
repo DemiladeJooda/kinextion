@@ -1,8 +1,258 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+/*
+  ---break---
+*/
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --color-aurora-green: #00c47a;
+  --color-aurora-green-dark: #009960;
+  --color-aurora-green-light: #33d494;
+
+  --color-aurora-teal: #0abab5;
+  --color-aurora-teal-dark: #088f8b;
+  --color-aurora-teal-light: #3dcfcb;
+
+  --color-aurora-purple: #7b2fbe;
+  --color-aurora-purple-dark: #5b21b6;
+  --color-aurora-purple-light: #9b5fd4;
+
+  --color-aurora-violet: #a855f7;
+  --color-aurora-violet-dark: #8b5cf6;
+  --color-aurora-violet-light: #c084fc;
+
+  --color-aurora-blue: #3b82f6;
+  --color-aurora-blue-dark: #2563eb;
+  --color-aurora-blue-light: #60a5fa;
+
+  --color-surface-base: #0d1c16;
+  --color-surface-card: #132b20;
+  --color-surface-muted: #102319;
+  --color-surface-border: #1e3d2c;
+
+  --color-ink-primary: #ffffff;
+  --color-ink-secondary: #ebf5f0;
+  --color-ink-muted: #bbdad2;
+  --color-ink-subtle: #7aada2;
+
+  --font-display: Inter, SF Pro Display, system-ui, sans-serif;
+  --font-body: Inter, SF Pro Text, system-ui, sans-serif;
+  --font-mono: JetBrains Mono, SF Mono, Fira Code, monospace;
+
+  --text-hero: clamp(3rem, 8vw, 6rem);
+  --text-h1: clamp(2rem, 5vw, 3.5rem);
+  --text-h2: clamp(1.5rem, 3vw, 2.5rem);
+  --text-h3: clamp(1.25rem, 2vw, 1.75rem);
+
+  --animate-aurora-slow: aurora 8s cubic-bezier(0.25, 0.1, 0.25, 1) infinite;
+  --animate-aurora-medium: aurora 6s cubic-bezier(0.25, 0.1, 0.25, 1) infinite;
+  --animate-glow-pulse: glow-pulse 3s ease-in-out infinite;
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-fade-in-up: fade-in-up 0.6s ease-out forwards;
+
+  --background-image-aurora-gradient: linear-gradient(
+    110deg,
+    #00c47a 0%,
+    #0abab5 45%,
+    #a855f7 100%
+  );
+  --background-image-hero-glow: radial-gradient(
+    ellipse at 50% 0%,
+    rgba(0, 196, 122, 0.12) 0%,
+    rgba(10, 186, 181, 0.07) 35%,
+    rgba(168, 85, 247, 0.04) 60%,
+    transparent 75%
+  );
+
+  @keyframes aurora {
+    0%,
+    100% {
+      transform: translateY(0) scale(1);
+    }
+    33% {
+      transform: translateY(-10px) scale(1.05);
+    }
+    66% {
+      transform: translateY(5px) scale(0.98);
+    }
+  }
+  @keyframes glow-pulse {
+    0%,
+    100% {
+      box-shadow: 0 0 20px rgba(0, 196, 122, 0.2);
+    }
+    50% {
+      box-shadow: 0 0 40px rgba(0, 196, 122, 0.4);
+    }
+  }
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+  @keyframes fade-in-up {
+    0% {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+@utility aurora-text {
+  color: #0f172a;
+  -webkit-text-fill-color: #0f172a;
+}
+
+@utility glass-card {
+  /* Light glass cards — white with subtle aurora borders */
+  background: #ffffff;
+  border: 1px solid rgba(0, 196, 122, 0.14);
+  border-radius: 12px;
+  box-shadow:
+    0 1px 6px rgba(0, 0, 0, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+@utility glass-card-vivid {
+  background: #ffffff;
+  border: 1px solid rgba(0, 196, 122, 0.18);
+  border-radius: 12px;
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.07),
+    0 2px 4px rgba(0, 0, 0, 0.04);
+}
+
+@utility glass-card-dark {
+  /* Dark glass cards — the counterpart of .glass-card for the immersive
+     "space" pages (Solution, Story). Translucent white over the dark backdrop
+     so cards read as frosted glass floating in space rather than solid blocks. */
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(2, 6, 23, 0.35);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+@utility glass-card-dark-vivid {
+  /* Slightly brighter dark glass for emphasis cards (headers, hero panels). */
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(2, 6, 23, 0.45);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+@utility glow-border {
+  border: 1px solid rgba(0, 196, 122, 0.28);
+  box-shadow: 0 0 20px rgba(0, 196, 122, 0.08);
+}
+
+@utility glow-border-violet {
+  border: 1px solid rgba(168, 85, 247, 0.22);
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.06);
+}
+
+@utility glow-border-blue {
+  border: 1px solid rgba(59, 130, 246, 0.22);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.06);
+}
+
+@utility section-container {
+  max-width: 80rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+
+  @media (min-width: 640px) {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+
+  @media (min-width: 1024px) {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+@utility tab-section {
+  padding-top: 4rem;
+  padding-bottom: 4rem;
+  position: relative;
+  overflow: hidden;
+
+  @media (min-width: 640px) {
+    padding-top: 5rem;
+    padding-bottom: 5rem;
+  }
+}
+
+@utility stat-number {
+  /* stat-number — used on inner (light) pages */
+  font-size: clamp(4.5rem, 12vw, 7rem);
+  font-weight: 700;
+  /* At 7rem, default spacing reads as gaps between the digits rather than a
+       number. Optical tracking is what separates a set figure from a big one. */
+  letter-spacing: -0.045em;
+  line-height: 0.95;
+  margin-bottom: 0.75rem;
+  color: #0f172a;
+  -webkit-text-fill-color: #0f172a;
+}
+
+@utility section-label {
+  color: var(--aurora-green);
+  -webkit-text-fill-color: var(--aurora-green);
+  font-weight: 600;
+  font-size: 0.6875rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-bottom: 1rem;
+  display: block;
+}
+
+@utility text-balance {
+  text-wrap: balance;
+}
+
+@utility scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
 
 @layer base {
   :root {
@@ -73,166 +323,207 @@
   }
 }
 
-/* Respect the OS-level motion preference.
+@layer utilities {
+  /* Respect the OS-level motion preference.
    This site leans hard on continuous animation — orbiting signals, twinkling
    stars, pulsing glows. For anyone with vestibular sensitivity that isn't
    atmosphere, it's a reason to close the tab. Transitions and one-shot
    entrances stay (they're short and non-vestibular); anything that loops
    forever or travels across the screen stops. */
-@media (prefers-reduced-motion: reduce) {
-  html {
-    scroll-behavior: auto;
-  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
 
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-}
-
-@layer components {
-  .aurora-text {
-    color: #0F172A;
-    -webkit-text-fill-color: #0F172A;
-  }
-
-  /* Light glass cards — white with subtle aurora borders */
-  .glass-card {
-    background: #FFFFFF;
-    border: 1px solid rgba(0, 196, 122, 0.14);
-    border-radius: 12px;
-    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-  }
-
-  .glass-card-vivid {
-    background: #FFFFFF;
-    border: 1px solid rgba(0, 196, 122, 0.18);
-    border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.04);
-  }
-
-  /* Dark glass cards — the counterpart of .glass-card for the immersive
-     "space" pages (Solution, Story). Translucent white over the dark backdrop
-     so cards read as frosted glass floating in space rather than solid blocks. */
-  .glass-card-dark {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.10);
-    border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(2, 6, 23, 0.35);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-  }
-
-  /* Slightly brighter dark glass for emphasis cards (headers, hero panels). */
-  .glass-card-dark-vivid {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 12px;
-    box-shadow: 0 12px 40px rgba(2, 6, 23, 0.45);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-  }
-
-  .glow-border {
-    border: 1px solid rgba(0, 196, 122, 0.28);
-    box-shadow: 0 0 20px rgba(0, 196, 122, 0.08);
-  }
-
-  .glow-border-violet {
-    border: 1px solid rgba(168, 85, 247, 0.22);
-    box-shadow: 0 0 20px rgba(168, 85, 247, 0.06);
-  }
-
-  .glow-border-blue {
-    border: 1px solid rgba(59, 130, 246, 0.22);
-    box-shadow: 0 0 20px rgba(59, 130, 246, 0.06);
-  }
-
-  .section-container {
-    max-width: 80rem;
-    margin-left: auto;
-    margin-right: auto;
-    padding-left: 1rem;
-    padding-right: 1rem;
-  }
-
-  @media (min-width: 640px) {
-    .section-container {
-      padding-left: 1.5rem;
-      padding-right: 1.5rem;
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
     }
   }
-
-  @media (min-width: 1024px) {
-    .section-container {
-      padding-left: 2rem;
-      padding-right: 2rem;
-    }
-  }
-
-  .tab-section {
-    padding-top: 4rem;
-    padding-bottom: 4rem;
-    position: relative;
-    overflow: hidden;
-  }
-
-  @media (min-width: 640px) {
-    .tab-section {
-      padding-top: 5rem;
-      padding-bottom: 5rem;
-    }
-  }
-
-  /* stat-number — used on inner (light) pages */
-  .stat-number {
-    font-size: clamp(4.5rem, 12vw, 7rem);
-    font-weight: 700;
-    /* At 7rem, default spacing reads as gaps between the digits rather than a
-       number. Optical tracking is what separates a set figure from a big one. */
-    letter-spacing: -0.045em;
-    line-height: 0.95;
-    margin-bottom: 0.75rem;
-    color: #0F172A;
-    -webkit-text-fill-color: #0F172A;
-  }
-
-  .section-label {
-    color: var(--aurora-green);
-    -webkit-text-fill-color: var(--aurora-green);
-    font-weight: 600;
-    font-size: 0.6875rem;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    margin-bottom: 1rem;
-    display: block;
-  }
-}
-
-/* Planetary orbit animations — CW (odd rings) and CCW (even rings) */
-@keyframes kinextion-orbit {
-  from { transform: rotate(0deg) translateX(var(--orbit-r)) rotate(0deg); }
-  to   { transform: rotate(360deg) translateX(var(--orbit-r)) rotate(-360deg); }
-}
-@keyframes kinextion-orbit-ccw {
-  from { transform: rotate(0deg) translateX(var(--orbit-r)) rotate(0deg); }
-  to   { transform: rotate(-360deg) translateX(var(--orbit-r)) rotate(360deg); }
 }
 
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
+  /* Planetary orbit animations — CW (odd rings) and CCW (even rings) */
+  @keyframes kinextion-orbit {
+    from {
+      transform: rotate(0deg) translateX(var(--orbit-r)) rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg) translateX(var(--orbit-r)) rotate(-360deg);
+    }
   }
+  @keyframes kinextion-orbit-ccw {
+    from {
+      transform: rotate(0deg) translateX(var(--orbit-r)) rotate(0deg);
+    }
+    to {
+      transform: rotate(-360deg) translateX(var(--orbit-r)) rotate(360deg);
+    }
+  }
+}
+/*
+  ---break---
+*/
+@theme inline {
+  --color-chart-line-primary: var(--chart-line-primary);
+  --color-chart-line-secondary: var(--chart-line-secondary);
+  --color-chart-brush-border: var(--chart-brush-border);
+  --color-chart-tooltip-background: var(--chart-tooltip-background);
+  --color-chart-tooltip-foreground: var(--chart-tooltip-foreground);
+  --color-chart-tooltip-muted: var(--chart-tooltip-muted);
+  --color-chart-scale-02: var(--chart-scale-02);
+  --color-chart-scale-03: var(--chart-scale-03);
+  --color-chart-scale-04: var(--chart-scale-04);
+  --color-chart-scale-05: var(--chart-scale-05);
+  --color-chart-segment-line: var(--chart-segment-line);
+  --color-chart-segment-background: var(--chart-segment-background);
+  --color-chart-marker-badge-foreground: var(--chart-marker-badge-foreground);
+  --color-chart-marker-badge-background: var(--chart-marker-badge-background);
+  --color-chart-indicator-secondary-color: var(--chart-indicator-secondary-color);
+  --color-chart-indicator-color: var(--chart-indicator-color);
+  --color-chart-scale-pattern-color: var(--chart-scale-pattern-color);
+  --chart-scale-05: var(--chart-scale-05);
+  --chart-scale-04: var(--chart-scale-04);
+  --chart-scale-03: var(--chart-scale-03);
+  --chart-scale-02: var(--chart-scale-02);
+  --color-chart-scale-01: var(--chart-scale-01);
+  --color-chart-scale-mix: var(--chart-scale-mix);
+  --color-chart-label: var(--chart-label);
+  --color-chart-marker-foreground: var(--chart-marker-foreground);
+  --color-chart-marker-border: var(--chart-marker-border);
+  --color-chart-marker-background: var(--chart-marker-background);
+  --chart-tooltip-muted: var(--chart-tooltip-muted);
+  --chart-tooltip-foreground: var(--chart-tooltip-foreground);
+  --chart-tooltip-background: var(--chart-tooltip-background);
+  --chart-brush-border: var(--chart-brush-border);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-crosshair: var(--chart-crosshair);
+  --chart-line-secondary: var(--chart-line-secondary);
+  --chart-line-primary: var(--chart-line-primary);
+  --color-chart-foreground-muted: var(--chart-foreground-muted);
+  --color-chart-foreground: var(--chart-foreground);
+  --color-chart-background: var(--chart-background);
+  --color-chart-negative: var(--chart-negative);
+  --color-chart-positive: var(--chart-positive);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+}
+/*
+  ---break---
+*/
+:root {
+  --chart-1: oklch(0.585 0.233 277.117);
+  --chart-2: oklch(0.852 0.199 91.936);
+  --chart-3: oklch(0.459 0.156 302.679);
+  --chart-4: oklch(0.56 0.021 213.5);
+  --chart-5: oklch(0 0 0);
+  --chart-positive: oklch(0.696 0.17 162.48);
+  --chart-negative: oklch(0.637 0.237 25.331);
+  --chart-background: oklch(1 0 0);
+  --chart-foreground: oklch(0.145 0.004 285);
+  --chart-foreground-muted: oklch(0.55 0.014 260);
+  --chart-line-primary: var(--chart-1);
+  --chart-line-secondary: var(--chart-2);
+  --chart-crosshair: oklch(0.4 0.1828 274.34);
+  --chart-grid: oklch(0.9 0 0);
+  --chart-brush-border: var(--chart-grid);
+  --chart-tooltip-background: var(--popover);
+  --chart-tooltip-foreground: var(--popover-foreground);
+  --chart-tooltip-muted: var(--muted-foreground);
+  --chart-marker-background: oklch(0.97 0.005 260);
+  --chart-marker-border: oklch(0.85 0.01 260);
+  --chart-marker-foreground: oklch(0.3 0.01 260);
+  --chart-label: oklch(0.45 0.01 260);
+  --chart-scale-mix: oklch(1 0 0);
+  --chart-scale-01: oklch(0.922 0 0);
+  --chart-scale-02: color-mix(in oklab, var(--chart-1) 35%, var(--chart-scale-mix));
+  --chart-scale-03: color-mix(in oklab, var(--chart-1) 55%, var(--chart-scale-mix));
+  --chart-scale-04: color-mix(in oklab, var(--chart-1) 78%, var(--chart-scale-mix));
+  --chart-scale-05: var(--chart-1);
+  --chart-scale-pattern-color: oklch(1 0 0);
+  --chart-indicator-color: oklch(0.21 0.006 285);
+  --chart-indicator-secondary-color: oklch(0.913 0 0);
+  --chart-marker-badge-background: oklch(0 0 0);
+  --chart-marker-badge-foreground: oklch(0.84 0 0);
+  --chart-segment-background: oklch(0.756 0 0 / 0.06);
+  --chart-segment-line: oklch(0.5 0 0 / 0.25);
+}
+/*
+  ---break---
+*/
+.dark {
+  --chart-1: oklch(0.585 0.233 277.117);
+  --chart-2: oklch(0.852 0.199 91.936);
+  --chart-3: oklch(0.459 0.156 302.679);
+  --chart-4: oklch(0.56 0.021 213.5);
+  --chart-5: oklch(1 0 0);
+  --chart-positive: oklch(0.765 0.177 163.223);
+  --chart-negative: oklch(0.704 0.191 22.216);
+  --chart-background: oklch(0.145 0 0);
+  --chart-foreground: oklch(0.45 0 0);
+  --chart-foreground-muted: oklch(0.65 0.01 260);
+  --chart-crosshair: oklch(0.45 0 0);
+  --chart-grid: oklch(0.25 0 0);
+  --chart-brush-border: var(--chart-grid);
+  --chart-marker-background: oklch(0.25 0.01 260);
+  --chart-marker-border: oklch(0.4 0.01 260);
+  --chart-marker-foreground: oklch(0.9 0 0);
+  --chart-label: oklch(0.75 0.01 260);
+  --chart-scale-mix: oklch(0.25 0 0);
+  --chart-scale-01: oklch(0.3 0 0);
+  --chart-scale-02: color-mix(in oklab, var(--chart-1) 35%, var(--chart-scale-mix));
+  --chart-scale-03: color-mix(in oklab, var(--chart-1) 55%, var(--chart-scale-mix));
+  --chart-scale-04: color-mix(in oklab, var(--chart-1) 78%, var(--chart-scale-mix));
+  --chart-scale-05: var(--chart-1);
+  --chart-scale-pattern-color: oklch(0.145 0 0);
+  --chart-indicator-color: oklch(1 0 0);
+  --chart-indicator-secondary-color: oklch(0.145 0 0);
+  --chart-marker-badge-background: oklch(1 0 0);
+  --chart-marker-badge-foreground: oklch(0.15 0 0);
+  --chart-segment-background: oklch(0.41 0.0127 248.14 / 0.25);
+  --chart-segment-line: oklch(1 0 0 / 0.25);
+}
 
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
 
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
+/* Community map pins. Maplibre positions the outer element, so the entrance
+   animation has to stay on a pseudo-element or a child. */
+.kx-pin {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.kx-pin::before {
+  content: "";
+  position: absolute;
+  inset: 13px;
+  border-radius: 999px;
+  background: var(--pin);
+  box-shadow: 0 0 18px var(--pin), 0 0 0 2px rgba(255, 255, 255, 0.85);
+  animation: kx-pin-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: inherit;
+}
+.kx-pin::after {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border-radius: 999px;
+  border: 1.5px solid var(--pin);
+  animation: kx-pin-pulse 2.6s ease-out infinite;
+}
+@keyframes kx-pin-in {
+  from { transform: scale(0); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes kx-pin-pulse {
+  from { transform: scale(0.7); opacity: 0.9; }
+  to { transform: scale(1.7); opacity: 0; }
 }

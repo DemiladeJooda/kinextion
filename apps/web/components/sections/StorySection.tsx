@@ -1,6 +1,7 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
+import { ScrollWords } from "@/components/motion/primitives";
 
 // ─── Core values ─────────────────────────────────────────────────────────────
 const coreValues = [
@@ -59,49 +60,14 @@ export function StorySection() {
           </p>
         </motion.div>
 
-        {/* ── Video placeholder ── */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-60px" }}
-          transition={{ duration: 0.5 }}
-          className="max-w-2xl mx-auto mb-28"
-        >
-          <div
-            className="relative rounded-2xl overflow-hidden group cursor-pointer"
-            style={{
-              aspectRatio: "16 / 9",
-              background:  "linear-gradient(135deg, rgba(0,196,122,0.12) 0%, rgba(10,186,181,0.08) 40%, rgba(255,255,255,0.03) 80%)",
-              border:      "1px solid rgba(255,255,255,0.12)",
-              boxShadow:   "0 4px 24px rgba(0,0,0,0.06)",
-            }}
-          >
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <motion.div
-                whileHover={{ scale: 1.08 }}
-                className="w-16 h-16 rounded-full flex items-center justify-center mb-4 transition-all duration-200"
-                style={{
-                  background: "rgba(0,196,122,0.12)",
-                  border:     "2px solid rgba(0,196,122,0.28)",
-                  boxShadow:  "0 4px 20px rgba(0,196,122,0.16)",
-                }}
-              >
-                <span className="text-2xl ml-1" style={{ color: "#00C47A" }}>▶</span>
-              </motion.div>
-              <p className="font-semibold text-base" style={{ color: "#FFFFFF" }}>Why We Started Kinextion</p>
-              <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.55)" }}>Demi & Cecil · 4 minutes</p>
-            </div>
-            <div className="absolute bottom-4 left-4 right-4 flex items-center gap-3">
-              <div className="flex-1 h-1 rounded-full" style={{ background: "rgba(255,255,255,0.15)" }}>
-                <div className="w-0 h-full rounded-full" style={{ background: "#00C47A" }} />
-              </div>
-              <span className="text-xs" style={{ color: "rgba(255,255,255,0.42)" }}>0:00 / 4:12</span>
-            </div>
-          </div>
-          <p className="text-center text-xs mt-3" style={{ color: "rgba(255,255,255,0.42)" }}>
-            Full video coming soon — follow our journey
-          </p>
-        </motion.div>
+        {/* One line to sit with, until the founders' video exists to go here. */}
+        <div className="max-w-4xl mx-auto mb-28">
+          <ScrollWords
+            text="People know what to do. Staying with it is the hard part. So we built the thing we kept wishing existed."
+            className="font-semibold text-white"
+            style={{ fontSize: "clamp(2rem, 5vw, 4rem)", lineHeight: 1.12, letterSpacing: "-0.03em" }}
+          />
+        </div>
 
         {/* ── Core Values ── */}
         <div className="border-t pt-16 mb-16" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
@@ -155,13 +121,6 @@ export function StorySection() {
               </motion.div>
             ))}
           </div>
-        </div>
-
-        {/* ── Footer ── */}
-        <div className="pt-8 border-t text-center" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
-          <p className="text-xs" style={{ color: "rgba(255,255,255,0.30)" }}>
-            Kinextion &copy; {new Date().getFullYear()} — Systems are our creation. Action leading to intentional impact.
-          </p>
         </div>
 
       </div>

@@ -14,14 +14,17 @@
  *      fails, so nothing depends on it.
  */
 
-import { speakable, type Persona } from "@kinextion/shared";
+import { GUIDE_SPEECH, speakable, type Persona } from "@kinextion/shared";
 
 /** Appended to the system prompt when the user is talking out loud. */
 export const VOICE_PROMPT = `## They're talking to you out loud
-They spoke this message, and they'll hear your reply read aloud. Talk the way a person talks:
+They spoke this, and they'll hear your reply. Write the way a person actually speaks, because it will be performed exactly as written:
 - Two to four short sentences. Say the one thing that matters most.
+- Use contractions always. Vary sentence length. A two-word sentence is fine.
+- It's fine to begin with "Okay," "Yeah," or "So" when a person would, but don't do it every time.
+- React to what they actually said before you move on. Never open with "I hear you", "That sounds", "Great question" or a summary of their words.
 - No lists, headings, bold, links or emoji. Nothing that only works on a screen.
-- Numbers and times the way you'd say them: "about seven", "half past six".
+- Say numbers and times as you'd say them: "about seven", "half past six".
 - At most one question, at the end.
 - Speech-to-text makes mistakes. If a word looks wrong, go with the likely meaning; if you can't tell, ask.`;
 
@@ -69,23 +72,6 @@ export const elevenLabs: SpeechProvider = {
 };
 
 /**
- * How each guide sounds on OpenAI's voice. The model takes direction, so the
- * tone is described rather than tuned with rate and pitch.
- */
-const OPENAI_STYLE: Record<Persona, { voice: string; instructions: string }> = {
-  altheo: {
-    voice: "ash",
-    instructions:
-      "You're Altheo, a warm, grounded coach talking one to one with someone you like. Speak naturally, the way a friend talks, at an easy conversational pace with relaxed energy. Encouraging but never peppy, salesy or like an announcer. Let sentences flow into each other.",
-  },
-  kairo: {
-    voice: "sage",
-    instructions:
-      "You're Kairo, a calm, gentle listener. Speak softly and unhurried, with warmth and natural pauses, like someone sitting beside a friend. Never sound scripted, clinical or like a meditation app.",
-  },
-};
-
-/**
  * OpenAI text-to-speech, on the same OPENAI_API_KEY as listening. Voices can
  * be swapped with OPENAI_VOICE_ALTHEO / OPENAI_VOICE_KAIRO, the model with
  * OPENAI_TTS_MODEL.
@@ -94,7 +80,7 @@ export const openAISpeech: SpeechProvider = {
   id: "openai",
   isConfigured: () => Boolean(process.env.OPENAI_API_KEY),
   async synthesize(text, persona, signal) {
-    const style = OPENAI_STYLE[persona];
+    const style = GUIDE_SPEECH[persona];
     const voice = (persona === "kairo" ? process.env.OPENAI_VOICE_KAIRO : process.env.OPENAI_VOICE_ALTHEO) || style.voice;
     const res = await fetch("https://api.openai.com/v1/audio/speech", {
       method: "POST",

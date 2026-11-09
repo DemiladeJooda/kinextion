@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 import { track } from "@/lib/analytics";
 
 type Status = "idle" | "sending" | "done" | "error";
@@ -110,10 +110,10 @@ export function WaitlistForm({
             }}
           >
             <p className="text-2xl mb-1">✓</p>
-            <p className="font-bold text-base mb-1" style={{ color: "#0F172A" }}>
+            <p className="font-bold text-base mb-1" style={{ color: "#FFFFFF" }}>
               You&apos;re on the list.
             </p>
-            <p className="text-sm" style={{ color: "#64748B" }}>
+            <p className="text-sm" style={{ color: "rgba(255,255,255,0.65)" }}>
               We&apos;ll email {email.trim()} before we open the doors. Nothing else — no
               newsletter, no sharing your address.
             </p>
@@ -141,11 +141,11 @@ export function WaitlistForm({
                 if (status === "error") setStatus("idle");
               }}
               placeholder="your@email.com"
-              className="flex-1 px-5 py-3.5 rounded-full text-sm outline-none transition-all duration-200 disabled:opacity-60"
+              className="flex-1 px-5 py-3.5 rounded-full text-sm outline-none transition-all duration-200 disabled:opacity-60 placeholder:text-white/40"
               style={{
-                background: "rgba(0,0,0,0.04)",
-                border: "1.5px solid rgba(0,0,0,0.10)",
-                color: "#0F172A",
+                background: "rgba(255,255,255,0.07)",
+                border: "1.5px solid rgba(255,255,255,0.14)",
+                color: "#FFFFFF",
               }}
             />
             <button
@@ -164,11 +164,11 @@ export function WaitlistForm({
       </AnimatePresence>
 
       {status === "error" ? (
-        <p className="mt-3 text-sm" role="alert" style={{ color: "#DC2626" }}>
+        <p className="mt-3 text-sm" role="alert" style={{ color: "#FCA5A5" }}>
           {message}
         </p>
       ) : status !== "done" ? (
-        <p className="mt-3 text-xs" style={{ color: "#94A3B8" }}>
+        <p className="mt-3 text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>
           One email when we launch. We don&apos;t sell or share your address —{" "}
           <a href="/privacy" className="underline hover:opacity-80">
             privacy policy

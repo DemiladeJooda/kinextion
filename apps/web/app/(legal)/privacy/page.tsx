@@ -91,7 +91,7 @@ export default function PrivacyPage() {
         </p>
         <p className="mt-4">
           Replies are read aloud by your phone&apos;s built-in voice. If we switch on a premium voice,
-          the text of the guide&apos;s reply is sent to that voice provider (currently ElevenLabs) to
+          the text of the guide&apos;s reply is sent to that voice provider (currently OpenAI) to
           be spoken. The audio is played and then deleted from your phone.
         </p>
       </Section>
@@ -102,6 +102,15 @@ export default function PrivacyPage() {
           analysis and receive an answer back. Frames are not stored, not used for training, and
           not retained after the response. The camera only runs while you have one of those
           screens open.
+        </p>
+      </Section>
+
+      <Section title="Your avatar">
+        <p>
+          If you choose to create an avatar, you first agree to it and confirm you&apos;re 18 or
+          older. The photos you take, including one of your whole body, are sent through our servers
+          to OpenAI to generate the images. We don&apos;t save those photos. The avatars that come back
+          are stored only on your phone, and you can delete them at any time in the app.
         </p>
       </Section>
 

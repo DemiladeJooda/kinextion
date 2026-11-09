@@ -4,11 +4,14 @@ import { prisma, Prisma } from "@kinextion/database";
 import { onboardingSchema, updateProfileSchema } from "@kinextion/shared";
 import { registerExportRoute } from "./export.js";
 import { registerOnboardingReadRoute } from "./onboarding-read.js";
+import { registerOnboardingSessionRoutes } from "./onboarding-session.js";
+import { rememberUnderstanding } from "./onboarding-memory.js";
 
 export async function userRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.requireAuth);
   registerExportRoute(app);
   registerOnboardingReadRoute(app);
+  registerOnboardingSessionRoutes(app);
 
   // Get the authenticated user's profile
   app.get("/me/profile", async (request, reply) => {
@@ -66,6 +69,12 @@ export async function userRoutes(app: FastifyInstance) {
         onboardingComplete: true,
       },
     });
+
+    if (data.understanding) {
+      await rememberUnderstanding(userId, data.understanding, profile.aiContext).catch((err) =>
+        request.log.warn({ err }, "couldn't save what onboarding learned")
+      );
+    }
 
     return { success: true, data: profile };
   });

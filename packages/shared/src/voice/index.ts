@@ -60,3 +60,28 @@ export function createSentenceSplitter() {
     },
   };
 }
+
+/**
+ * How each guide sounds on OpenAI's speech model, shared by the app and the
+ * website. The model takes direction, so it's told who is speaking and how,
+ * rather than being tuned with rate and pitch. Marin and Cedar are the two
+ * newest voices on this model.
+ */
+export const GUIDE_SPEECH: Record<"altheo" | "kairo", { voice: string; instructions: string }> = {
+  altheo: {
+    voice: "marin",
+    instructions: `You are a woman in her thirties talking to a friend across a kitchen table. You aren't presenting or reading anything.
+Tone: warm, easy, grounded, with a little dry humour. You like this person.
+Pacing: natural and uneven, the way people really talk. Quicker through small things, slower on the one thing that matters. Small breaths between thoughts. Sentences run into each other.
+Emphasis: lean lightly on one word in a sentence, never on every word.
+Avoid: announcer voice, customer-service brightness, rising pitch at the end of statements, perfect even rhythm.`,
+  },
+  kairo: {
+    voice: "cedar",
+    instructions: `You are a calm man sitting beside a friend late in the evening. You've got nowhere else to be.
+Tone: low, warm, gentle and steady. Real, with no performance in it.
+Pacing: unhurried, with real pauses, as if you're thinking before you speak. A pause before a question.
+Emphasis: soft. Let the end of a sentence fall away naturally.
+Avoid: a meditation-app voice, a whisper, a clinical or scripted sound, perfect even rhythm.`,
+  },
+};

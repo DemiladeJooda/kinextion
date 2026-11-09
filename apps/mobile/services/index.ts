@@ -16,7 +16,12 @@ import type {
   LogHabitInput,
   CreateMoodEntryInput,
   CheckInInput,
+  AvatarRequest,
   HabitDraft,
+  NegotiateTurnInput,
+  NegotiateTurnResult,
+  WhyTurnInput,
+  WhyTurnResult,
 } from "@kinextion/shared";
 
 export type {
@@ -27,7 +32,12 @@ export type {
   LogHabitInput,
   CreateMoodEntryInput,
   CheckInInput,
+  AvatarRequest,
   HabitDraft,
+  NegotiateTurnInput,
+  NegotiateTurnResult,
+  WhyTurnInput,
+  WhyTurnResult,
 };
 
 /**
@@ -63,6 +73,8 @@ export interface RemoteProfile {
   equipment: string[] | null;
   /** "someone who moves every day" — set at onboarding, editable. */
   identityGoal?: string | null;
+  /** What the onboarding conversations learned, among other model context. */
+  aiContext?: { understanding?: import("@kinextion/shared").Understanding } | null;
   /** Who they are, in their own words — read by the guides. */
   background?: UserBackground | null;
   /** Notification and guide settings — including Kairo's spiritual dial. */
@@ -288,6 +300,21 @@ export function ingestDeviceHealth(
 /** Whether the API has a premium voice set up, and whether it can listen for builds without the phone's recogniser. */
 export function getVoice(token: string | null) {
   return apiRequest<{ premium: boolean; provider: string | null; listening?: boolean }>(`/api/chat/me/voice`, { token });
+}
+
+/** One avatar image, made from photos and returned; nothing is stored server-side. */
+export function generateAvatar(token: string | null, input: AvatarRequest) {
+  return apiRequest<{ image: string }>(`/api/avatar/generate`, { method: "POST", body: input, token });
+}
+
+/** One turn with Kairo in onboarding. */
+export function whyTurn(token: string | null, input: WhyTurnInput) {
+  return apiRequest<WhyTurnResult>(`/api/users/me/onboarding/why`, { method: "POST", body: input, token });
+}
+
+/** One turn with Althea, agreeing the first habit. */
+export function negotiateTurn(token: string | null, input: NegotiateTurnInput) {
+  return apiRequest<NegotiateTurnResult>(`/api/users/me/onboarding/negotiate`, { method: "POST", body: input, token });
 }
 
 /** Onboarding answers read back tidied, with access options for who they want to become. */

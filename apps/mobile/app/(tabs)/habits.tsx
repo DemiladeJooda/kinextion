@@ -45,6 +45,7 @@ import Animated, {
   ZoomIn,
 } from "react-native-reanimated";
 
+import { GetToKnowCard } from "../../components/GetToKnowCard";
 import { MicroRecommendation } from "../../components/MicroRecommendation";
 import { YourNumbers } from "../../components/YourNumbers";
 import { AmountSheet } from "../../components/AmountSheet";
@@ -499,6 +500,8 @@ export default function TodayScreen() {
           }}
         >
           <Label c={color.textFaint}>For you</Label>
+
+          <GetToKnowCard />
 
           {usage.concern ? (
             <UsageCard

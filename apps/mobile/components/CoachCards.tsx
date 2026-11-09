@@ -31,7 +31,7 @@ import type { ReflectResult } from "../services";
 import { color, radius, space, tint } from "../theme";
 
 const GUIDE = {
-  altheo: { name: "Altheo", accent: color.green },
+  altheo: { name: "Althea", accent: color.green },
   kairo: { name: "Kairo", accent: color.purple },
 } as const;
 

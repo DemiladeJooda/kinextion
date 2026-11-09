@@ -2,6 +2,8 @@
 
 Audit of every factual or scientific claim on the marketing site (`apps/web/components/sections/*`), October 2026.
 
+**Status (November 2026):** applied in the website rebuild. The sections below are the original audit, kept as the record of what each claim rests on. Check any new claim here, with its source, before it goes on the site.
+
 - ✅ **Backed**: the source exists and says this.
 - ⚠️ **Fix wording**: a real source exists, but the site's number, attribution, or framing is off.
 - ❌ **No source**: no peer-reviewed source found. Remove it, or swap it for the replacement given.

@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useCallback, useEffect, useState } from "react";
@@ -29,7 +29,7 @@ import {
   Txt,
 } from "../../components/ui";
 import { useApi } from "../../hooks/useApi";
-import { avatarImageUrl } from "../../lib/avatar";
+import { avatarPortrait } from "../../lib/avatar";
 import { useAppState } from "../../lib/store";
 import type { IntegrationProvider, IntegrationsList } from "../../services";
 import { color, radius, space, tint } from "../../theme";
@@ -190,7 +190,7 @@ export default function ProfileScreen() {
   const { signOut } = useAuth();
   const { user } = useUser();
   const [connected, setConnected] = useState<Record<string, boolean>>({});
-  const [avatarId, setAvatarId] = useState<string | null>(null);
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
 
   // Best run in the loaded history, not today's, so a 40-day best doesn't
   // read as 0 the morning after one miss.
@@ -199,19 +199,11 @@ export default function ProfileScreen() {
     user?.firstName || user?.primaryEmailAddress?.emailAddress || "";
   const initial = displayName ? displayName[0]!.toUpperCase() : "K";
 
-  useEffect(() => {
-    let cancelled = false;
-    api
-      .getMyProfile()
-      .then((u) => {
-        if (!cancelled) setAvatarId(u.profile?.avatarId ?? null);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      void avatarPortrait().then(setAvatarUri);
+    }, [])
+  );
 
   /**
    * Two-step confirmation before an irreversible delete. Both stores require
@@ -281,7 +273,7 @@ export default function ProfileScreen() {
                 gap: space.lg,
               }}
             >
-              <Pressable onPress={() => router.push("/avatar/create" as never)}>
+              <Pressable onPress={() => router.push("/avatar" as never)}>
                 <LinearGradient
                   colors={[color.green, color.teal, color.purple]}
                   start={{ x: 0, y: 0 }}
@@ -303,11 +295,9 @@ export default function ProfileScreen() {
                       overflow: "hidden",
                     }}
                   >
-                    {avatarId ? (
+                    {avatarUri ? (
                       <Image
-                        source={{
-                          uri: avatarImageUrl(avatarId, { camera: "portrait" }),
-                        }}
+                        source={{ uri: avatarUri }}
                         style={{ width: "100%", height: "100%" }}
                       />
                     ) : user?.hasImage && user.imageUrl ? (
@@ -334,7 +324,7 @@ export default function ProfileScreen() {
                     "Synced across devices"}
                 </Txt>
                 <Pressable
-                  onPress={() => router.push("/avatar/create" as never)}
+                  onPress={() => router.push("/avatar" as never)}
                   hitSlop={8}
                 >
                   <Txt
@@ -342,7 +332,7 @@ export default function ProfileScreen() {
                     c={color.green}
                     style={{ marginTop: 4, fontWeight: "700" }}
                   >
-                    {avatarId ? "Edit avatar" : "Create your avatar"}
+                    {avatarUri ? "Your avatar" : "Create your avatar"}
                   </Txt>
                 </Pressable>
               </View>

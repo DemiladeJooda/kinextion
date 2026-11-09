@@ -8,3 +8,5 @@ export * from "./community/index.js";
 export * from "./profile/index.js";
 export * from "./simulation/index.js";
 export * from "./voice/index.js";
+export * from "./onboarding/index.js";
+export * from "./avatar/index.js";

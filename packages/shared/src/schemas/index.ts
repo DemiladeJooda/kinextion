@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { backgroundSchema } from "../profile/index.js";
+import { understandingSchema } from "../onboarding/index.js";
 import { autoLogSchema } from "../habits/measure.js";
 
 // ─── Enums ───────────────────────────────────────────────────────
@@ -54,9 +55,10 @@ export const workoutDifficultySchema = z.enum([
 export const onboardingSchema = z.object({
   displayName: z.string().min(1).max(50),
   age: z.number().int().min(13).max(120).optional(),
-  fitnessLevel: fitnessLevelSchema,
+  /** Asked later, a little at a time, so these can arrive empty. */
+  fitnessLevel: fitnessLevelSchema.optional(),
   primaryGoals: z.array(z.string()).min(1).max(5),
-  weeklyAvailability: z.number().int().min(1).max(7),
+  weeklyAvailability: z.number().int().min(1).max(7).optional(),
   equipment: z.array(z.string()).optional(),
   identityGoal: identityGoalSchema.optional(),
   /** Supplementary lifestyle context, volunteered once at onboarding. */
@@ -65,8 +67,11 @@ export const onboardingSchema = z.object({
       doesTherapy: z.boolean().optional(),
       doesJournal: z.boolean().optional(),
       currentlyWorkingOut: z.boolean().optional(),
+      coachingIntensity: z.enum(["gentle", "balanced", "intense"]).optional(),
     })
     .optional(),
+  /** What they want help with and why, from the onboarding conversation. */
+  understanding: understandingSchema.optional(),
   /** Optional: where they live and what their days look like, in their words. */
   background: backgroundSchema.optional(),
 });
@@ -101,6 +106,8 @@ export const userPreferencesSchema = z.object({
   /** The window the displayed Kinextion Score aggregates and resets on. */
   scorePeriod: scorePeriodSchema.optional(),
   doesTherapy: z.boolean().optional(),
+  /** Whether they talk to someone for support, including only sometimes. */
+  supportPerson: z.enum(["regular", "sometimes", "none", "private"]).optional(),
   doesJournal: z.boolean().optional(),
   currentlyWorkingOut: z.boolean().optional(),
 });

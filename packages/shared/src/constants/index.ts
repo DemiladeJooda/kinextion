@@ -62,6 +62,10 @@ export const AI_TASKS = {
   habitSuggest: { tier: "deep", effort: "medium", maxTokens: 12000 },
   /** Working a habit out in conversation. */
   habitDiscover: { tier: "deep", effort: "medium", maxTokens: 12000 },
+  /** Kairo finding the real reason, in onboarding. */
+  whySession: { tier: "deep", effort: "medium", maxTokens: 6000 },
+  /** Althea and the user agreeing on the first habit. */
+  habitNegotiate: { tier: "deep", effort: "medium", maxTokens: 6000 },
   /** "What would it take?" — reflect back, propose one change. */
   coach: { tier: "deep", effort: "medium", maxTokens: 8000 },
   /** The daily two-option micro-recommendation. */

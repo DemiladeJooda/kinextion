@@ -1,50 +1,91 @@
 /**
- * Ready Player Me avatar — a stylized, face-matched 3D avatar, not a body
- * scan. (Real body-shape scanning exists as a vendor product, 3DLOOK/
- * FitXpress, starting at $1,000+/month with its own native camera SDK — a
- * deliberate, separate decision, not what this wires up.)
+ * Your avatar, kept on your phone.
  *
- * The "demo" subdomain below works with no Ready Player Me account at all —
- * fine for building and testing. Before shipping to real users, swap it for
- * a free subdomain from https://studio.readyplayer.me (one dashboard field,
- * no code change) so avatars land under Kinextion's own namespace rather
- * than the shared public demo one.
+ * The API makes images and forgets them. Everything finished lives in this
+ * app's private folder: the first avatar, the latest, moods and activities.
+ * Deleting removes all of it.
  */
 
-export const RPM_SUBDOMAIN = "demo";
+import * as FileSystem from "expo-file-system/legacy";
 
-export function avatarCreatorUrl(): string {
-  return `https://${RPM_SUBDOMAIN}.readyplayer.me/avatar?frameApi&source=kinextion&bodyType=fullbody&quickStart`;
+const DIR = `${FileSystem.documentDirectory}avatar/`;
+const MANIFEST = `${DIR}manifest.json`;
+
+export interface AvatarManifest {
+  /** ISO dates of the first scan and the most recent. */
+  firstScan: string;
+  latestScan: string;
+  /** How many images have been made, so re-renders bust image caches. */
+  version: number;
 }
 
-/** `pose`/`expression`/`camera` match Ready Player Me's 2D render API. */
-export function avatarImageUrl(
-  avatarId: string,
-  options: { pose?: string; expression?: string; camera?: "fullbody" | "portrait" } = {}
-): string {
-  const params = new URLSearchParams(options as Record<string, string>).toString();
-  const base = `https://models.readyplayer.me/${avatarId}.png`;
-  return params ? `${base}?${params}` : base;
+const Base64 = FileSystem.EncodingType.Base64;
+
+const uri = (name: string) => `${DIR}${name}.jpg`;
+
+async function ensureDir() {
+  const info = await FileSystem.getInfoAsync(DIR);
+  if (!info.exists) await FileSystem.makeDirectoryAsync(DIR, { intermediates: true });
 }
 
-export interface RpmEvent {
-  source?: string;
-  eventName?: string;
-  data?: { avatarId?: string; id?: string; assetId?: string };
-}
-
-export function parseRpmEvent(raw: string): RpmEvent | null {
+export async function loadManifest(): Promise<AvatarManifest | null> {
   try {
-    const event = JSON.parse(raw) as RpmEvent;
-    return event?.source === "readyplayerme" ? event : null;
+    return JSON.parse(await FileSystem.readAsStringAsync(MANIFEST)) as AvatarManifest;
   } catch {
     return null;
   }
 }
 
-/** Posted once the WebView loads, so Ready Player Me starts sending events. */
-export const RPM_SUBSCRIBE_MESSAGE = JSON.stringify({
-  target: "readyplayerme",
-  type: "subscribe",
-  eventName: "v1.**",
-});
+async function saveManifest(m: AvatarManifest) {
+  await FileSystem.writeAsStringAsync(MANIFEST, JSON.stringify(m));
+}
+
+export async function saveImage(name: string, base64: string): Promise<string> {
+  await ensureDir();
+  await FileSystem.writeAsStringAsync(uri(name), base64, { encoding: Base64 });
+  return uri(name);
+}
+
+export async function imageIfExists(name: string): Promise<string | null> {
+  const info = await FileSystem.getInfoAsync(uri(name));
+  return info.exists ? uri(name) : null;
+}
+
+export function readImage(name: string): Promise<string> {
+  return FileSystem.readAsStringAsync(uri(name), { encoding: Base64 });
+}
+
+/**
+ * Stores a new scan. The first one is kept forever as "before"; a later scan
+ * becomes "latest", and everything drawn from the old one is cleared.
+ */
+export async function storeScan(base64: string): Promise<AvatarManifest> {
+  await ensureDir();
+  const now = new Date().toISOString();
+  const existing = await loadManifest();
+
+  if (!existing) {
+    await saveImage("first", base64);
+  } else {
+    const files = await FileSystem.readDirectoryAsync(DIR);
+    await Promise.all(files.filter((f) => f.startsWith("mood-") || f.startsWith("scene-")).map((f) => FileSystem.deleteAsync(`${DIR}${f}`, { idempotent: true })));
+  }
+  await saveImage("latest", base64);
+
+  const manifest: AvatarManifest = {
+    firstScan: existing?.firstScan ?? now,
+    latestScan: now,
+    version: (existing?.version ?? 0) + 1,
+  };
+  await saveManifest(manifest);
+  return manifest;
+}
+
+export async function deleteAvatar() {
+  await FileSystem.deleteAsync(DIR, { idempotent: true });
+}
+
+/** The face to show around the app: a portrait if there is one. */
+export async function avatarPortrait(): Promise<string | null> {
+  return (await imageIfExists("mood-calm")) ?? (await imageIfExists("latest"));
+}

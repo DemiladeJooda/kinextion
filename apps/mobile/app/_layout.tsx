@@ -208,6 +208,10 @@ export default function RootLayout() {
                 options={{ headerShown: false }}
               />
               <Stack.Screen
+                name="avatar/index"
+                options={{ headerShown: true }}
+              />
+              <Stack.Screen
                 name="avatar/create"
                 options={{ headerShown: true }}
               />
@@ -217,6 +221,7 @@ export default function RootLayout() {
               />
               {/* Habit builder and check-in set their own titles per screen. */}
               <Stack.Screen name="habit/new" options={{ headerShown: true }} />
+              <Stack.Screen name="habit/negotiate" options={{ headerShown: true }} />
               <Stack.Screen
                 name="habit/suggest"
                 options={{ headerShown: true }}

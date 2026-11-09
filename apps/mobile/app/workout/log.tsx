@@ -28,6 +28,7 @@ import {
 } from "../../components/ui";
 import { useAppState } from "../../lib/store";
 import type { LogWorkoutInput } from "../../services";
+import { loadManifest } from "../../lib/avatar";
 import { color, radius, space, tint } from "../../theme";
 
 const TYPES: Array<{
@@ -68,8 +69,17 @@ const EFFORT: Array<{
   { value: "too_hard", label: "Too hard" },
 ];
 
+/** Optional, for strength days: picks what your avatar shows afterwards. */
+const FOCUS = [
+  { id: "arms", label: "Arms" },
+  { id: "legs", label: "Legs" },
+  { id: "back", label: "Back & chest" },
+  { id: "core", label: "Core" },
+] as const;
+
 export default function LogWorkoutScreen() {
   const router = useRouter();
+  const [focus, setFocus] = useState<(typeof FOCUS)[number]["id"] | null>(null);
   const { logWorkout, workoutLogged } = useAppState();
 
   const [type, setType] = useState<LogWorkoutInput["type"] | null>(null);
@@ -91,7 +101,9 @@ export default function LogWorkoutScreen() {
         difficulty,
       });
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.back();
+      const activity = focus ?? (picked.type === "cardio" ? "run" : picked.type === "mobility" ? "stretch" : null);
+      if (activity && (await loadManifest())) router.replace(`/avatar?activity=${activity}` as never);
+      else router.back();
     } catch {
       setError("Couldn't save that workout. Try again.");
       setSaving(false);
@@ -161,7 +173,18 @@ export default function LogWorkoutScreen() {
 
         <Card>
           <View style={{ gap: space.lg }}>
-            <View style={{ gap: space.sm }}>
+            {type === "strength" ? (
+          <View style={{ gap: space.sm }}>
+            <Label>What did you train?</Label>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
+              {FOCUS.map((f) => (
+                <Chip key={f.id} label={f.label} accent={color.green} selected={focus === f.id} onPress={() => setFocus(focus === f.id ? null : f.id)} />
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        <View style={{ gap: space.sm }}>
               <Label>How long</Label>
               <View
                 style={{

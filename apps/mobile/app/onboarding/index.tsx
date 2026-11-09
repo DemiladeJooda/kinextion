@@ -1,358 +1,124 @@
+/**
+ * Arriving.
+ *
+ * Four short chapters: say hello, say what's going on, say why it matters,
+ * decide what to try. It only asks what it needs to actually help today, and
+ * each question says why it's there. Everything else (your days, your home,
+ * whether you see a therapist) comes later, one at a time. See GetToKnowCard.
+ */
+
 import { useState } from "react";
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  TextInput,
-  View,
-} from "react-native";
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import Animated, {
-  FadeIn,
-  FadeInDown,
-  FadeInLeft,
-  FadeInRight,
-} from "react-native-reanimated";
+import Animated, { FadeIn, FadeInDown, FadeInRight } from "react-native-reanimated";
 import {
-  GOAL_OPTIONS,
-  accessOptionsFor,
-  identitySuggestions,
-  nextMondayKey,
-  starterHabitsFor,
-  starterToCreateInput,
-  today,
+  FOCUS_AREAS,
+  HELP_STYLES,
+  OBSTACLE_OPTIONS,
+  ROUTINE_OPTIONS,
+  habitFromProposal,
+  type HabitProposal,
+  type HelpStyleId,
 } from "@kinextion/shared";
-import type { FitnessLevel } from "@kinextion/shared";
 
-import {
-  AuroraBackdrop,
-  Button,
-  Chip,
-  Label,
-  Notice,
-  PressCard,
-  Txt,
-} from "../../components/ui";
-import { StartChoice, StarterPicker } from "../../components/StarterPicker";
+import { AuroraBackdrop, Button, Notice, PressCard, Txt } from "../../components/ui";
 import { JourneyPath } from "../../components/JourneyPath";
+import { WhySession, type WhyOutcome } from "../../components/onboarding/WhySession";
+import { HabitNegotiation } from "../../components/onboarding/HabitNegotiation";
+import { markOnboardingFinished } from "../../components/GetToKnowCard";
 import { useApi } from "../../hooks/useApi";
 import { useAuth } from "../../lib/auth";
 import { useAppState } from "../../lib/store";
 import { color, radius, space, tint, type } from "../../theme";
 
-const FITNESS_LEVELS: readonly [string, FitnessLevel][] = [
-  ["New to this", "beginner"],
-  ["Some experience", "intermediate"],
-  ["Very experienced", "advanced"],
+type Screen = "hello" | "name" | "area" | "specific" | "routine" | "obstacles" | "style" | "invite" | "why" | "becoming" | "journey" | "negotiate";
+
+const FLOW: readonly Screen[] = ["hello", "name", "area", "specific", "routine", "obstacles", "style", "invite", "why", "becoming", "journey", "negotiate"];
+
+const CHAPTERS: readonly { title: string; screens: readonly Screen[] }[] = [
+  { title: "Hello", screens: ["hello", "name"] },
+  { title: "What's going on", screens: ["area", "specific", "routine", "obstacles", "style"] },
+  { title: "Why it matters", screens: ["invite", "why", "becoming"] },
+  { title: "What you'll try", screens: ["journey", "negotiate"] },
 ];
 
-/** "1–2 days" → 2, etc. — the schema wants a single weekly number. */
-const DAYS_OPTIONS = ["1–2 days", "3–4 days", "5–6 days", "Every day"] as const;
-const DAYS_TO_COUNT: Record<(typeof DAYS_OPTIONS)[number], number> = {
-  "1–2 days": 2,
-  "3–4 days": 4,
-  "5–6 days": 6,
-  "Every day": 7,
-};
-
-/**
- * Onboarding.
- *
- * Short steps, one question per screen. Deliberately does not ask for
- * anything sensitive up front — health conditions, medications, and history
- * are volunteered later in conversation, where the context makes it obvious
- * why the system is asking.
- *
- * Two steps exist for the habits that follow. "Who are you becoming?" gives
- * habits an identity to attach to (Person, in Zoe Chance's 4Ps). The last
- * step offers a short starter menu for the chosen goal, so nobody leaves
- * onboarding facing an empty list and a blank form (Possibilities). Both are
- * optional.
- */
-type Step =
-  | {
-      key: "name";
-      kind: "text";
-      question: string;
-      hint: string;
-      placeholder: string;
-    }
-  | {
-      key: "goal";
-      kind: "goals";
-      question: string;
-      hint: string;
-      options: readonly string[];
-    }
-  | {
-      key: "fitness";
-      kind: "single";
-      question: string;
-      hint: string;
-      options: readonly string[];
-    }
-  | {
-      key: "days";
-      kind: "single";
-      question: string;
-      hint: string;
-      options: readonly string[];
-    }
-  | {
-      key: "equipment";
-      kind: "multi";
-      question: string;
-      hint: string;
-    }
-  | {
-      key: "lifestyle";
-      kind: "lifestyle";
-      question: string;
-      hint: string;
-      options: readonly string[];
-    }
-  | { key: "identity"; kind: "identity"; question: string; hint: string }
-  | { key: "possible"; kind: "possible"; question: string; hint: string }
-  | { key: "starter"; kind: "starter"; question: string; hint: string };
-
-/** Lifestyle chip labels, in the order shown — mapped to preference flags at submit time. */
-const LIFESTYLE_OPTIONS = [
-  "I see a therapist",
-  "I journal regularly",
-  "I already work out",
-] as const;
-
-/** The profile schema takes up to five goals. */
-const MAX_GOALS = 5;
-
-/** Typed answers get the keyboard's spelling help; the AI tidies the rest. */
-const SPELL_CHECKED = { autoCorrect: true, spellCheck: true } as const;
-
-const ONBOARDING_INPUT = {
-  backgroundColor: color.surface,
-  borderWidth: 1,
-  borderColor: color.border,
-  borderRadius: radius.lg,
-  paddingHorizontal: space.lg,
-  paddingVertical: space.md,
-  color: color.text,
-} as const;
-
-const STEPS: Step[] = [
-  {
-    key: "name",
-    kind: "text",
-    question: "What should we call you?",
-    hint: "Your guides will use it — sparingly.",
-    placeholder: "First name",
-  },
-  {
-    key: "goal",
-    kind: "goals",
-    question: "What matters most right now?",
-    hint: `Pick up to ${MAX_GOALS}. You can change these whenever they change.`,
-    options: GOAL_OPTIONS,
-  },
-  {
-    key: "identity",
-    kind: "identity",
-    question: "Who do you want to become?",
-    hint: "One line, in your words. Your habits, and the next few questions, will be built around it. Optional.",
-  },
-  {
-    key: "fitness",
-    kind: "single",
-    question: "Where are you starting from?",
-    hint: "No wrong answer — this just calibrates the first few weeks.",
-    options: FITNESS_LEVELS.map(([label]) => label),
-  },
-  {
-    key: "days",
-    kind: "single",
-    question: "How many days a week do you want to work on this?",
-    hint: "Pick what actually fits your week, not your best week. You can always change this later.",
-    options: DAYS_OPTIONS,
-  },
-  {
-    key: "equipment",
-    kind: "multi",
-    question: "What do you have access to?",
-    hint: "Pick everything that applies.",
-  },
-  {
-    key: "lifestyle",
-    kind: "lifestyle",
-    question: "A bit about your life",
-    hint: "Optional. Where you live and what your days look like help your guides fit their advice to your real life, like the weather, your shifts, your family.",
-    options: LIFESTYLE_OPTIONS,
-  },
-  {
-    key: "possible",
-    kind: "possible",
-    question: "This is a journey, not a race",
-    hint: "Everyone's path to becoming better looks different. Long or short, up or down, every step still counts.",
-  },
-  {
-    key: "starter",
-    kind: "starter",
-    question: "Pick your first habits",
-    hint: "Each one is already tiny and attached to part of your day. Optional — you can add your own later.",
-  },
-];
+const OTHER_ID = "other";
 
 export default function OnboardingScreen() {
   const router = useRouter();
   const api = useApi();
   const { signOut } = useAuth();
+  const { addHabits } = useAppState();
+
   const [index, setIndex] = useState(0);
   const [name, setName] = useState("");
-  const [single, setSingle] = useState<Record<string, string>>({});
-  const [multi, setMulti] = useState<string[]>([]);
+  const [areaId, setAreaId] = useState<string | null>(null);
+  const [areaOther, setAreaOther] = useState("");
+  const [specifics, setSpecifics] = useState<string[]>([]);
+  const [specificOther, setSpecificOther] = useState("");
+  const [routine, setRoutine] = useState<string | undefined>();
+  const [obstacles, setObstacles] = useState<string[]>([]);
+  const [obstacleOther, setObstacleOther] = useState("");
+  const [helpStyle, setHelpStyle] = useState<HelpStyleId | undefined>();
+  const [why, setWhy] = useState<WhyOutcome>({ ladder: [] });
+  const [identity, setIdentity] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [goals, setGoals] = useState<string[]>([]);
-  /** Options for "What do you have access to?", from who they want to become. */
-  const [accessOptions, setAccessOptions] = useState<string[] | null>(null);
+  const screen = FLOW[index];
+  const area = FOCUS_AREAS.find((a) => a.id === areaId) ?? null;
+  const areaLabel = area?.label ?? areaOther.trim();
+  const firstName = name.trim();
 
-  // "Other" free-text fallbacks — for when none of the preset options fit.
-  const [showGoalOther, setShowGoalOther] = useState(false);
-  const [goalOther, setGoalOther] = useState("");
-  const [showEquipmentOther, setShowEquipmentOther] = useState(false);
-  const [equipmentOther, setEquipmentOther] = useState("");
-  const [lifestyle, setLifestyle] = useState<string[]>([]);
-  const [identity, setIdentity] = useState("");
-  const [where, setWhere] = useState("");
-  const [days, setDays] = useState("");
-  const [starterIds, setStarterIds] = useState<string[]>([]);
-  const [start, setStart] = useState<"today" | "monday">("today");
-  const { addHabits } = useAppState();
-  const todayKey = today();
+  const allSpecifics = [...specifics, ...(specificOther.trim() ? [specificOther.trim()] : [])];
+  const allObstacles = [...obstacles, ...(obstacleOther.trim() ? [obstacleOther.trim()] : [])];
 
-  const step = STEPS[index];
-  const isLast = index === STEPS.length - 1;
-
-  /** A typed goal still in the box counts, so nobody loses it by tapping Continue. */
-  const pendingGoal = showGoalOther ? goalOther.trim() : "";
-  const allGoals =
-    pendingGoal && !goals.includes(pendingGoal) && goals.length < MAX_GOALS ? [...goals, pendingGoal] : goals;
-
-  const canAdvance =
-    step.kind === "text"
-      ? name.trim().length > 0
-      : step.kind === "goals"
-        ? allGoals.length > 0
-        : step.kind === "single"
-          ? !!single[step.key]
-          : step.kind === "lifestyle" ||
-              step.kind === "identity" ||
-              step.kind === "possible" ||
-              step.kind === "starter"
-            ? true // optional — context, never a gate
-            : multi.length > 0;
-
-  const starters = starterHabitsFor(allGoals, multi);
-  const identityGoal =
-    identity.trim().length >= 3 ? identity.trim() : undefined;
-  const access = accessOptions ?? accessOptionsFor(identityGoal, allGoals);
-
-  const addGoal = (goal: string) => {
-    const g = goal.trim();
-    if (!g) return;
-    setGoals((p) => (p.includes(g) || p.length >= MAX_GOALS ? p : [...p, g]));
-  };
-
-  const toggleGoal = (goal: string) => {
+  const go = () => {
     void Haptics.selectionAsync();
-    setGoals((p) => (p.includes(goal) ? p.filter((x) => x !== goal) : p.length >= MAX_GOALS ? p : [...p, goal]));
+    setIndex((i) => Math.min(FLOW.length - 1, i + 1));
   };
 
-  /**
-   * Leaving "Who do you want to become?": tidy what they typed and fetch
-   * access options for that person. Nothing waits on it; the keyword list
-   * shows until (or unless) the reading comes back.
-   */
-  const readIdentity = () => {
-    const typed = allGoals.filter((g) => !(GOAL_OPTIONS as readonly string[]).includes(g));
-    setAccessOptions(accessOptionsFor(identityGoal, allGoals));
-    api
-      .readOnboarding({ identity: identityGoal, goals: allGoals })
-      .then((read) => {
-        if (read.identity && identityGoal && read.identity !== identityGoal) {
-          setIdentity((cur) => (cur.trim() === identityGoal ? read.identity! : cur));
-        }
-        // Only goals they typed get tidied; preset labels stay exact.
-        if (typed.length && read.goals.length === allGoals.length) {
-          setGoals(allGoals.map((g, i) => (typed.includes(g) ? read.goals[i] || g : g)));
-        }
-        setAccessOptions(read.access);
-      })
-      .catch(() => {});
+  const back = () => {
+    void Haptics.selectionAsync();
+    if (index > 0) return setIndex((i) => i - 1);
+    Alert.alert("Leave setup?", "You'll be signed out. Your account stays, and setup starts again next time you sign in.", [
+      { text: "Stay", style: "cancel" },
+      { text: "Sign out", style: "destructive", onPress: () => void signOut() },
+    ]);
   };
 
-  /** Finish onboarding; `talk` opens Altheo to build the first habit by conversation. */
-  const next = async (talk = false) => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (!isLast) {
-      if (step.kind === "goals") {
-        if (pendingGoal) addGoal(pendingGoal);
-        setGoalOther("");
-        setShowGoalOther(false);
-        setAccessOptions(null); // goals changed, so re-read at the identity step
-      }
-      if (step.kind === "identity") readIdentity();
-      setIndex((i) => i + 1);
-      return;
-    }
+  const toggle = (value: string, set: (fn: (p: string[]) => string[]) => void) => {
+    void Haptics.selectionAsync();
+    set((p) => (p.includes(value) ? p.filter((x) => x !== value) : [...p, value]));
+  };
 
-    const fitnessLevel = FITNESS_LEVELS.find(
-      ([label]) => label === single.fitness,
-    )?.[1];
-    const daysLabel = single.days as (typeof DAYS_OPTIONS)[number] | undefined;
-
-    if (!fitnessLevel || !daysLabel) return;
-
+  const finish = async (proposal: HabitProposal | null, outcome: WhyOutcome = why) => {
     setError(null);
     setSubmitting(true);
     try {
       await api.completeOnboarding({
-        displayName: name.trim(),
-        fitnessLevel,
-        primaryGoals: allGoals,
-        weeklyAvailability: DAYS_TO_COUNT[daysLabel],
-        equipment: multi,
-        identityGoal,
-        preferences: {
-          doesTherapy: lifestyle.includes("I see a therapist"),
-          doesJournal: lifestyle.includes("I journal regularly"),
-          currentlyWorkingOut: lifestyle.includes("I already work out"),
+        displayName: firstName,
+        primaryGoals: [areaLabel.slice(0, 60)],
+        identityGoal: identity.trim().length >= 3 ? identity.trim() : undefined,
+        preferences: helpStyle ? { coachingIntensity: HELP_STYLES.find((s) => s.id === helpStyle)?.intensity } : undefined,
+        understanding: {
+          area: areaLabel.slice(0, 60),
+          specifics: allSpecifics.slice(0, 6),
+          routine,
+          obstacles: allObstacles.slice(0, 8),
+          helpStyle,
+          whyLadder: outcome.ladder.slice(0, 8),
+          coreWhy: outcome.coreWhy,
         },
-        ...(where.trim() || days.trim()
-          ? {
-              background: {
-                ...(where.trim() ? { location: where.trim() } : {}),
-                ...(days.trim() ? { work: days.trim() } : {}),
-              },
-            }
-          : {}),
       });
       // The profile is saved first, so a failure here never loses onboarding.
-      const picked = starters.filter((h) => starterIds.includes(h.id));
-      if (picked.length) {
-        const startsOn =
-          start === "monday" ? nextMondayKey(todayKey) : undefined;
-        await addHabits(
-          picked.map((h) => starterToCreateInput(h, startsOn)),
-        ).catch(() => {});
-      }
+      if (proposal) await addHabits([habitFromProposal(proposal, why.coreWhy, area?.category ?? "physical")]).catch(() => {});
+      await markOnboardingFinished();
       router.replace("/(tabs)" as never);
-      if (talk) router.push("/chat/altheo?intro=build" as never);
+      if (outcome.concern) router.push("/chat/kairo" as never);
     } catch {
       setError("Couldn't save that. Check your connection and try again.");
     } finally {
@@ -360,581 +126,317 @@ export default function OnboardingScreen() {
     }
   };
 
+  const context = { name: firstName, area: areaLabel, specifics: allSpecifics, routine, obstacles: allObstacles };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: color.bg }}>
-      <AuroraBackdrop accent={color.green} />
+      <AuroraBackdrop accent={screen === "why" || screen === "invite" ? color.purple : color.green} />
 
-      {/* Progress */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: space.md,
-          padding: space.xl,
-          paddingBottom: 0,
-        }}
-      >
-        <Pressable
-          onPress={() => {
-            void Haptics.selectionAsync();
-            if (index > 0) return setIndex((i) => i - 1);
-            // The first step has nowhere to go back to but out: sign out,
-            // and the auth gate returns to sign-in.
-            Alert.alert(
-              "Leave setup?",
-              "You'll be signed out. Your account stays, and setup starts again next time you sign in.",
-              [
-                { text: "Stay", style: "cancel" },
-                { text: "Sign out", style: "destructive", onPress: () => void signOut() },
-              ]
-            );
+      <Progress screen={screen} onBack={back} />
+
+      {screen === "why" ? (
+        <WhySession
+          {...context}
+          onDone={(outcome) => {
+            setWhy(outcome);
+            // Someone who's just said something frightening isn't asked to plan a habit.
+            if (outcome.concern) void finish(null, outcome);
+            else go();
           }}
-          hitSlop={10}
-          accessibilityLabel={index === 0 ? "Leave setup and sign out" : "Previous step"}
-        >
-          <Ionicons name="chevron-back" size={22} color={color.text} />
-        </Pressable>
-        <View style={{ flex: 1, flexDirection: "row", gap: 5 }}>
-          {STEPS.map((s, i) => (
-            <View
-              key={s.key}
-              style={{
-                flex: 1,
-                height: 4,
-                borderRadius: 2,
-                backgroundColor: "rgba(255,255,255,0.08)",
-                overflow: "hidden",
-              }}
-            >
-              {i <= index ? (
-                <Animated.View
-                  entering={FadeInLeft.duration(360)}
-                  style={{ flex: 1 }}
-                >
-                  <LinearGradient
-                    colors={[color.green, color.teal]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={{ flex: 1 }}
-                  />
-                </Animated.View>
-              ) : null}
+        />
+      ) : screen === "negotiate" ? (
+        <>
+          {error ? (
+            <View style={{ paddingHorizontal: space.xl }}>
+              <Notice>{error}</Notice>
             </View>
-          ))}
-        </View>
-        <View style={{ width: 22 }} />
-      </View>
-
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={{ flex: 1 }}
-      >
-        <ScrollView
-          contentContainerStyle={{
-            padding: space.xl,
-            paddingTop: space.xxl,
-            flexGrow: 1,
-          }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <Animated.View key={step.key} entering={FadeInRight.duration(320)}>
-            <Label c={color.green}>
-              Step {index + 1} of {STEPS.length}
-            </Label>
-
-            <Txt variant="title" style={{ marginTop: space.md }}>
-              {step.question}
-            </Txt>
-            <Txt
-              variant="small"
-              c={color.textMuted}
-              style={{ marginTop: space.sm }}
-            >
-              {step.key === "equipment" && identityGoal
-                ? `For becoming ${identityGoal}. Pick everything that applies.`
-                : step.hint}
-            </Txt>
-
-            <View style={{ marginTop: space.xxl }}>
-              {step.kind === "text" ? (
-                <TextInput
-                  value={name}
-                  onChangeText={setName}
-                  autoCapitalize="words"
-                  autoCorrect={false}
-                  textContentType="givenName"
-                  placeholder={step.placeholder}
-                  placeholderTextColor={color.textFaint}
-                  autoFocus
-                  maxLength={40}
-                  returnKeyType="next"
-                  onSubmitEditing={() => canAdvance && next()}
-                  style={[
-                    type.heading,
-                    {
-                      backgroundColor: color.surface,
-                      borderWidth: 1,
-                      borderColor: color.border,
-                      borderRadius: radius.lg,
-                      paddingHorizontal: space.xl,
-                      paddingVertical: space.lg,
-                      color: color.text,
-                    },
-                  ]}
-                />
-              ) : step.kind === "single" ? (
-                <View style={{ gap: space.sm }}>
-                  {step.options.map((opt, i) => {
-                    const selected = single[step.key] === opt;
-                    return (
-                      <Animated.View
-                        key={opt}
-                        entering={FadeInDown.duration(300).delay(60 + i * 40)}
-                      >
-                        <PressCard
-                          accent={selected ? color.green : undefined}
-                          onPress={() => {
-                            void Haptics.selectionAsync();
-                            setSingle((p) => ({ ...p, [step.key]: opt }));
-                          }}
-                          haptic="none"
-                          style={{
-                            paddingVertical: space.lg,
-                            borderColor: selected
-                              ? tint(color.green, 0.55)
-                              : color.border,
-                          }}
-                        >
-                          <View
-                            style={{
-                              flexDirection: "row",
-                              alignItems: "center",
-                              gap: space.md,
-                            }}
-                          >
-                            <Txt variant="bodyStrong" style={{ flex: 1 }}>
-                              {opt}
-                            </Txt>
-                            <Ionicons
-                              name={
-                                selected
-                                  ? "checkmark-circle"
-                                  : "ellipse-outline"
-                              }
-                              size={22}
-                              color={selected ? color.green : color.textFaint}
-                            />
-                          </View>
-                        </PressCard>
-                      </Animated.View>
-                    );
-                  })}
-
-                </View>
-              ) : step.kind === "goals" ? (
-                <View style={{ gap: space.sm }}>
-                  {[...step.options, ...goals.filter((g) => !step.options.includes(g))].map((opt, i) => {
-                    const selected = goals.includes(opt);
-                    const full = !selected && allGoals.length >= MAX_GOALS;
-                    return (
-                      <Animated.View
-                        key={opt}
-                        entering={FadeInDown.duration(300).delay(60 + i * 40)}
-                      >
-                        <PressCard
-                          accent={selected ? color.green : undefined}
-                          onPress={() => toggleGoal(opt)}
-                          haptic="none"
-                          disabled={full}
-                          style={{
-                            paddingVertical: space.lg,
-                            borderColor: selected
-                              ? tint(color.green, 0.55)
-                              : color.border,
-                          }}
-                        >
-                          <View
-                            style={{
-                              flexDirection: "row",
-                              alignItems: "center",
-                              gap: space.md,
-                            }}
-                          >
-                            <Txt variant="bodyStrong" style={{ flex: 1 }}>
-                              {opt}
-                            </Txt>
-                            <Ionicons
-                              name={selected ? "checkmark-circle" : "square-outline"}
-                              size={22}
-                              color={selected ? color.green : color.textFaint}
-                            />
-                          </View>
-                        </PressCard>
-                      </Animated.View>
-                    );
-                  })}
-
-                  {/* Free text for anything the list misses; each one joins the picks. */}
-                  {showGoalOther ? (
-                    <View style={{ flexDirection: "row", gap: space.sm }}>
-                      <TextInput
-                        value={goalOther}
-                        onChangeText={setGoalOther}
-                        placeholder="Tell us what matters to you"
-                        placeholderTextColor={color.textFaint}
-                        autoFocus
-                        maxLength={60}
-                        returnKeyType="done"
-                        autoCapitalize="sentences"
-                        {...SPELL_CHECKED}
-                        onSubmitEditing={() => {
-                          addGoal(goalOther);
-                          setGoalOther("");
-                        }}
-                        style={[
-                          type.body,
-                          ONBOARDING_INPUT,
-                          { flex: 1, borderColor: tint(color.green, 0.4) },
-                        ]}
-                      />
-                      <Pressable
+          ) : null}
+          <HabitNegotiation {...context} helpStyle={helpStyle} coreWhy={why.coreWhy} submitting={submitting} onCommit={(p) => void finish(p)} onSkip={() => void finish(null)} />
+        </>
+      ) : (
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+          <ScrollView contentContainerStyle={{ padding: space.xl, paddingTop: space.xxl, flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <Animated.View key={screen} entering={FadeInRight.duration(320)} style={{ flex: 1 }}>
+              {screen === "hello" ? (
+                <Hello onNext={go} />
+              ) : screen === "name" ? (
+                <Question title="First, what should we call you?">
+                  <Field value={name} onChange={setName} placeholder="Your first name" autoCapitalize="words" autoFocus onSubmit={() => firstName && go()} />
+                  <Next onPress={go} disabled={!firstName} />
+                </Question>
+              ) : screen === "area" ? (
+                <Question title={`Good to meet you, ${firstName}. What do you most want help with?`} why="Start with one thing. We'll get to the rest over time.">
+                  <View style={{ gap: space.sm }}>
+                    {FOCUS_AREAS.map((a, i) => (
+                      <Option
+                        key={a.id}
+                        index={i}
+                        label={a.label}
+                        selected={areaId === a.id}
                         onPress={() => {
-                          addGoal(goalOther);
-                          setGoalOther("");
+                          setAreaId(a.id);
+                          setSpecifics([]);
+                          setAreaOther("");
                         }}
-                        disabled={!goalOther.trim()}
-                        accessibilityLabel="Add this goal"
-                        style={{
-                          width: 48,
-                          borderRadius: radius.lg,
-                          alignItems: "center",
-                          justifyContent: "center",
-                          borderWidth: 1,
-                          borderColor: goalOther.trim() ? tint(color.green, 0.5) : color.border,
-                          backgroundColor: goalOther.trim() ? tint(color.green, 0.18) : "transparent",
-                        }}
-                      >
-                        <Ionicons name="add" size={20} color={goalOther.trim() ? color.green : color.textFaint} />
-                      </Pressable>
-                    </View>
-                  ) : allGoals.length < MAX_GOALS ? (
-                    <Chip
-                      label="Something else"
-                      icon="add"
-                      accent={color.green}
-                      onPress={() => setShowGoalOther(true)}
-                    />
+                      />
+                    ))}
+                    <Option index={FOCUS_AREAS.length} label="Something else" selected={areaId === OTHER_ID} onPress={() => { setAreaId(OTHER_ID); setSpecifics([]); }} />
+                    {areaId === OTHER_ID ? <Field value={areaOther} onChange={setAreaOther} placeholder="What's on your mind?" autoFocus /> : null}
+                  </View>
+                  <Next onPress={go} disabled={!areaId || (areaId === OTHER_ID && !areaOther.trim())} />
+                </Question>
+              ) : screen === "specific" ? (
+                <Question title={area?.question ?? "Tell me a bit more. What's actually going on?"} why="The same words mean different things to different people. This is how we avoid guessing.">
+                  <View style={{ gap: space.sm }}>
+                    {area?.specifics.map((s, i) => <Option key={s} index={i} multi label={s} selected={specifics.includes(s)} onPress={() => toggle(s, setSpecifics)} />)}
+                    <Field value={specificOther} onChange={setSpecificOther} placeholder={area ? "Or say it your way" : "In your own words"} multiline />
+                  </View>
+                  <Next onPress={go} disabled={allSpecifics.length === 0} />
+                </Question>
+              ) : screen === "routine" ? (
+                <Question title="Do you already have something you do for this?" why="So we build on what you've got, and don't start you over.">
+                  <View style={{ gap: space.sm }}>
+                    {ROUTINE_OPTIONS.map((r, i) => <Option key={r} index={i} label={r} selected={routine === r} onPress={() => setRoutine(r)} />)}
+                  </View>
+                  <Next onPress={go} disabled={!routine} />
+                </Question>
+              ) : screen === "obstacles" ? (
+                <Question title="What's usually gotten in the way?" why="Your plan should be built around this. Pick as many as are true.">
+                  <View style={{ gap: space.sm }}>
+                    {OBSTACLE_OPTIONS.map((o, i) => <Option key={o} index={i} multi label={o} selected={obstacles.includes(o)} onPress={() => toggle(o, setObstacles)} />)}
+                    <Field value={obstacleOther} onChange={setObstacleOther} placeholder="Something else" />
+                  </View>
+                  <Next onPress={go} disabled={allObstacles.length === 0} />
+                </Question>
+              ) : screen === "style" ? (
+                <Question title="When it gets hard, what actually helps you?" why="This is how your guides will talk to you. You can change it any time.">
+                  <View style={{ gap: space.sm }}>
+                    {HELP_STYLES.map((s, i) => <Option key={s.id} index={i} label={s.label} note={s.note} selected={helpStyle === s.id} onPress={() => setHelpStyle(s.id)} />)}
+                  </View>
+                  <Next onPress={go} disabled={!helpStyle} />
+                </Question>
+              ) : screen === "invite" ? (
+                <Invite name={firstName} area={areaLabel} onNext={go} />
+              ) : screen === "becoming" ? (
+                <Question title="So, who do you want to become?" why="Your habits and your progress will be told in these words. Skip it if nothing comes yet.">
+                  {why.coreWhy ? (
+                    <Txt variant="body" c={color.purple} style={{ marginBottom: space.lg }}>
+                      {why.coreWhy}
+                    </Txt>
                   ) : null}
-                </View>
-              ) : step.kind === "identity" ? (
-                <View style={{ gap: space.md }}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      backgroundColor: color.surface,
-                      borderWidth: 1,
-                      borderColor: identity
-                        ? tint(color.green, 0.4)
-                        : color.border,
-                      borderRadius: radius.lg,
-                      paddingHorizontal: space.lg,
-                    }}
-                  >
+                  <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: color.surface, borderWidth: 1, borderColor: identity ? tint(color.green, 0.4) : color.border, borderRadius: radius.lg, paddingHorizontal: space.lg }}>
                     <Txt variant="body" c={color.textMuted}>
-                      I&apos;m{" "}
+                      I'm{" "}
                     </Txt>
                     <TextInput
                       value={identity}
                       onChangeText={setIdentity}
+                      placeholder="someone who shows up for my kids"
+                      placeholderTextColor={color.textFaint}
                       autoCapitalize="none"
-                      {...SPELL_CHECKED}
-                      placeholder="someone who moves every day"
-                      placeholderTextColor={color.textFaint}
+                      autoCorrect
+                      spellCheck
+                      autoFocus
                       maxLength={120}
-                      returnKeyType="done"
-                      style={[
-                        type.body,
-                        {
-                          flex: 1,
-                          paddingVertical: space.lg,
-                          color: color.text,
-                        },
-                      ]}
+                      style={[type.body, { flex: 1, paddingVertical: space.lg, color: color.text }]}
                     />
                   </View>
-                  <View style={{ gap: space.sm }}>
-                    {identitySuggestions(allGoals).map((phrase) => (
-                      <Chip
-                        key={phrase}
-                        label={phrase}
-                        accent={color.green}
-                        selected={identity === phrase}
-                        onPress={() => setIdentity(phrase)}
-                      />
-                    ))}
-                  </View>
-                </View>
-              ) : step.kind === "possible" ? (
-                <JourneyPath />
-              ) : step.kind === "starter" ? (
-                <View style={{ gap: space.xl }}>
-                  <StarterPicker
-                    starters={starters}
-                    selected={starterIds}
-                    onChange={setStarterIds}
-                  />
-                  <StartChoice
-                    value={start}
-                    onChange={setStart}
-                    isMonday={nextMondayKey(todayKey) === todayKey}
-                  />
-                </View>
-              ) : step.kind === "lifestyle" ? (
-                <View style={{ gap: space.sm }}>
-                  {step.options.map((opt, i) => {
-                    const selected = lifestyle.includes(opt);
-                    return (
-                      <Animated.View
-                        key={opt}
-                        entering={FadeInDown.duration(300).delay(60 + i * 40)}
-                      >
-                        <PressCard
-                          accent={selected ? color.green : undefined}
-                          onPress={() => {
-                            void Haptics.selectionAsync();
-                            setLifestyle((p) =>
-                              p.includes(opt)
-                                ? p.filter((x) => x !== opt)
-                                : [...p, opt],
-                            );
-                          }}
-                          haptic="none"
-                          style={{
-                            paddingVertical: space.lg,
-                            borderColor: selected
-                              ? tint(color.green, 0.55)
-                              : color.border,
-                          }}
-                        >
-                          <View
-                            style={{
-                              flexDirection: "row",
-                              alignItems: "center",
-                              gap: space.md,
-                            }}
-                          >
-                            <Txt variant="bodyStrong" style={{ flex: 1 }}>
-                              {opt}
-                            </Txt>
-                            <Ionicons
-                              name={
-                                selected ? "checkmark-circle" : "square-outline"
-                              }
-                              size={22}
-                              color={selected ? color.green : color.textFaint}
-                            />
-                          </View>
-                        </PressCard>
-                      </Animated.View>
-                    );
-                  })}
-                  <View style={{ gap: space.sm, marginTop: space.lg }}>
-                    <Label>Where you live</Label>
-                    <TextInput
-                      value={where}
-                      onChangeText={setWhere}
-                      autoCapitalize="words"
-                      {...SPELL_CHECKED}
-                      placeholder="e.g. Houston, Texas"
-                      placeholderTextColor={color.textFaint}
-                      maxLength={80}
-                      style={[type.body, ONBOARDING_INPUT]}
-                    />
-                    <Label>What your days look like</Label>
-                    <TextInput
-                      value={days}
-                      onChangeText={setDays}
-                      autoCapitalize="sentences"
-                      {...SPELL_CHECKED}
-                      placeholder="e.g. nurse on night shifts, two kids"
-                      placeholderTextColor={color.textFaint}
-                      maxLength={120}
-                      style={[type.body, ONBOARDING_INPUT]}
-                    />
-                  </View>
-                </View>
+                  <Next onPress={go} label={identity.trim() ? "Continue" : "Skip for now"} />
+                </Question>
               ) : (
-                <View>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      flexWrap: "wrap",
-                      gap: space.sm,
-                    }}
-                  >
-                    {access.map((opt) => {
-                      const selected = multi.includes(opt);
-                      return (
-                        <Chip
-                          key={opt}
-                          label={opt}
-                          icon={selected ? "checkmark" : undefined}
-                          accent={color.green}
-                          selected={selected}
-                          onPress={() =>
-                            setMulti((p) =>
-                              p.includes(opt)
-                                ? p.filter((x) => x !== opt)
-                                : [...p, opt],
-                            )
-                          }
-                        />
-                      );
-                    })}
-
-                    {/* Custom items already added — rendered as removable chips. */}
-                    {multi
-                      .filter((opt) => !access.includes(opt))
-                      .map((opt) => (
-                        <Chip
-                          key={opt}
-                          label={opt}
-                          icon="close"
-                          accent={color.green}
-                          selected
-                          onPress={() =>
-                            setMulti((p) => p.filter((x) => x !== opt))
-                          }
-                        />
-                      ))}
-
-                    <Chip
-                      label="Something else"
-                      icon={showEquipmentOther ? "checkmark" : "add"}
-                      accent={color.green}
-                      selected={showEquipmentOther}
-                      onPress={() => setShowEquipmentOther((s) => !s)}
-                    />
-                  </View>
-
-                  {showEquipmentOther ? (
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        gap: space.sm,
-                        marginTop: space.md,
-                      }}
-                    >
-                      <TextInput
-                        value={equipmentOther}
-                        onChangeText={setEquipmentOther}
-                        autoCapitalize="sentences"
-                        {...SPELL_CHECKED}
-                        placeholder="e.g. Resistance bands"
-                        placeholderTextColor={color.textFaint}
-                        maxLength={40}
-                        returnKeyType="done"
-                        onSubmitEditing={() => {
-                          const val = equipmentOther.trim();
-                          if (val && !multi.includes(val))
-                            setMulti((p) => [...p, val]);
-                          setEquipmentOther("");
-                        }}
-                        style={[
-                          type.body,
-                          {
-                            flex: 1,
-                            backgroundColor: color.surface,
-                            borderWidth: 1,
-                            borderColor: tint(color.green, 0.4),
-                            borderRadius: radius.lg,
-                            paddingHorizontal: space.lg,
-                            paddingVertical: space.md,
-                            color: color.text,
-                          },
-                        ]}
-                      />
-                      <Pressable
-                        onPress={() => {
-                          const val = equipmentOther.trim();
-                          if (val && !multi.includes(val))
-                            setMulti((p) => [...p, val]);
-                          setEquipmentOther("");
-                        }}
-                        disabled={!equipmentOther.trim()}
-                        style={{
-                          width: 48,
-                          borderRadius: radius.lg,
-                          alignItems: "center",
-                          justifyContent: "center",
-                          backgroundColor: equipmentOther.trim()
-                            ? tint(color.green, 0.18)
-                            : "transparent",
-                          borderWidth: 1,
-                          borderColor: equipmentOther.trim()
-                            ? tint(color.green, 0.5)
-                            : color.border,
-                        }}
-                      >
-                        <Ionicons
-                          name="add"
-                          size={20}
-                          color={
-                            equipmentOther.trim()
-                              ? color.green
-                              : color.textFaint
-                          }
-                        />
-                      </Pressable>
-                    </View>
-                  ) : null}
-                </View>
+                <Question title="This won't be a straight line." why="Everyone's way there looks different. Up and down is how it normally goes.">
+                  <JourneyPath />
+                  <Next onPress={go} label="What should I try?" />
+                </Question>
               )}
-            </View>
-          </Animated.View>
-
-          <View style={{ flex: 1 }} />
-
-          {error ? <Notice>{error}</Notice> : null}
-
-          <Animated.View
-            entering={FadeIn.delay(150)}
-            style={{ gap: space.md, marginTop: space.xxl }}
-          >
-            <Button
-              label={
-                isLast
-                  ? `Let's go${name.trim() ? `, ${name.trim()}` : ""}`
-                  : "Continue"
-              }
-              onPress={() => next()}
-              loading={submitting}
-              disabled={!canAdvance || submitting}
-              accent={color.green}
-            />
-            {isLast ? (
-              <Button
-                label="Or just tell Altheo what you want to build"
-                variant="ghost"
-                icon="mic-outline"
-                accent={color.green}
-                disabled={submitting}
-                onPress={() => next(true)}
-              />
-            ) : null}
-          </Animated.View>
-
-          <Txt
-            variant="small"
-            c={color.textFaint}
-            style={{ textAlign: "center", marginTop: space.lg }}
-          >
-            No health questions yet. Share what you want, when it matters.
-          </Txt>
-        </ScrollView>
-      </KeyboardAvoidingView>
+            </Animated.View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      )}
     </SafeAreaView>
+  );
+}
+
+function Progress({ screen, onBack }: { screen: Screen; onBack: () => void }) {
+  const chapter = CHAPTERS.findIndex((c) => c.screens.includes(screen));
+  const within = CHAPTERS[chapter].screens;
+  const share = (within.indexOf(screen) + 1) / within.length;
+
+  return (
+    <View style={{ paddingHorizontal: space.xl, paddingTop: space.md, gap: space.sm }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+        <Pressable onPress={onBack} hitSlop={10} accessibilityLabel="Back">
+          <Ionicons name="chevron-back" size={22} color={color.text} />
+        </Pressable>
+        <View style={{ flex: 1, flexDirection: "row", gap: 5 }}>
+          {CHAPTERS.map((c, i) => (
+            <View key={c.title} style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+              <View style={{ height: "100%", width: i < chapter ? "100%" : i === chapter ? `${share * 100}%` : "0%", backgroundColor: color.green }} />
+            </View>
+          ))}
+        </View>
+      </View>
+      <Txt variant="small" c={color.textMuted} style={{ textAlign: "center" }}>
+        {CHAPTERS[chapter].title}
+      </Txt>
+    </View>
+  );
+}
+
+function Hello({ onNext }: { onNext: () => void }) {
+  return (
+    <View style={{ flex: 1, justifyContent: "center" }}>
+      <Animated.View entering={FadeIn.duration(700)}>
+        <Txt variant="display">Hi. We're really glad you're here.</Txt>
+      </Animated.View>
+      <Animated.View entering={FadeInDown.delay(450).duration(600)}>
+        <Txt variant="body" c={color.textMuted} style={{ marginTop: space.lg, fontSize: 17, lineHeight: 25 }}>
+          Take a few minutes to tell us what's going on, so your guides don't start from zero.
+        </Txt>
+        <Txt variant="body" c={color.textMuted} style={{ marginTop: space.md, fontSize: 17, lineHeight: 25 }}>
+          No right answers. Change anything later.
+        </Txt>
+      </Animated.View>
+      <Animated.View entering={FadeIn.delay(1000)} style={{ marginTop: space.xxxl }}>
+        <Button label="Let's start" accent={color.green} onPress={onNext} />
+      </Animated.View>
+    </View>
+  );
+}
+
+function Invite({ name, area, onNext }: { name: string; area: string; onNext: () => void }) {
+  return (
+    <View style={{ flex: 1, justifyContent: "center" }}>
+      <Txt variant="label" c={color.purple}>
+        KAIRO
+      </Txt>
+      <Txt variant="title" style={{ marginTop: space.md }}>
+        {name}, before we plan anything, I'd love to know what's underneath this.
+      </Txt>
+      <Txt variant="body" c={color.textMuted} style={{ marginTop: space.lg, fontSize: 17, lineHeight: 25 }}>
+        Plans fall apart. The reason you want "{area.toLowerCase()}" is what keeps you going when they do. A few questions, about three minutes.
+      </Txt>
+      <Txt variant="small" c={color.textFaint} style={{ marginTop: space.lg }}>
+        It's easier out loud, if you're somewhere you can talk. Typing works too.
+      </Txt>
+      <View style={{ marginTop: space.xxl }}>
+        <Button label="I'm ready" accent={color.purple} onPress={onNext} />
+      </View>
+    </View>
+  );
+}
+
+function Question({ title, why, children }: { title: string; why?: string; children: React.ReactNode }) {
+  return (
+    <View style={{ flex: 1 }}>
+      <Txt variant="title">{title}</Txt>
+      {why ? (
+        <Txt variant="body" c={color.textMuted} style={{ marginTop: space.sm }}>
+          {why}
+        </Txt>
+      ) : null}
+      <View style={{ marginTop: space.xl, flex: 1 }}>{children}</View>
+    </View>
+  );
+}
+
+function Next({ onPress, disabled, label = "Continue" }: { onPress: () => void; disabled?: boolean; label?: string }) {
+  return (
+    <View style={{ marginTop: "auto", paddingTop: space.xxl }}>
+      <Button label={label} accent={color.green} onPress={onPress} disabled={disabled} />
+    </View>
+  );
+}
+
+function Option({
+  index,
+  label,
+  note,
+  selected,
+  multi,
+  onPress,
+}: {
+  index: number;
+  label: string;
+  note?: string;
+  selected: boolean;
+  multi?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Animated.View entering={FadeInDown.duration(280).delay(40 + index * 35)}>
+      <PressCard
+        accent={selected ? color.green : undefined}
+        haptic="none"
+        onPress={() => {
+          void Haptics.selectionAsync();
+          onPress();
+        }}
+        style={{ paddingVertical: space.lg, borderColor: selected ? tint(color.green, 0.55) : color.border }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+          <View style={{ flex: 1 }}>
+            <Txt variant="bodyStrong">{label}</Txt>
+            {note ? (
+              <Txt variant="small" c={color.textMuted}>
+                {note}
+              </Txt>
+            ) : null}
+          </View>
+          <Ionicons
+            name={selected ? "checkmark-circle" : multi ? "square-outline" : "ellipse-outline"}
+            size={22}
+            color={selected ? color.green : color.textFaint}
+          />
+        </View>
+      </PressCard>
+    </Animated.View>
+  );
+}
+
+function Field({
+  value,
+  onChange,
+  placeholder,
+  autoFocus,
+  autoCapitalize = "sentences",
+  multiline,
+  onSubmit,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  autoFocus?: boolean;
+  autoCapitalize?: "words" | "sentences";
+  multiline?: boolean;
+  onSubmit?: () => void;
+}) {
+  return (
+    <TextInput
+      value={value}
+      onChangeText={onChange}
+      placeholder={placeholder}
+      placeholderTextColor={color.textFaint}
+      autoFocus={autoFocus}
+      autoCapitalize={autoCapitalize}
+      autoCorrect
+      spellCheck
+      multiline={multiline}
+      maxLength={120}
+      returnKeyType={multiline ? "default" : "done"}
+      onSubmitEditing={onSubmit}
+      style={[
+        type.body,
+        {
+          backgroundColor: color.surface,
+          borderWidth: 1,
+          borderColor: value ? tint(color.green, 0.4) : color.border,
+          borderRadius: radius.lg,
+          paddingHorizontal: space.lg,
+          paddingVertical: space.lg,
+          color: color.text,
+        },
+      ]}
+    />
   );
 }

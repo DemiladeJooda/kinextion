@@ -28,6 +28,8 @@ export const GUIDANCE_FILES: Record<AITask, string[]> = {
   chat: ["chat.md"],
   habitSuggest: ["habit-suggestions.md"],
   habitDiscover: ["habit-suggestions.md"],
+  whySession: ["kairo.md"],
+  habitNegotiate: ["altheo.md", "habit-suggestions.md"],
   coach: ["what-would-it-take.md"],
   recommendation: ["recommendations.md"],
   checkinPrompt: ["check-in.md"],

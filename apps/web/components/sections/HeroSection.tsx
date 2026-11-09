@@ -1,155 +1,215 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { NextPageButton } from "@/components/navigation/NextPageButton";
+import { useEffect, useRef, useState } from "react";
+import {
+  AnimatePresence,
+  motion,
+  useMotionValueEvent,
+  useScroll,
+  useSpring,
+  useTransform,
+  type MotionValue,
+} from "motion/react";
+import { useOpenChat } from "@/components/chat/chat-context";
+import { useNavigate } from "@/components/navigation/navigation-context";
+import { AURORA, EASE, ScrollStage } from "@/components/motion/primitives";
+import { AuroraRibbons } from "@/components/aurora/AuroraRibbons";
+import {
+  BecomingScreen,
+  GuideScreen,
+  HabitsScreen,
+  PhoneFrame,
+  RoomScreen,
+  SimulatorScreen,
+} from "@/components/showcase/PhoneScreens";
 
-// The animated wordmark, rendered letter-by-letter.
-const LETTERS = ["K","I","N","E","X","T","I","O","N"];
+const LETTERS = "KINEXTION".split("");
 
-// Returns the glow colour for a given letter. The letters themselves are white;
-// only their drop-shadow glow shifts across the aurora spectrum — green at the
-// start, teal in the middle, violet at the end — interpolated by position.
-function letterGlow(index: number, total: number): string {
-  const t = index / (total - 1);
-  if (t <= 0.5) {
-    const s = t / 0.5;
-    const r = Math.round(0  + (10  - 0  ) * s);
-    const g = Math.round(220 + (186 - 220) * s);
-    const b = Math.round(110 + (181 - 110) * s);
-    return `rgb(${r},${g},${b})`;
-  } else {
-    const s = (t - 0.5) / 0.5;
-    const r = Math.round(10  + (180 - 10 ) * s);
-    const g = Math.round(186 + (60  - 186) * s);
-    const b = Math.round(181 + (255 - 181) * s);
-    return `rgb(${r},${g},${b})`;
-  }
-}
+const BECOMING = [
+  "someone who moves every day",
+  "someone who sleeps",
+  "a calmer parent",
+  "the one who shows up",
+  "stronger than last year",
+];
 
-// Landing/home section. Sits on the shared dark SpaceBackground (stars are
-// provided globally), and adds a one-time aurora "wave" rising from the bottom
-// on entry, plus the glowing KINEXTION wordmark and taglines.
+const BEATS = [
+  { title: "Start with who you want to become.", color: "#0ABAB5", Screen: BecomingScreen },
+  { title: "Make it small enough to survive a bad day.", color: "#00C47A", Screen: HabitsScreen },
+  { title: "Say it out loud. Your guide adjusts.", color: "#00C47A", Screen: GuideScreen },
+  { title: "See there's more than one way there.", color: "#A855F7", Screen: SimulatorScreen },
+  { title: "Then do it with people.", color: "#0ABAB5", Screen: RoomScreen },
+] as const;
+
 export function HeroSection() {
+  const navigate = useNavigate();
+
   return (
-    <section
-      className="relative flex flex-col items-center justify-center overflow-hidden"
-      style={{ minHeight: "calc(100vh - var(--nav-height, 56px))" }}
-    >
-      {/* ── Aurora wave entrance — green light sweeps up once on mount ── */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <motion.div
-          className="absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(ellipse 110% 90% at 50% 110%, rgba(0,196,122,0.55) 0%, rgba(10,186,181,0.25) 35%, transparent 68%)",
-            filter: "blur(55px)",
-          }}
-          animate={{ y: [120, -60, 0], opacity: [0, 0.85, 0.22] }}
-          transition={{ duration: 2.1, times: [0, 0.42, 1], ease: "easeOut" }}
-        />
-        <motion.div
-          className="absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(ellipse 80% 75% at 65% 105%, rgba(10,186,181,0.45) 0%, rgba(0,196,122,0.15) 40%, transparent 68%)",
-            filter: "blur(70px)",
-          }}
-          animate={{ y: [160, -40, 10], opacity: [0, 0.7, 0.14] }}
-          transition={{ duration: 2.1, delay: 0.18, times: [0, 0.42, 1], ease: "easeOut" }}
-        />
-        <motion.div
-          className="absolute top-0 left-0 right-0"
-          style={{
-            height: "45%",
-            background:
-              "linear-gradient(180deg, rgba(0,196,122,0.14) 0%, rgba(10,186,181,0.07) 45%, rgba(168,85,247,0.05) 75%, transparent 100%)",
-            filter: "blur(30px)",
-          }}
-          animate={{ opacity: [0, 0.9, 0.38] }}
-          transition={{ duration: 1.8, delay: 0.35, times: [0, 0.48, 1], ease: "easeOut" }}
-        />
+    <section className="relative">
+      <Opening />
+
+      <div id="journey">
+        <ScrollStage length={BEATS.length + 1}>{(progress) => <Journey progress={progress} />}</ScrollStage>
       </div>
 
-      {/* ── Main content ── */}
-      <div className="relative z-10 flex flex-col items-center text-center px-4">
-
-        {/* Wordmark — white letters, aurora glow spectrum */}
-        <div className="flex items-end justify-center mb-6 gap-[1px] sm:gap-0.5">
-          {LETTERS.map((char, i) => {
-            const glow = letterGlow(i, LETTERS.length);
-            return (
-              <motion.span
-                key={char + i}
-                initial={{ opacity: 0, y: 52, scale: 0.78 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{
-                  delay:    0.55 + i * 0.065,
-                  duration: 0.55,
-                  ease:     [0.22, 1, 0.36, 1],
-                }}
-                className="relative font-extrabold tracking-tight select-none"
-                style={{
-                  fontSize:   "clamp(3.5rem, 12vw, 8.5rem)",
-                  lineHeight: 1,
-                  color:      "#FFFFFF",
-                  filter: `drop-shadow(0 0 16px ${glow}88)`,
-                }}
-              >
-                {/* Ambient pulse behind each letter */}
-                <motion.span
-                  aria-hidden
-                  className="absolute inset-0 flex items-center justify-center font-extrabold"
-                  style={{ fontSize: "clamp(3.5rem, 12vw, 8.5rem)", lineHeight: 1, color: "#FFFFFF" }}
-                  animate={{
-                    filter: [
-                      `drop-shadow(0 0 8px ${glow}55)`,
-                      `drop-shadow(0 0 26px ${glow}99)`,
-                      `drop-shadow(0 0 8px ${glow}55)`,
-                    ],
-                  }}
-                  transition={{
-                    duration: 2.8 + i * 0.15,
-                    repeat:   Infinity,
-                    ease:     "easeInOut",
-                    delay:    i * 0.22,
-                  }}
-                >
-                  {char}
-                </motion.span>
-                {char}
-              </motion.span>
-            );
-          })}
-        </div>
-
-        {/* Primary tagline */}
-        <motion.p
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 1.35, duration: 0.65, ease: "easeOut" }}
-          className="text-xl sm:text-2xl font-light tracking-wide"
-          style={{ color: "rgba(255,255,255,0.90)" }}
+      <div className="flex justify-center px-6 pt-24 pb-28">
+        <button
+          onClick={() => navigate("problem")}
+          className="group text-center cursor-pointer"
         >
-          Your system for becoming.
-        </motion.p>
-
-        {/* Supporting line */}
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.65, duration: 0.7 }}
-          className="mt-3 text-sm sm:text-base max-w-sm"
-          style={{ color: "rgba(255,255,255,0.62)" }}
-        >
-          The AI-powered health and wellness app designed for your everyday.
-        </motion.p>
-
-      </div>
-
-      {/* Bottom nav hint */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
-        <NextPageButton toTab="problem" label="See what we couldn't ignore" dark />
+          <span className="block text-sm text-white/55 mb-3">Why we built it</span>
+          <span
+            className="block font-semibold transition-transform duration-300 group-hover:-translate-y-1"
+            style={{ fontSize: "clamp(1.8rem, 4vw, 3rem)", backgroundImage: AURORA, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}
+          >
+            See what we couldn&apos;t ignore →
+          </span>
+        </button>
       </div>
     </section>
+  );
+}
+
+function Opening() {
+  const openChat = useOpenChat();
+  const ref = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
+  const smooth = useSpring(scrollYProgress, { stiffness: 120, damping: 28, restDelta: 0.001 });
+  const scale = useTransform(smooth, [0, 1], [1, 1.5]);
+  const opacity = useTransform(smooth, [0, 0.7], [1, 0]);
+  const y = useTransform(smooth, [0, 1], [0, -90]);
+
+  const [answer, setAnswer] = useState(0);
+  useEffect(() => {
+    const t = window.setInterval(() => setAnswer((a) => (a + 1) % BECOMING.length), 2600);
+    return () => window.clearInterval(t);
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      className="relative flex items-center justify-center overflow-hidden"
+      style={{ minHeight: "calc(100vh - var(--nav-height, 56px))" }}
+    >
+      <AuroraRibbons />
+
+      <motion.div className="relative z-10 flex flex-col items-center text-center px-4" style={{ scale, opacity, y }}>
+        <h1 aria-label="Kinextion" className="flex items-end justify-center" style={{ letterSpacing: "-0.04em" }}>
+          {LETTERS.map((char, i) => (
+            <motion.span
+              key={i}
+              aria-hidden
+              className="font-extrabold text-white select-none"
+              style={{ fontSize: "clamp(3.2rem, 13vw, 10rem)", lineHeight: 1 }}
+              initial={{ opacity: 0, y: 44, filter: "blur(10px)" }}
+              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+              transition={{ delay: 0.05 + i * 0.045, duration: 0.7, ease: EASE }}
+            >
+              {char}
+            </motion.span>
+          ))}
+        </h1>
+
+        <motion.p
+          className="mt-6 font-light text-white/85"
+          style={{ fontSize: "clamp(1.15rem, 2.4vw, 1.75rem)" }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.55, duration: 0.6 }}
+        >
+          Your system for becoming
+        </motion.p>
+
+        <div className="relative mt-1 h-[2.4em] w-[92vw] max-w-2xl overflow-hidden" style={{ fontSize: "clamp(1.15rem, 2.4vw, 1.75rem)" }}>
+          <AnimatePresence initial={false}>
+            <motion.p
+              key={answer}
+              className="absolute inset-x-0 font-semibold"
+              style={{ backgroundImage: AURORA, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}
+              initial={{ y: "100%", opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: "-100%", opacity: 0 }}
+              transition={{ duration: 0.55, ease: EASE }}
+            >
+              {BECOMING[answer]}
+            </motion.p>
+          </AnimatePresence>
+        </div>
+
+        <motion.div
+          className="mt-6 flex flex-col sm:flex-row items-center gap-3"
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.75, duration: 0.6, ease: EASE }}
+        >
+          <motion.button
+            onClick={() => openChat()}
+            whileHover={{ scale: 1.04 }}
+            whileTap={{ scale: 0.97 }}
+            className="h-13 px-8 py-3.5 rounded-full font-semibold text-[15px] cursor-pointer"
+            style={{ background: "#FFFFFF", color: "#05070F" }}
+          >
+            Talk to a guide
+          </motion.button>
+          <button
+            onClick={() => document.getElementById("journey")?.scrollIntoView({ behavior: "smooth" })}
+            className="px-7 py-3.5 text-[15px] font-medium text-white/75 hover:text-white cursor-pointer"
+          >
+            See it work ↓
+          </button>
+        </motion.div>
+      </motion.div>
+    </div>
+  );
+}
+
+function Journey({ progress }: { readonly progress: MotionValue<number> }) {
+  const [beat, setBeat] = useState(0);
+
+  useMotionValueEvent(progress, "change", (v) => {
+    const next = Math.min(BEATS.length - 1, Math.floor(v * BEATS.length));
+    setBeat((b) => (b === next ? b : next));
+  });
+
+  const { Screen, color } = BEATS[beat];
+
+  return (
+    <div className="section-container h-full grid lg:grid-cols-2 items-center gap-4 py-4">
+      <div className="relative order-1 h-[22vh] lg:h-auto flex items-center">
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.h2
+            key={beat}
+            className="font-semibold text-balance"
+            style={{ fontSize: "clamp(1.9rem, 5vw, 4.4rem)", color: "#FFFFFF" }}
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -40 }}
+            transition={{ duration: 0.55, ease: EASE }}
+          >
+            {BEATS[beat].title}
+          </motion.h2>
+        </AnimatePresence>
+
+        <div className="hidden lg:flex absolute -bottom-20 left-0 gap-2" aria-hidden>
+          {BEATS.map((b, i) => (
+            <motion.span
+              key={b.title}
+              className="h-1 rounded-full"
+              animate={{ width: i === beat ? 40 : 12, background: i === beat ? color : "rgba(255,255,255,0.2)" }}
+              transition={{ duration: 0.4 }}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className="order-2 flex flex-col items-center">
+        <PhoneFrame glow={color}>
+          <AnimatePresence>
+            <Screen key={beat} />
+          </AnimatePresence>
+        </PhoneFrame>
+        <p className="mt-2 text-[11px] text-white/40">Illustration of the app, with sample content</p>
+      </div>
+    </div>
   );
 }

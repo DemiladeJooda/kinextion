@@ -17,6 +17,7 @@ import { scoreRoutes } from "./modules/score/routes.js";
 import { integrationRoutes } from "./modules/integrations/routes.js";
 import { therapistRoutes } from "./modules/therapist/routes.js";
 import { nearbyRoutes } from "./modules/nearby/routes.js";
+import { avatarRoutes } from "./modules/avatar/routes.js";
 import { communityRoutes } from "./modules/community/routes.js";
 import { discoverRoutes } from "./modules/community/discover-routes.js";
 import { communityDevRoutes } from "./modules/community/dev-routes.js";
@@ -77,6 +78,8 @@ async function buildApp(options: BuildOptions = {}) {
      * noticed because native requests aren't subject to CORS.
      */
     methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"],
+    /** The website reads this to keep one thread going with a guide. */
+    exposedHeaders: ["X-Conversation-Id"],
   });
 
   /**
@@ -149,6 +152,7 @@ async function buildApp(options: BuildOptions = {}) {
   await app.register(integrationRoutes, { prefix: "/api/integrations" });
   await app.register(therapistRoutes, { prefix: "/api/therapist" });
   await app.register(nearbyRoutes, { prefix: "/api/nearby" });
+  await app.register(avatarRoutes, { prefix: "/api/avatar" });
   await app.register(adminRoutes, { prefix: "/api/admin" });
   // A movable clock for walking a week in minutes. Never in production, and
   // never without asking for it.

@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { SignInButton, UserButton, useUser } from "@clerk/nextjs";
 import { track } from "@/lib/analytics";
 
@@ -16,11 +16,12 @@ interface TabNavProps {
   activeTab: string;
   onTabChange: (id: string) => void;
   onEarlyAccess: () => void;
+  onTalk: () => void;
 }
 
 const BRAND_GRADIENT = "linear-gradient(135deg, #00C47A 0%, #0ABAB5 100%)";
 
-export function TabNav({ tabs, activeTab, onTabChange, onEarlyAccess }: TabNavProps) {
+export function TabNav({ tabs, activeTab, onTabChange, onEarlyAccess, onTalk }: TabNavProps) {
   const navRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const { isSignedIn, isLoaded } = useUser();
@@ -74,14 +75,14 @@ export function TabNav({ tabs, activeTab, onTabChange, onEarlyAccess }: TabNavPr
         style={{ height: "var(--nav-height, 56px)" }}
       >
         {/* Light glass backdrop */}
-        <div className="absolute inset-0 bg-white/90 backdrop-blur-xl border-b border-slate-200/80" />
+        <div className="absolute inset-0 bg-[#070B14]/75 backdrop-blur-xl" />
 
         <div className="relative flex items-center h-full px-4 sm:px-6 gap-2">
           {/* Logo. The wordmark appears alongside the mark once there's room
               for it — on the narrowest screens the mark alone has to carry it. */}
           <button
             onClick={() => selectTab("home")}
-            className="shrink-0 flex items-center gap-1.5 -ml-1 px-2 h-11 rounded-lg hover:bg-slate-100/70 transition-colors"
+            className="shrink-0 flex items-center gap-1.5 -ml-1 px-2 h-11 rounded-lg hover:bg-white/10 transition-colors"
             aria-label="Kinextion home"
           >
             <span
@@ -96,7 +97,7 @@ export function TabNav({ tabs, activeTab, onTabChange, onEarlyAccess }: TabNavPr
             >
               K
             </span>
-            <span className="hidden sm:inline text-[15px] font-bold tracking-[-0.01em] text-slate-900">
+            <span className="hidden sm:inline text-[15px] font-bold tracking-[-0.01em] text-white">
               Kinextion
             </span>
           </button>
@@ -116,13 +117,13 @@ export function TabNav({ tabs, activeTab, onTabChange, onEarlyAccess }: TabNavPr
                   onClick={() => onTabChange(tab.id)}
                   aria-current={isActive ? "page" : undefined}
                   className={`relative shrink-0 px-3.5 h-9 flex items-center text-sm font-medium rounded-full transition-colors duration-150 ${
-                    isActive ? "text-slate-900" : "text-slate-500 hover:text-slate-900"
+                    isActive ? "text-white" : "text-white/55 hover:text-white"
                   }`}
                 >
                   {isActive && (
                     <motion.span
                       layoutId="nav-pill"
-                      className="absolute inset-0 rounded-full bg-slate-100 border border-slate-200"
+                      className="absolute inset-0 rounded-full bg-white/10"
                       transition={{ type: "spring", bounce: 0.18, duration: 0.4 }}
                     />
                   )}
@@ -143,7 +144,7 @@ export function TabNav({ tabs, activeTab, onTabChange, onEarlyAccess }: TabNavPr
                   {/* Signing in used to lead nowhere. It leads here. */}
                   <Link
                     href="/dashboard"
-                    className="hidden sm:flex items-center px-3.5 h-9 text-[13px] font-semibold rounded-full text-slate-600 border border-slate-200 hover:text-slate-900 hover:border-slate-300 bg-white transition-all duration-200 whitespace-nowrap"
+                    className="hidden sm:flex items-center px-3.5 h-9 text-[13px] font-semibold rounded-full text-white/80 border border-white/15 hover:text-white hover:border-white/30 transition-all duration-200 whitespace-nowrap"
                   >
                     Today
                   </Link>
@@ -153,12 +154,20 @@ export function TabNav({ tabs, activeTab, onTabChange, onEarlyAccess }: TabNavPr
                 <SignInButton mode="modal">
                   <button
                     onClick={() => track("signin_click", activeTab)}
-                    className="hidden sm:flex items-center px-3.5 h-9 text-[13px] font-semibold rounded-full text-slate-600 border border-slate-200 hover:text-slate-900 hover:border-slate-300 bg-white transition-all duration-200 whitespace-nowrap"
+                    className="hidden sm:flex items-center px-3.5 h-9 text-[13px] font-semibold rounded-full text-white/80 border border-white/15 hover:text-white hover:border-white/30 transition-all duration-200 whitespace-nowrap"
                   >
                     Sign In
                   </button>
                 </SignInButton>
               ))}
+
+            <button
+              onClick={onTalk}
+              className="hidden md:flex items-center gap-1.5 px-3.5 h-9 text-[13px] font-semibold rounded-full text-white border border-white/15 hover:border-white/30 whitespace-nowrap cursor-pointer"
+            >
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: BRAND_GRADIENT }} aria-hidden="true" />
+              Talk to a guide
+            </button>
 
             <button
               onClick={() => {
@@ -178,7 +187,7 @@ export function TabNav({ tabs, activeTab, onTabChange, onEarlyAccess }: TabNavPr
             <button
               ref={menuButtonRef}
               onClick={() => setMenuOpen((open) => !open)}
-              className="lg:hidden flex items-center justify-center w-11 h-11 -mr-2 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors"
+              className="lg:hidden flex items-center justify-center w-11 h-11 -mr-2 rounded-lg text-white/80 hover:bg-white/10 transition-colors"
               aria-label={menuOpen ? "Close menu" : "Open menu"}
               aria-expanded={menuOpen}
               aria-controls="mobile-nav"
@@ -219,7 +228,7 @@ export function TabNav({ tabs, activeTab, onTabChange, onEarlyAccess }: TabNavPr
           missing 200ms fade-out is imperceptible; a dead page is not. */}
       {menuOpen && (
         <div
-          className="lg:hidden fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-sm animate-in fade-in duration-200"
+          className="lg:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
           onClick={() => setMenuOpen(false)}
           aria-hidden="true"
         />
@@ -228,7 +237,7 @@ export function TabNav({ tabs, activeTab, onTabChange, onEarlyAccess }: TabNavPr
       {menuOpen && (
             <motion.div
               id="mobile-nav"
-              className="lg:hidden fixed left-0 right-0 z-40 bg-white border-b border-slate-200 shadow-xl overflow-hidden"
+              className="lg:hidden fixed left-0 right-0 z-40 bg-[#0B111E] shadow-xl overflow-hidden"
               style={{ top: "var(--nav-height, 56px)" }}
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
@@ -247,8 +256,8 @@ export function TabNav({ tabs, activeTab, onTabChange, onEarlyAccess }: TabNavPr
                       transition={{ delay: 0.03 + i * 0.025, duration: 0.2 }}
                       className={`flex items-center justify-between min-h-[48px] px-3 rounded-xl text-[15px] font-medium text-left transition-colors ${
                         isActive
-                          ? "bg-slate-100 text-slate-900"
-                          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                          ? "bg-white/10 text-white"
+                          : "text-white/70 hover:bg-white/5 hover:text-white"
                       }`}
                     >
                       {tab.label}
@@ -266,11 +275,11 @@ export function TabNav({ tabs, activeTab, onTabChange, onEarlyAccess }: TabNavPr
                 {/* Sign-in lives here on the narrowest screens, where it's
                     hidden from the bar to keep the CTA from being crowded. */}
                 {isLoaded && (
-                  <div className="sm:hidden mt-2 pt-3 border-t border-slate-100">
+                  <div className="sm:hidden mt-2 pt-3 border-t border-white/10">
                     {isSignedIn ? (
                       <Link
                         href="/dashboard"
-                        className="flex items-center w-full min-h-[48px] px-3 rounded-xl text-[15px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                        className="flex items-center w-full min-h-[48px] px-3 rounded-xl text-[15px] font-semibold text-white/80 hover:bg-white/5 transition-colors"
                       >
                         Today
                       </Link>
@@ -278,7 +287,7 @@ export function TabNav({ tabs, activeTab, onTabChange, onEarlyAccess }: TabNavPr
                       <SignInButton mode="modal">
                         <button
                           onClick={() => track("signin_click", activeTab)}
-                          className="w-full min-h-[48px] px-3 rounded-xl text-[15px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors text-left"
+                          className="w-full min-h-[48px] px-3 rounded-xl text-[15px] font-semibold text-white/80 hover:bg-white/5 transition-colors text-left"
                         >
                           Sign In
                         </button>

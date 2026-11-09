@@ -1390,6 +1390,30 @@ export const demoApi: Api = {
   // The demo guide never acts, so there is never anything to undo.
   undoChatAction: async () => ({ undone: true }),
   getVoice: async () => ({ premium: false, provider: null, listening: false }),
+  generateAvatar: async () => {
+    throw new Error("Avatars need a real account. Demo mode can't make one.");
+  },
+  whyTurn: async ({ turns, name }) => {
+    await wait(500);
+    const said = turns.filter((t) => t.role === "you");
+    const last = said[said.length - 1]?.text ?? "";
+    const script = [
+      `Good to sit down with you${name ? `, ${name}` : ""}. If this got better, what would actually change for you?`,
+      "Okay. And who's that for, really?",
+      "That's not a small thing. When did it start to matter this much?",
+    ];
+    if (said.length >= 3) {
+      return { say: "So that's what this is about. Not the habit. That.", ladder: last.slice(0, 40), done: true, coreWhy: last.slice(0, 120), concern: false };
+    }
+    return { say: script[said.length], ladder: said.length ? last.slice(0, 40) : null, done: false, coreWhy: null, concern: false };
+  },
+  negotiateTurn: async ({ turns, proposal }) => {
+    await wait(500);
+    const said = turns.filter((t) => t.role === "you");
+    if (!said.length) return { say: "Okay. With that in mind, what do you want to try?", proposal: null, agreed: false };
+    const next = proposal ?? { name: "Evening walk", anchor: "After I finish dinner", tiny: "Walk to the end of the street", full: "A twenty-minute walk", timeWindow: "evening" as const, daysPerWeek: 3 };
+    return { say: "Three days to start. Enough to matter, and small enough to survive a bad week. Does that feel right?", proposal: next, agreed: false };
+  },
   readOnboarding: async ({ identity, goals }) => ({
     identity: identity ?? null,
     goals,

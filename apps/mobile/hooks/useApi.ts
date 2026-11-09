@@ -47,6 +47,9 @@ function useLiveApi() {
       restoreHabit: (id: string) =>
         withToken((token) => api.restoreHabit(token, id)),
       getVoice: () => withToken(api.getVoice),
+      generateAvatar: (input: api.AvatarRequest) => withToken((token) => api.generateAvatar(token, input)),
+      whyTurn: (input: api.WhyTurnInput) => withToken((token) => api.whyTurn(token, input)),
+      negotiateTurn: (input: api.NegotiateTurnInput) => withToken((token) => api.negotiateTurn(token, input)),
       readOnboarding: (input: { identity?: string; goals: string[] }) =>
         withToken((token) => api.readOnboarding(token, input)),
       connectDeviceHealth: (provider: "apple_health" | "health_connect") =>
