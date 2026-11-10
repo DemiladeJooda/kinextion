@@ -15,31 +15,74 @@ import { useNavigate } from "@/components/navigation/navigation-context";
 import { AURORA, EASE, ScrollStage } from "@/components/motion/primitives";
 import { AuroraRibbons } from "@/components/aurora/AuroraRibbons";
 import {
-  BecomingScreen,
+  CommunityScreen,
+  GrowthScreen,
   GuideScreen,
-  HabitsScreen,
+  KnowYouScreen,
   PhoneFrame,
-  RoomScreen,
-  SimulatorScreen,
+  ShapeHabitScreen,
+  TalkScreen,
 } from "@/components/showcase/PhoneScreens";
 
 const LETTERS = "KINEXTION".split("");
 
 const BECOMING = [
+  "someone who gets quality sleep",
   "someone who moves every day",
-  "someone who sleeps",
   "a calmer parent",
-  "the one who shows up",
   "stronger than last year",
+  "the one who shows up",
+  "someone who cooks at home",
+  "kinder to yourself",
+  "the friend who checks in",
+  "someone who runs on Saturdays",
+  "able to keep up with your kids",
+  "someone who switches off at night",
+  "calm under pressure",
+  "someone who reads before bed",
+  "present with the people you love",
+  "someone who stretches every morning",
+  "lighter on your feet",
+  "someone who finishes what they start",
+  "the healthiest you've been",
 ];
 
 const BEATS = [
-  { title: "Start with who you want to become.", color: "#0ABAB5", Screen: BecomingScreen },
-  { title: "Make it small enough to survive a bad day.", color: "#00C47A", Screen: HabitsScreen },
-  { title: "Say it out loud. Your guide adjusts.", color: "#00C47A", Screen: GuideScreen },
-  { title: "See there's more than one way there.", color: "#A855F7", Screen: SimulatorScreen },
-  { title: "Then do it with people.", color: "#0ABAB5", Screen: RoomScreen },
+  { title: "Start by talking. Your guide gets to know you.", color: "#A855F7", Screen: TalkScreen },
+  { title: "It asks for your why, then goes deeper.", color: "#A855F7", Screen: KnowYouScreen },
+  { title: "Then you shape a habit that challenges you and helps you grow.", color: "#00C47A", Screen: ShapeHabitScreen },
+  { title: "Keep talking. It adjusts with your journey.", color: "#00C47A", Screen: GuideScreen },
+  { title: "See yourself grow.", color: "#0ABAB5", Screen: GrowthScreen },
+  { title: "Then do it with people.", color: "#0ABAB5", Screen: CommunityScreen },
 ] as const;
+
+/** One line at a time: it slides up and out, the next slides in, forever. */
+function BecomingReel() {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    const t = window.setInterval(() => setIndex((i) => (i + 1) % BECOMING.length), 2600);
+    return () => window.clearInterval(t);
+  }, []);
+
+  return (
+    <div className="relative mt-1 h-[2.4em] w-[92vw] max-w-2xl overflow-hidden" style={{ fontSize: "clamp(1.15rem, 2.4vw, 1.75rem)" }}>
+      <AnimatePresence initial={false}>
+        <motion.p
+          key={index}
+          className="absolute inset-x-0 font-semibold"
+          style={{ backgroundImage: AURORA, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}
+          initial={{ y: "100%", opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: "-100%", opacity: 0 }}
+          transition={{ duration: 0.55, ease: EASE }}
+        >
+          {BECOMING[index]}
+        </motion.p>
+      </AnimatePresence>
+    </div>
+  );
+}
 
 export function HeroSection() {
   const navigate = useNavigate();
@@ -79,12 +122,6 @@ function Opening() {
   const opacity = useTransform(smooth, [0, 0.7], [1, 0]);
   const y = useTransform(smooth, [0, 1], [0, -90]);
 
-  const [answer, setAnswer] = useState(0);
-  useEffect(() => {
-    const t = window.setInterval(() => setAnswer((a) => (a + 1) % BECOMING.length), 2600);
-    return () => window.clearInterval(t);
-  }, []);
-
   return (
     <div
       ref={ref}
@@ -120,21 +157,7 @@ function Opening() {
           Your system for becoming
         </motion.p>
 
-        <div className="relative mt-1 h-[2.4em] w-[92vw] max-w-2xl overflow-hidden" style={{ fontSize: "clamp(1.15rem, 2.4vw, 1.75rem)" }}>
-          <AnimatePresence initial={false}>
-            <motion.p
-              key={answer}
-              className="absolute inset-x-0 font-semibold"
-              style={{ backgroundImage: AURORA, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}
-              initial={{ y: "100%", opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: "-100%", opacity: 0 }}
-              transition={{ duration: 0.55, ease: EASE }}
-            >
-              {BECOMING[answer]}
-            </motion.p>
-          </AnimatePresence>
-        </div>
+        <BecomingReel />
 
         <motion.div
           className="mt-6 flex flex-col sm:flex-row items-center gap-3"
@@ -208,7 +231,7 @@ function Journey({ progress }: { readonly progress: MotionValue<number> }) {
             <Screen key={beat} />
           </AnimatePresence>
         </PhoneFrame>
-        <p className="mt-2 text-[11px] text-white/40">Illustration of the app, with sample content</p>
+        <p className="mt-2 text-[11px] text-white/40">Illustration of the app. Sample content, stock photos.</p>
       </div>
     </div>
   );

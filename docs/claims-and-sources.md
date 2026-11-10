@@ -18,8 +18,8 @@ Books are cited as books. Where a book's claim rests on a study, the study is li
 |---|---|---|
 | **80%** abandon or fall short of health goals within 3 months | ⚠️ | The "80%" figure traces to pop-press stats on New Year's resolutions, not to a study. The closest peer-reviewed number: **Sperandei, Vieira & Reis (2016)**, *Adherence to physical activity in an unsupervised setting: Explanatory variables for high attrition rates among fitness center members*, J Sci Med Sport 19(11):916–920. Of 5,240 gym members, **63% quit before month 3** and **under 4% lasted 12 months**. Suggested rewrite: "63% of new gym members quit within 3 months." Also relevant: Norcross, Mrykalo & Blagys (2002), J Clin Psychol 58(4):397–405, where 46% of resolvers were still succeeding at 6 months. |
 | 100-person grid: 20 stay, 80 drop | ⚠️ | If you switch to Sperandei, show 37 staying at day 90 (and about 4 at a year). |
-| **5+** apps the average person manages for their health | ❌ | No study found. Remove it, or relabel it as your own survey result once the survey has enough responses. |
-| **4×** restarts per year | ❌ | No study found, in this text or the "Repeats 4× per year on average" caption. Same fix as above. |
+| **5+** apps the average person manages for their health | ✅ replaced | Now **6**, sourced: **Talker Research for MDLIVE**, survey of 2,000 commercially insured US adults (18–64) who use health apps, 3–10 Dec 2025. Average person uses six health apps regularly; 22% use ten or more; 45% feel burnt out weekly keeping up; 53% say there are too many to track. A commissioned poll, labelled on the site. https://talkerresearch.com/are-americans-experiencing-a-health-app-burnout/ |
+| **4×** restarts per year | ✅ replaced | Still no source for 4×. The site now says **3× a year** the average person starts a new diet, and 55% say they "always" fail: **Laughing Cow** poll of 2,000 UK adults, January 2018 (commercial poll, labelled as one). https://pressreleases.responsesource.com/newsroom/GingerComms/release/94702/ |
 
 ## 2. Research page (`ResearchSection.tsx`)
 

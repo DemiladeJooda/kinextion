@@ -23,9 +23,9 @@ export const TABS = [
   { id: "home", label: "Home" },
   { id: "problem", label: "The Problem" },
   { id: "shift", label: "The Solution" },
-  { id: "how-it-works", label: "How It Works" },
+  { id: "how-it-works", label: "Your Guides" },
   { id: "community", label: "Community" },
-  { id: "research", label: "Research" },
+  { id: "research", label: "How It Works" },
   { id: "story", label: "Our Story" },
 ];
 

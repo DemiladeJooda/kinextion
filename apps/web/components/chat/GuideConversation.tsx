@@ -20,8 +20,8 @@ import { track } from "@/lib/analytics";
 import type { GuideId } from "./chat-context";
 
 const GUIDE = {
-  altheo: { name: "Althea", role: "Health companion", color: "#00C47A", second: "#0ABAB5" },
-  kairo: { name: "Kairo", role: "Wellness guide", color: "#A855F7", second: "#3B82F6" },
+  altheo: { name: "Althea", role: "Health companion", about: "Your body, your training and what today can hold.", color: "#00C47A", second: "#0ABAB5" },
+  kairo: { name: "Kairo", role: "Wellness guide", about: "Your head, your patterns and why it matters to you.", color: "#A855F7", second: "#3B82F6" },
 } as const;
 
 const STARTERS: Record<GuideId, readonly string[]> = {
@@ -321,7 +321,21 @@ export function GuideConversation({
         transition={{ duration: 0.7 }}
       />
 
-      <header className="relative flex items-center justify-between gap-3 px-4 sm:px-6 h-16 shrink-0">
+      <header className="relative grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 sm:px-6 h-16 shrink-0">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span
+            aria-hidden
+            className="w-8 h-8 shrink-0 rounded-[10px] flex items-center justify-center font-extrabold text-[15px] text-white"
+            style={{ background: "linear-gradient(135deg, #00C47A, #0ABAB5 60%, #A855F7)" }}
+          >
+            K
+          </span>
+          <span className="hidden sm:block min-w-0">
+            <span className="block text-[13px] font-extrabold tracking-[0.18em] text-white leading-none">KINEXTION</span>
+            <span className="block mt-1 text-[11px] text-white/45 leading-none">Talk to a guide</span>
+          </span>
+        </div>
+
         <div className="flex items-center gap-1 rounded-full p-1" style={{ background: "rgba(255,255,255,0.06)" }}>
           {(Object.keys(GUIDE) as GuideId[]).map((id) => (
             <button
@@ -344,7 +358,7 @@ export function GuideConversation({
           ))}
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center justify-end gap-1">
           <button
             onClick={() => {
               if (speakReplies) stopSpeaking();
@@ -375,7 +389,23 @@ export function GuideConversation({
           <Orb color={guide.color} second={guide.second} phase={phase} />
         </button>
 
-        <p className="mt-3 text-sm font-medium" style={{ color: guide.color }} aria-live="polite">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={guideId}
+            className="mt-3 text-center"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.25 }}
+          >
+            <p className="text-white font-semibold text-lg leading-tight">
+              {guide.name} <span className="text-white/45 font-normal">· {guide.role}</span>
+            </p>
+            <p className="mt-0.5 text-[13px] text-white/60">{guide.about}</p>
+          </motion.div>
+        </AnimatePresence>
+
+        <p className="mt-2 text-sm font-medium" style={{ color: guide.color }} aria-live="polite">
           {statusLine[phase]}
         </p>
 

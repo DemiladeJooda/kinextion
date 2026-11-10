@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element */
 
 /**
  * A phone showing the app's real flows, drawn in the app's own design tokens
@@ -7,9 +8,11 @@
  */
 
 import { useEffect, useState, type ReactNode } from "react";
-import { motion } from "motion/react";
-import { Check, Lock, Mic, Sparkles } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { Lock, MapPin, Mic, Sparkles } from "lucide-react";
 import { EASE } from "@/components/motion/primitives";
+import { MAP_PLACES, KIND_COLOR } from "@/lib/community-places";
+import { SAMPLE_PEOPLE, samplePhoto } from "@/lib/sample-voices";
 
 const C = {
   bg: "#070B14",
@@ -22,6 +25,7 @@ const C = {
   teal: "#0ABAB5",
   purple: "#A855F7",
   amber: "#F59E0B",
+  red: "#EF4444",
 };
 
 const PHONE_W = 300;
@@ -86,120 +90,211 @@ function Screen({ title, children }: { readonly title?: string; readonly childre
   );
 }
 
-const ANSWERS = ["Someone who moves every day", "A calmer parent", "Someone who sleeps", "A person who shows up"];
+function GuideOrb({ color, second, size = 120 }: { readonly color: string; readonly second: string; readonly size?: number }) {
+  return (
+    <div className="relative mx-auto" style={{ width: size, height: size }}>
+      {[0, 1, 2].map((i) => (
+        <motion.span
+          key={i}
+          className="absolute rounded-full"
+          style={{ inset: i * (size / 8.5), border: `1px solid ${color}66` }}
+          animate={{ scale: [1, 1.16, 1], opacity: [0.4, 0.9, 0.4] }}
+          transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.18 }}
+        />
+      ))}
+      <motion.span
+        className="absolute rounded-full"
+        style={{ inset: size / 3, background: `radial-gradient(circle at 35% 30%, #fff, ${color} 40%, ${second})`, boxShadow: `0 0 40px ${color}` }}
+        animate={{ scale: [1, 1.12, 1] }}
+        transition={{ duration: 1.1, repeat: Infinity }}
+      />
+    </div>
+  );
+}
 
-export function BecomingScreen() {
+function Bubble({ from, delay, children }: { readonly from: "you" | "guide"; readonly delay: number; readonly children: ReactNode }) {
+  return (
+    <motion.p
+      className={from === "you" ? "ml-auto max-w-[85%] w-fit rounded-2xl px-3.5 py-2 text-[12.5px]" : "text-[13.5px] leading-snug"}
+      style={from === "you" ? { background: "rgba(255,255,255,0.09)", color: C.text } : { color: C.text }}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay }}
+    >
+      {children}
+    </motion.p>
+  );
+}
+
+// ─── 1. Start by talking ──────────────────────────────────────────────────────
+
+export function TalkScreen() {
   return (
     <Screen>
-      <p className="text-[11px] font-bold tracking-[0.14em] uppercase mb-3" style={{ color: C.teal }}>
-        Step 3 of 6
+      <p className="text-center font-bold text-[15px] mb-1" style={{ color: C.text }}>
+        Kairo
       </p>
-      <p className="font-extrabold text-[25px] leading-[1.15] tracking-[-0.03em] mb-6" style={{ color: C.text }}>
-        Who do you want to become?
+      <p className="text-center text-[11px] mb-4" style={{ color: C.purple }}>
+        Listening
       </p>
-      <div className="space-y-2.5">
-        {ANSWERS.map((a, i) => (
-          <motion.div
-            key={a}
-            className="rounded-2xl px-4 py-3.5 text-[13px] font-semibold"
-            initial={{ opacity: 0, x: 18 }}
-            animate={{
-              opacity: 1,
-              x: 0,
-              background: i === 0 ? ["rgba(255,255,255,0.05)", "rgba(0,196,122,0.18)"] : "rgba(255,255,255,0.05)",
-              color: i === 0 ? [C.muted, "#FFFFFF"] : C.muted,
-            }}
-            transition={{ delay: 0.15 + i * 0.1, duration: 0.45, ease: EASE, background: { delay: 1, duration: 0.4 }, color: { delay: 1, duration: 0.4 } }}
-          >
-            {a}
-          </motion.div>
-        ))}
+      <GuideOrb color={C.purple} second="#3B82F6" />
+      <div className="mt-5 space-y-2.5">
+        <Bubble from="guide" delay={0.3}>
+          Before anything else: who do you want to become?
+        </Bubble>
+        <Bubble from="you" delay={1.2}>
+          Someone who gets back in the gym. I keep stopping.
+        </Bubble>
+        <Bubble from="guide" delay={2.2}>
+          Then let&apos;s work out what keeps stopping you.
+        </Bubble>
+      </div>
+      <div className="mt-auto mb-5 flex justify-center">
+        <span className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: C.purple }}>
+          <Mic size={20} color="#05070F" />
+        </span>
       </div>
     </Screen>
   );
 }
 
-const HABITS = [
-  { name: "Evening walk", detail: "After dinner · 10 min", accent: C.green },
-  { name: "Lights out by 11", detail: "After brushing teeth", accent: C.purple },
-  { name: "Stretch", detail: "After my coffee · 2 min", accent: C.amber },
+// ─── 2. It gets to know you ───────────────────────────────────────────────────
+
+const WHY = [
+  { text: "Get back in the gym", note: "What you said" },
+  { text: "Feel strong in my body again", note: "Why that matters" },
+  { text: "Have energy for my kids after work", note: "And why that matters" },
+  { text: "Be the parent who joins in, not the one watching", note: "Your motivation" },
 ];
 
-export function HabitsScreen() {
+export function KnowYouScreen() {
   return (
-    <Screen title="Today">
-      <div className="rounded-2xl p-3.5 flex items-center gap-3 mb-3" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
-        <svg width="56" height="56" viewBox="0 0 56 56" className="-rotate-90 shrink-0">
-          <circle cx="28" cy="28" r="23" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="6" />
-          <motion.circle
-            cx="28"
-            cy="28"
-            r="23"
-            fill="none"
-            stroke={C.green}
-            strokeWidth="6"
-            strokeLinecap="round"
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: 2 / 3 }}
-            transition={{ delay: 0.5, duration: 1.3, ease: EASE }}
-          />
-        </svg>
-        <div>
-          <p className="text-[11px]" style={{ color: C.muted }}>
-            Someone who moves every day
-          </p>
-          <p className="font-bold text-[15px]" style={{ color: C.text }}>
-            2 of 3 done
-          </p>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        {HABITS.map((h, i) => (
-          <motion.div
-            key={h.name}
-            className="rounded-2xl p-3 flex items-center gap-3"
-            style={{ background: C.surface, border: `1px solid ${C.border}` }}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 + i * 0.12, ease: EASE, duration: 0.5 }}
-          >
-            <motion.span
-              className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
-              initial={{ background: "rgba(255,255,255,0.06)" }}
-              animate={{ background: i < 2 ? h.accent : "rgba(255,255,255,0.06)" }}
-              transition={{ delay: 0.8 + i * 0.5, duration: 0.3 }}
+    <Screen>
+      <p className="text-[11px] font-bold tracking-[0.14em] uppercase mb-2" style={{ color: C.purple }}>
+        Kairo · Getting to know you
+      </p>
+      <p className="font-extrabold text-[22px] leading-[1.15] tracking-[-0.03em] mb-1" style={{ color: C.text }}>
+        Finding your why.
+      </p>
+      <p className="text-[12px] mb-4" style={{ color: C.muted }}>
+        It keeps asking until it understands what really drives you.
+      </p>
+      <div className="relative">
+        {WHY.map((w, i) => {
+          const last = i === WHY.length - 1;
+          return (
+            <motion.div
+              key={w.text}
+              className="relative pl-6 pb-3.5"
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25 + i * 0.6, duration: 0.5, ease: EASE }}
             >
-              {i < 2 ? (
-                <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.85 + i * 0.5, type: "spring", bounce: 0.6 }}>
-                  <Check size={15} color="#05070F" strokeWidth={3} />
-                </motion.span>
-              ) : null}
-            </motion.span>
-            <div className="min-w-0">
-              <p className="font-semibold text-[13px]" style={{ color: C.text }}>
-                {h.name}
+              {!last ? <span className="absolute left-[7px] top-4 bottom-0 w-px" style={{ background: `${C.purple}55` }} /> : null}
+              <span
+                className="absolute left-0 top-1.5 w-[15px] h-[15px] rounded-full"
+                style={{ background: last ? C.purple : C.surface, border: `2px solid ${C.purple}` }}
+              />
+              <p className="text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: last ? C.purple : C.faint }}>
+                {w.note}
               </p>
-              <p className="text-[11px]" style={{ color: C.faint }}>
-                {h.detail}
+              <p className={last ? "font-bold text-[16px] leading-snug" : "text-[13.5px]"} style={{ color: last ? C.text : C.muted }}>
+                {w.text}
               </p>
-            </div>
-          </motion.div>
-        ))}
+            </motion.div>
+          );
+        })}
       </div>
-
       <motion.div
-        className="mt-3 self-start rounded-full px-3 py-1.5 text-[11px] font-semibold"
-        style={{ background: "rgba(0,196,122,0.12)", color: C.green }}
-        initial={{ opacity: 0, scale: 0.8 }}
+        className="mt-2 rounded-2xl p-3 flex items-center gap-2.5"
+        style={{ background: `${C.purple}1A`, border: `1px solid ${C.purple}40` }}
+        initial={{ opacity: 0, scale: 0.92 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 2.1, type: "spring", bounce: 0.4 }}
+        transition={{ delay: 2.9, type: "spring", bounce: 0.35 }}
       >
-        Missed Tuesday. Still 18 of 21.
+        <Sparkles size={15} color={C.purple} />
+        <p className="text-[12px] font-semibold" style={{ color: C.text }}>
+          Your guides will remember this.
+        </p>
       </motion.div>
     </Screen>
   );
 }
+
+// ─── 3. A habit that stretches you, and fits ─────────────────────────────────
+
+export function ShapeHabitScreen() {
+  return (
+    <Screen>
+      <p className="text-[11px] font-bold tracking-[0.14em] uppercase mb-2" style={{ color: C.green }}>
+        Althea · Your first habit
+      </p>
+      <div className="space-y-2.5">
+        <Bubble from="you" delay={0.2}>
+          Five mornings a week. Let&apos;s go.
+        </Bubble>
+        <Bubble from="guide" delay={1}>
+          Five is the trap. You&apos;ve stopped at five before. Three you&apos;ll keep, then we grow it.
+        </Bubble>
+      </div>
+
+      <motion.div
+        className="mt-4 rounded-2xl p-3.5"
+        style={{ background: C.surface, border: `1px solid ${C.green}44` }}
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 1.8, ease: EASE }}
+      >
+        <p className="font-bold text-[15px]" style={{ color: C.text }}>
+          Gym, 3 mornings a week
+        </p>
+        <p className="text-[11.5px]" style={{ color: C.muted }}>
+          After school drop-off · 30 min
+        </p>
+        <p className="mt-1 text-[11.5px]" style={{ color: C.amber }}>
+          Bad day: 10 minutes still counts
+        </p>
+        <div className="mt-3 flex gap-2">
+          {["Ease it", "Just right", "Push me"].map((o) => (
+            <span
+              key={o}
+              className="flex-1 text-center rounded-full py-1.5 text-[11px] font-semibold"
+              style={o === "Just right" ? { background: C.green, color: "#05070F" } : { background: "rgba(255,255,255,0.06)", color: C.muted }}
+            >
+              {o}
+            </span>
+          ))}
+        </div>
+      </motion.div>
+
+      <div className="mt-auto mb-6 flex flex-col items-center">
+        <div className="relative w-16 h-16">
+          <svg viewBox="0 0 64 64" className="absolute inset-0 -rotate-90">
+            <circle cx="32" cy="32" r="28" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="4" />
+            <motion.circle
+              cx="32"
+              cy="32"
+              r="28"
+              fill="none"
+              stroke={C.green}
+              strokeWidth="4"
+              strokeLinecap="round"
+              initial={{ pathLength: 0 }}
+              animate={{ pathLength: 1 }}
+              transition={{ delay: 2.6, duration: 1.4, ease: "easeInOut" }}
+            />
+          </svg>
+          <span className="absolute inset-2.5 rounded-full" style={{ background: `${C.green}30` }} />
+        </div>
+        <p className="mt-1.5 text-[11px] font-semibold" style={{ color: C.text }}>
+          Hold to commit
+        </p>
+      </div>
+    </Screen>
+  );
+}
+
+// ─── 4. Keep talking ──────────────────────────────────────────────────────────
 
 export function GuideScreen() {
   return (
@@ -210,42 +305,16 @@ export function GuideScreen() {
       <p className="text-center text-[11px] mb-4" style={{ color: C.green }}>
         Listening
       </p>
-      <div className="relative mx-auto mb-5" style={{ width: 120, height: 120 }}>
-        {[0, 1, 2].map((i) => (
-          <motion.span
-            key={i}
-            className="absolute rounded-full"
-            style={{ inset: i * 14, border: `1px solid ${C.green}66` }}
-            animate={{ scale: [1, 1.16, 1], opacity: [0.4, 0.9, 0.4] }}
-            transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.18 }}
-          />
-        ))}
-        <motion.span
-          className="absolute rounded-full"
-          style={{ inset: 40, background: `radial-gradient(circle at 35% 30%, #fff, ${C.green} 40%, ${C.teal})`, boxShadow: `0 0 40px ${C.green}` }}
-          animate={{ scale: [1, 1.12, 1] }}
-          transition={{ duration: 1.1, repeat: Infinity }}
-        />
+      <div className="mb-5">
+        <GuideOrb color={C.green} second={C.teal} />
       </div>
       <div className="space-y-2.5">
-        <motion.p
-          className="ml-auto max-w-[85%] w-fit rounded-2xl px-3.5 py-2 text-[12.5px]"
-          style={{ background: "rgba(255,255,255,0.09)", color: C.text }}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-        >
+        <Bubble from="you" delay={0.5}>
           Only slept five hours. I can&apos;t do the gym today.
-        </motion.p>
-        <motion.p
-          className="text-[13.5px] leading-snug"
-          style={{ color: C.text }}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 1.5 }}
-        >
-          Then we don&apos;t do the gym. Ten-minute walk after lunch. It counts, and your streak&apos;s fine.
-        </motion.p>
+        </Bubble>
+        <Bubble from="guide" delay={1.5}>
+          Then we don&apos;t do the gym. Ten-minute walk after lunch. It counts, and nothing resets.
+        </Bubble>
         <motion.div
           className="rounded-2xl p-3 flex items-center gap-2.5"
           style={{ background: "rgba(0,196,122,0.1)", border: `1px solid ${C.green}33` }}
@@ -268,113 +337,236 @@ export function GuideScreen() {
   );
 }
 
-const PATHS = [
-  { c: C.green, d: "M0 88 C20 70 34 56 54 42 S92 20 120 14 S160 10 180 8" },
-  { c: C.teal, d: "M0 88 C24 84 36 70 60 64 S84 62 104 40 S150 18 180 16" },
-  { c: C.purple, d: "M0 88 C18 80 28 86 48 72 S86 74 112 50 S154 34 180 26" },
-  { c: C.amber, d: "M0 88 C30 86 44 80 70 78 S108 66 128 54 S162 42 180 36" },
-  { c: "#EC4899", d: "M0 88 C16 62 30 72 52 60 S76 66 94 44 S148 40 180 22" },
-  { c: "#3B82F6", d: "M0 88 C34 88 58 84 84 78 S132 70 150 60 S170 54 180 50" },
-];
+// ─── 5. See your growth ───────────────────────────────────────────────────────
 
-export function SimulatorScreen() {
+const WEEKS_SHOWN = [2, 3, 2, 3, 3, 3, 4, 3, 4];
+
+export function GrowthScreen() {
   return (
-    <Screen title="Six ways there">
-      <p className="text-[12px] mb-3" style={{ color: C.muted }}>
-        One habit, one life, 90 days. A missed day never resets to zero.
+    <Screen>
+      <p className="text-[11px] font-bold tracking-[0.14em] uppercase mb-2" style={{ color: C.teal }}>
+        Week 9
       </p>
-      <div className="rounded-2xl p-3" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
-        <svg viewBox="0 0 180 96" className="w-full">
-          <line x1="0" y1="26" x2="180" y2="26" stroke="rgba(255,255,255,0.14)" strokeDasharray="3 4" />
-          {PATHS.map((p, i) => (
-            <motion.path
-              key={p.c}
-              d={p.d}
-              fill="none"
-              stroke={p.c}
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              initial={{ pathLength: 0, opacity: 0 }}
-              animate={{ pathLength: 1, opacity: 1 }}
-              transition={{ delay: 0.15 + i * 0.14, duration: 1.7, ease: "easeInOut" }}
+      <p className="font-extrabold text-[22px] leading-[1.15] tracking-[-0.03em]" style={{ color: C.text }}>
+        You&apos;re someone who trains.
+      </p>
+      <p className="mt-1 text-[12px]" style={{ color: C.muted }}>
+        27 sessions. Grew from 3 mornings to 4.
+      </p>
+
+      <div className="mt-4 rounded-2xl p-3.5" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
+        <p className="text-[11px] mb-2" style={{ color: C.muted }}>
+          Mornings each week
+        </p>
+        <div className="flex items-end gap-1.5 h-20">
+          {WEEKS_SHOWN.map((n, i) => (
+            <motion.span
+              key={i}
+              className="flex-1 rounded-md origin-bottom"
+              style={{ height: `${(n / 4) * 100}%`, background: n >= 4 ? C.green : `${C.teal}AA` }}
+              initial={{ scaleY: 0 }}
+              animate={{ scaleY: 1 }}
+              transition={{ delay: 0.2 + i * 0.09, duration: 0.45, ease: EASE }}
             />
           ))}
-        </svg>
-        <p className="text-[10px] mt-1" style={{ color: C.faint }}>
-          Dotted line: when it starts to feel automatic
-        </p>
+        </div>
       </div>
-      <motion.p
-        className="mt-3 text-[11px]"
-        style={{ color: C.faint }}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1.6 }}
+
+      <div className="mt-3 rounded-2xl p-3.5" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
+        <p className="text-[11px]" style={{ color: C.muted }}>
+          How automatic it feels
+        </p>
+        <svg viewBox="0 0 180 60" className="w-full mt-1">
+          <motion.path
+            d="M0 56 C30 54 50 46 75 34 S130 12 180 8"
+            fill="none"
+            stroke={C.teal}
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: 1 }}
+            transition={{ delay: 0.9, duration: 1.6, ease: "easeInOut" }}
+          />
+        </svg>
+      </div>
+
+      <motion.div
+        className="mt-3 self-start rounded-full px-3 py-1.5 text-[11px] font-semibold"
+        style={{ background: "rgba(0,196,122,0.12)", color: C.green }}
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 2.4, type: "spring", bounce: 0.4 }}
       >
-        An illustration built on published ranges, never a prediction.
-      </motion.p>
+        Missed week 3 twice. Nothing reset.
+      </motion.div>
     </Screen>
   );
 }
 
-const RESPONSES = ["Dee · 4 min", "Sam · 6 min", "Ari · 3 min", "Noor · 7 min"];
+// ─── 6. With people: rooms, topics, places near you ──────────────────────────
 
-export function RoomScreen() {
+const VIEWS = ["Room", "Topics", "Near you"] as const;
+
+export function CommunityScreen() {
+  const [view, setView] = useState(0);
+
+  useEffect(() => {
+    const t = window.setInterval(() => setView((v) => (v + 1) % VIEWS.length), 3200);
+    return () => window.clearInterval(t);
+  }, []);
+
   return (
     <Screen>
-      <p className="text-[11px] font-bold tracking-[0.14em] uppercase mb-2" style={{ color: C.teal }}>
+      <div className="flex rounded-full p-1 mb-4" style={{ background: "rgba(255,255,255,0.06)" }}>
+        {VIEWS.map((v, i) => (
+          <span key={v} className="relative flex-1 text-center py-1.5 text-[11px] font-semibold" style={{ color: i === view ? "#05070F" : C.muted }}>
+            {i === view ? (
+              <motion.span layoutId="community-view" className="absolute inset-0 rounded-full" style={{ background: C.teal }} transition={{ type: "spring", bounce: 0.2, duration: 0.45 }} />
+            ) : null}
+            <span className="relative">{v}</span>
+          </span>
+        ))}
+      </div>
+
+      <div className="relative flex-1">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={view}
+            className="absolute inset-0"
+            initial={{ opacity: 0, x: 24 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -24 }}
+            transition={{ duration: 0.35, ease: EASE }}
+          >
+            {view === 0 ? <RoomView /> : view === 1 ? <TopicsView /> : <NearbyView />}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </Screen>
+  );
+}
+
+function RoomView() {
+  return (
+    <div>
+      <p className="text-[10.5px] font-bold tracking-[0.14em] uppercase mb-1" style={{ color: C.teal }}>
         This week&apos;s room
       </p>
-      <p className="font-extrabold text-[20px] leading-[1.18] tracking-[-0.025em] mb-4" style={{ color: C.text }}>
+      <p className="font-extrabold text-[17px] leading-[1.2] tracking-[-0.02em] mb-3" style={{ color: C.text }}>
         What did you stop doing that made life better?
       </p>
-      <div className="rounded-2xl p-3 flex items-center gap-3 mb-3" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
-        <div className="flex items-center gap-[3px] flex-1 h-8">
-          {Array.from({ length: 26 }, (_, i) => (
-            <motion.span
-              key={i}
-              className="flex-1 rounded-full"
-              style={{ background: C.teal, height: `${30 + ((i * 37) % 70)}%`, transformOrigin: "center" }}
-              initial={{ scaleY: 0.1, opacity: 0.3 }}
-              animate={{ scaleY: 1, opacity: 1 }}
-              transition={{ delay: 0.3 + i * 0.05, duration: 0.25 }}
-            />
-          ))}
-        </div>
-        <motion.span
-          className="text-[11px] font-semibold"
-          style={{ color: C.teal }}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.6 }}
-        >
-          Sent
-        </motion.span>
-      </div>
       <div className="grid grid-cols-2 gap-2">
-        {RESPONSES.map((r, i) => (
+        {SAMPLE_PEOPLE.slice(0, 4).map((p, i) => (
           <motion.div
-            key={r}
-            className="relative rounded-2xl p-3 h-20 flex items-end overflow-hidden"
-            style={{ background: `linear-gradient(150deg, ${[C.teal, C.purple, C.green, C.amber][i]}40, ${C.surface})` }}
-            initial={{ filter: "blur(7px)" }}
+            key={p.name}
+            className="relative rounded-2xl h-[118px] overflow-hidden"
+            initial={{ filter: "blur(8px)" }}
             animate={{ filter: "blur(0px)" }}
-            transition={{ delay: 1.8 + i * 0.15, duration: 0.6 }}
+            transition={{ delay: 0.5 + i * 0.15, duration: 0.6 }}
           >
-            <span className="text-[11px] font-semibold" style={{ color: C.text }}>
-              {r}
+            <img src={samplePhoto(p.photo, 260, 320)} alt="" className="absolute inset-0 w-full h-full object-cover" />
+            <span className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(5,7,15,0.85), transparent 55%)" }} />
+            <span className="absolute top-2 left-2 flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold text-white" style={{ background: "rgba(0,0,0,0.45)" }}>
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: C.red }} />
+              {[4, 6, 3, 7][i]}:0{i}
             </span>
-            <motion.span
-              className="absolute top-2 right-2"
-              initial={{ opacity: 1 }}
-              animate={{ opacity: 0 }}
-              transition={{ delay: 1.7 + i * 0.15 }}
-            >
-              <Lock size={13} color={C.text} />
+            <span className="absolute bottom-2 left-2 text-[11px] font-semibold text-white">{p.name}</span>
+            <motion.span className="absolute top-2 right-2" initial={{ opacity: 1 }} animate={{ opacity: 0 }} transition={{ delay: 0.4 + i * 0.15 }}>
+              <Lock size={12} color="#fff" />
             </motion.span>
           </motion.div>
         ))}
       </div>
-    </Screen>
+      <p className="mt-2 text-[10px]" style={{ color: C.faint }}>
+        You spoke first, so you can listen.
+      </p>
+    </div>
+  );
+}
+
+const TOPICS = [
+  { name: "Sleep that actually rests", people: [5, 7, 9] },
+  { name: "Strong after 40", people: [6, 10, 13] },
+  { name: "New parents", people: [1, 2, 11] },
+  { name: "Running, slowly", people: [8, 4, 12] },
+];
+
+function TopicsView() {
+  return (
+    <div className="space-y-2">
+      {TOPICS.map((t, i) => (
+        <motion.div
+          key={t.name}
+          className="rounded-2xl p-3 flex items-center gap-3"
+          style={{ background: C.surface, border: `1px solid ${C.border}` }}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 + i * 0.1, ease: EASE }}
+        >
+          <div className="flex -space-x-2.5 shrink-0">
+            {t.people.map((p) => (
+              <img key={p} src={samplePhoto(SAMPLE_PEOPLE[p].photo, 80, 80)} alt="" className="w-8 h-8 rounded-full object-cover" style={{ border: `2px solid ${C.surface}` }} />
+            ))}
+          </div>
+          <div className="min-w-0">
+            <p className="font-semibold text-[12.5px] leading-tight" style={{ color: C.text }}>
+              {t.name}
+            </p>
+            <p className="text-[10.5px]" style={{ color: C.faint }}>
+              New question every week
+            </p>
+          </div>
+        </motion.div>
+      ))}
+    </div>
+  );
+}
+
+const NEARBY_IDS = ["214", "black-swan", "oak-cliff", "klyde"];
+
+function NearbyView() {
+  const places = NEARBY_IDS.map((id) => MAP_PLACES.find((p) => p.id === id)).filter((p) => p !== undefined);
+
+  return (
+    <div>
+      <div className="relative h-24 rounded-2xl overflow-hidden mb-2" style={{ background: "linear-gradient(160deg, #0F1A2E, #0A1120)" }}>
+        <svg viewBox="0 0 260 96" className="absolute inset-0 w-full h-full" aria-hidden>
+          <path d="M-10 70 C40 60 80 80 130 50 S220 30 270 40" stroke="rgba(255,255,255,0.08)" strokeWidth="6" fill="none" />
+          <path d="M60 -10 C70 30 50 60 80 110" stroke="rgba(255,255,255,0.06)" strokeWidth="4" fill="none" />
+        </svg>
+        {places.map((p, i) => (
+          <motion.span
+            key={p.id}
+            className="absolute w-3 h-3 rounded-full"
+            style={{ left: `${18 + i * 20}%`, top: `${[30, 55, 38, 62][i]}%`, background: KIND_COLOR[p.kind], boxShadow: `0 0 12px ${KIND_COLOR[p.kind]}` }}
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.2 + i * 0.12, type: "spring", bounce: 0.5 }}
+          />
+        ))}
+      </div>
+      <div className="space-y-1.5">
+        {places.map((p, i) => (
+          <motion.div
+            key={p.id}
+            className="rounded-xl px-3 py-2 flex items-center gap-2.5"
+            style={{ background: C.surface }}
+            initial={{ opacity: 0, x: 12 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.3 + i * 0.1, ease: EASE }}
+          >
+            <MapPin size={13} color={KIND_COLOR[p.kind]} />
+            <div className="min-w-0">
+              <p className="font-semibold text-[12px] leading-tight truncate" style={{ color: C.text }}>
+                {p.name}
+              </p>
+              <p className="text-[10px]" style={{ color: C.faint }}>
+                {p.kind} · {p.note}
+              </p>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+    </div>
   );
 }

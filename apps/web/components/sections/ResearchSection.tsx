@@ -217,7 +217,7 @@ export function ResearchSection() {
   return (
     <section className="relative">
       <div className="section-container pt-20 sm:pt-28 pb-10">
-        <Heading label="Research" color="#3B82F6" title="We didn't guess." muted="We studied." />
+        <Heading label="How it works" color="#3B82F6" title="We didn't guess." muted="We studied." />
       </div>
 
       <WhenAndWhere />

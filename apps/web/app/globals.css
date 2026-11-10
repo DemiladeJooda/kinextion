@@ -527,3 +527,22 @@
   from { transform: scale(0.7); opacity: 0.9; }
   to { transform: scale(1.7); opacity: 0; }
 }
+
+/* Endless sliding rows (Community voices). The track holds two copies and
+   slides by one, so the loop has no seam. */
+.kx-marquee-track {
+  animation-name: kx-marquee;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.kx-marquee:hover .kx-marquee-track {
+  animation-play-state: paused;
+}
+@keyframes kx-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kx-marquee { overflow-x: auto; }
+  .kx-marquee-track { animation: none; }
+}

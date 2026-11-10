@@ -96,7 +96,17 @@ export function CommunityMap() {
         <p className="mt-2 text-[15px] text-white/75">{failed ? "The map didn't load." : "Tap a pin. These are real, and they're near you in Dallas."}</p>
       </div>
 
-      <div className="pointer-events-none absolute left-4 bottom-8 flex flex-wrap gap-x-3 gap-y-1 max-w-[60%]">
+      <div className="absolute right-3 sm:right-14 bottom-28 sm:bottom-8 w-[50%] sm:w-64 rounded-2xl p-3 sm:p-4" style={{ background: "rgba(10,15,27,0.88)", border: "1px solid rgba(255,255,255,0.1)", backdropFilter: "blur(8px)" }}>
+        <p className="text-white text-[13px] sm:text-sm font-semibold leading-tight">Run a group in Dallas?</p>
+        <a href="mailto:hello@kinextion.com?subject=Dallas%20community" className="mt-1 inline-flex items-center gap-1 text-[12px] sm:text-[13px] font-semibold" style={{ color: "#0ABAB5" }}>
+          Tell us about it <ArrowUpRight size={14} />
+        </a>
+        <p className="hidden sm:block mt-2 text-[10.5px] leading-snug text-white/45">
+          Groups here are independent, not partners or sponsors. Each pin links to its own page.
+        </p>
+      </div>
+
+      <div className="pointer-events-none absolute left-4 bottom-8 flex flex-wrap gap-x-3 gap-y-1 max-w-[48%] sm:max-w-[60%]">
         {(Object.keys(KIND_COLOR) as (keyof typeof KIND_COLOR)[]).map((k) => (
           <span key={k} className="flex items-center gap-1.5 text-[11px] text-white/80">
             <span className="w-2 h-2 rounded-full" style={{ background: KIND_COLOR[k] }} />

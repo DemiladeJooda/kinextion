@@ -30,7 +30,6 @@ import { useOpenChat } from "@/components/chat/chat-context";
 import { EarlyAccess } from "@/components/marketing/EarlyAccess";
 import { AURORA, EASE, Heading } from "@/components/motion/primitives";
 import {
-  SIGNAL_SOURCES,
   SIGNAL_TIERS,
   SIGNALS,
   categoryColor,
@@ -38,7 +37,6 @@ import {
   sourceLabel,
   tier as tierOf,
   type SignalDef,
-  type SourceId,
 } from "@/lib/signal-taxonomy";
 
 const ICONS: Record<string, LucideIcon> = {
@@ -73,24 +71,26 @@ export function ShiftSection() {
   return (
     <section className="relative">
       <div className="section-container pt-14 sm:pt-20">
-        <Heading label="The solution" color="#00C47A" title="Everything it reads." muted="Held by how much it matters." />
+        <Heading
+          label="The solution"
+          color="#00C47A"
+          title="One app that brings it all together."
+          muted="Your body, your mind, your habits and your people, read as one."
+        />
       </div>
 
       <SignalExplorer />
 
       <OneMorning />
 
-      <EarlyAccess source="shift" accent="#00C47A" line="One system that knows the whole of you." />
+      <EarlyAccess source="shift" />
     </section>
   );
 }
 
 function SignalExplorer() {
   const openChat = useOpenChat();
-  const [source, setSource] = useState<SourceId | null>(null);
   const [picked, setPicked] = useState<SignalDef>(SIGNALS[0]);
-
-  const lit = (s: SignalDef) => source === null || s.sources.includes(source);
 
   const frameRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
@@ -103,13 +103,10 @@ function SignalExplorer() {
   }, []);
 
   return (
-    <div className="section-container pt-8 sm:pt-12 pb-16">
-      <div className="flex flex-wrap justify-center gap-2 max-w-3xl mx-auto">
-        <SourceChip label="Everything" active={source === null} onClick={() => setSource(null)} />
-        {SIGNAL_SOURCES.map((s) => (
-          <SourceChip key={s.id} label={s.label} active={source === s.id} onClick={() => setSource(s.id)} />
-        ))}
-      </div>
+    <div className="section-container pt-4 sm:pt-8 pb-16">
+      <p className="text-center text-sm text-white/55 max-w-xl mx-auto">
+        Everything Kinextion reads about you. The closer to the centre, the more it shapes what your guide tells you.
+      </p>
 
       <div className="mt-6 grid lg:grid-cols-[1fr_320px] gap-6 lg:gap-10 items-center">
         <div ref={frameRef} className="relative w-full max-w-[min(680px,84vh)] mx-auto aspect-square">
@@ -142,7 +139,7 @@ function SignalExplorer() {
                   size={t.orbSize}
                   duration={t.speed}
                   delay={-(t.speed / list.length) * i}
-                  lit={lit(signal)}
+                  lit
                   selected={picked.id === signal.id}
                   onPick={() => setPicked(signal)}
                 />
@@ -185,26 +182,6 @@ function SignalExplorer() {
         </button>
       </div>
     </div>
-  );
-}
-
-function SourceChip({ label, active, onClick }: { readonly label: string; readonly active: boolean; readonly onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      aria-pressed={active}
-      className="relative px-3.5 h-9 rounded-full text-[13px] font-medium cursor-pointer transition-colors"
-      style={{ color: active ? "#05070F" : "rgba(255,255,255,0.65)", background: active ? "transparent" : "rgba(255,255,255,0.05)" }}
-    >
-      {active ? (
-        <motion.span
-          layoutId="source-chip"
-          className="absolute inset-0 rounded-full bg-white"
-          transition={{ type: "spring", bounce: 0.2, duration: 0.45 }}
-        />
-      ) : null}
-      <span className="relative">{label}</span>
-    </button>
   );
 }
 
@@ -331,7 +308,7 @@ function OneMorning() {
   const done = step > INPUTS.length;
 
   return (
-    <div id="one-morning" ref={ref} className="section-container py-20 sm:py-28 scroll-mt-16">
+    <div id="one-morning" ref={ref} className="section-container mt-24 sm:mt-40 pt-16 sm:pt-24 pb-20 sm:pb-28 scroll-mt-16 border-t border-white/[0.06]">
       <Heading title="One morning." muted="Everything Althea weighed." />
 
       <div className="relative w-full max-w-5xl mx-auto mt-12" style={{ height: "min(56vh, 460px)" }}>
