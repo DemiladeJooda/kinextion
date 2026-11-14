@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion, useInView } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import {
   Activity,
   Bandage,
@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { useOpenChat } from "@/components/chat/chat-context";
 import { EarlyAccess } from "@/components/marketing/EarlyAccess";
-import { AURORA, EASE, Heading } from "@/components/motion/primitives";
+import { AURORA, Band, EASE, Heading, Reveal, inkFor } from "@/components/motion/primitives";
 import {
   SIGNAL_TIERS,
   SIGNALS,
@@ -70,21 +70,81 @@ const EXTENT = 2 * OUTER.radius + OUTER.orbSize + 24;
 export function ShiftSection() {
   return (
     <section className="relative">
-      <div className="section-container pt-14 sm:pt-20">
+      <div className="section-container pt-16 sm:pt-24 pb-24 sm:pb-32">
         <Heading
           label="The solution"
           color="#00C47A"
           title="One app that brings it all together."
-          muted="Your body, your mind, your habits and your people, read as one."
+          muted="And two guides who actually know you."
         />
+        <Reveal delay={0.1}>
+          <p className="mt-6 mx-auto max-w-2xl text-center text-balance text-white/75" style={{ fontSize: "clamp(1.05rem, 1.7vw, 1.3rem)", lineHeight: 1.5 }}>
+            Kinextion looks at your body, your mind, your habits and your people together, then tells you the one thing worth
+            doing today. Here&apos;s how.
+          </p>
+        </Reveal>
       </div>
+
+      <HowItHelps />
 
       <SignalExplorer />
 
-      <OneMorning />
-
       <EarlyAccess source="shift" />
     </section>
+  );
+}
+
+// ─── What it actually does, in four plain steps ──────────────────────────────
+
+const STEPS = [
+  {
+    title: "It gets to know you.",
+    body: "You talk, it listens. Who you want to become, what your days really look like, and what has stopped you before.",
+    color: "#7B2FBE",
+  },
+  {
+    title: "It reads your whole day.",
+    body: "What you tell it, what your wearables already know, and how your habits are going. Read together, so you don't have to.",
+    color: "#087F7B",
+  },
+  {
+    title: "It gives you one next step.",
+    body: "Not seven notifications from seven apps. One thing that fits how you are today, from a guide who remembers yesterday.",
+    color: "#00875A",
+  },
+  {
+    title: "It stays with you.",
+    body: "Miss a day and nothing resets. The plan bends, the guide keeps coaching, and your community pod keeps you company.",
+    color: "#2563EB",
+  },
+];
+
+const DAY = inkFor("dawn");
+
+function HowItHelps() {
+  return (
+    <Band tone="dawn" lift>
+      <div className="section-container py-24 sm:py-32 max-w-5xl">
+        {STEPS.map((step, i) => (
+          <Reveal key={step.title} delay={i * 0.05}>
+            <div
+              className="grid sm:grid-cols-[5rem_1fr_1.1fr] gap-x-8 gap-y-2 items-baseline py-8 sm:py-10"
+              style={{ borderTop: i === 0 ? "none" : `1px solid ${DAY.line}` }}
+            >
+              <p className="font-semibold tabular-nums" style={{ fontSize: "clamp(1rem, 1.6vw, 1.25rem)", color: step.color }}>
+                0{i + 1}
+              </p>
+              <h3 className="font-semibold text-balance" style={{ fontSize: "clamp(1.6rem, 3.2vw, 2.6rem)", letterSpacing: "-0.03em", lineHeight: 1.1, color: DAY.strong }}>
+                {step.title}
+              </h3>
+              <p className="text-balance" style={{ fontSize: "clamp(1rem, 1.4vw, 1.15rem)", lineHeight: 1.55, color: DAY.body }}>
+                {step.body}
+              </p>
+            </div>
+          </Reveal>
+        ))}
+      </div>
+    </Band>
   );
 }
 
@@ -103,9 +163,10 @@ function SignalExplorer() {
   }, []);
 
   return (
-    <div className="section-container pt-4 sm:pt-8 pb-16">
-      <p className="text-center text-sm text-white/55 max-w-xl mx-auto">
-        Everything Kinextion reads about you. The closer to the centre, the more it shapes what your guide tells you.
+    <div className="section-container pt-24 sm:pt-32 pb-16">
+      <Heading title="What it can listen to." muted="Closer to the centre matters more." />
+      <p className="mt-4 text-center text-[15px] text-white/60 max-w-xl mx-auto text-balance">
+        Each circle is something Kinextion can read about you. Tap one to see what it does with it.
       </p>
 
       <div className="mt-6 grid lg:grid-cols-[1fr_320px] gap-6 lg:gap-10 items-center">
@@ -171,16 +232,6 @@ function SignalExplorer() {
         </AnimatePresence>
       </div>
 
-      <div className="mt-8 text-center">
-        <p className="text-sm text-white/60">Tap any signal to see what it does.</p>
-        <button
-          onClick={() => document.getElementById("one-morning")?.scrollIntoView({ behavior: "smooth" })}
-          className="mt-2 text-sm font-semibold cursor-pointer"
-          style={{ color: "#00C47A" }}
-        >
-          See them come together ↓
-        </button>
-      </div>
     </div>
   );
 }
@@ -280,104 +331,5 @@ function SignalCard({ signal }: { readonly signal: SignalDef }) {
         </span>
       </div>
     </motion.div>
-  );
-}
-
-/** One morning: the inputs arrive by themselves, then the reply. No scrolling needed. */
-const INPUTS = [
-  { label: "Slept 5h 40m", from: "Oura", color: "#00C47A", y: 12 },
-  { label: "Recovery 38%", from: "Whoop", color: "#00C47A", y: 31 },
-  { label: "Stress up, 4th day", from: "Check-in", color: "#A855F7", y: 50 },
-  { label: "Left knee", from: "She remembers", color: "#3B82F6", y: 69 },
-  { label: "Evening walk, 18 of 21", from: "Your habits", color: "#EC4899", y: 88 },
-];
-
-const STEP_MS = 750;
-
-function OneMorning() {
-  const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { amount: 0.5 });
-  const [step, setStep] = useState(0);
-
-  useEffect(() => {
-    if (!inView || step > INPUTS.length) return;
-    const t = window.setTimeout(() => setStep((s) => s + 1), step === 0 ? 300 : STEP_MS);
-    return () => window.clearTimeout(t);
-  }, [inView, step]);
-
-  const done = step > INPUTS.length;
-
-  return (
-    <div id="one-morning" ref={ref} className="section-container mt-24 sm:mt-40 pt-16 sm:pt-24 pb-20 sm:pb-28 scroll-mt-16 border-t border-white/[0.06]">
-      <Heading title="One morning." muted="Everything Althea weighed." />
-
-      <div className="relative w-full max-w-5xl mx-auto mt-12" style={{ height: "min(56vh, 460px)" }}>
-        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
-          {INPUTS.map((inp, i) => (
-            <motion.path
-              key={inp.label}
-              d={`M 34 ${inp.y} C 48 ${inp.y}, 50 50, 62 50`}
-              fill="none"
-              stroke={inp.color}
-              vectorEffect="non-scaling-stroke"
-              style={{ strokeWidth: 1.5 }}
-              initial={false}
-              animate={{ pathLength: step > i ? 1 : 0, opacity: step > i ? 1 : 0 }}
-              transition={{ duration: 0.6, ease: "easeInOut" }}
-            />
-          ))}
-        </svg>
-
-        {INPUTS.map((inp, i) => (
-          <motion.div
-            key={inp.label}
-            className="absolute left-0 -translate-y-1/2 w-[34%] rounded-2xl px-3 py-2 sm:px-4 sm:py-3"
-            style={{ top: `${inp.y}%`, background: `${inp.color}1C`, border: `1px solid ${inp.color}44` }}
-            initial={false}
-            animate={{ opacity: step > i ? 1 : 0, x: step > i ? 0 : -24 }}
-            transition={{ duration: 0.4, ease: EASE }}
-          >
-            <p className="text-[12px] sm:text-[15px] font-semibold text-white leading-tight">{inp.label}</p>
-            <p className="text-[10px] sm:text-[11px] text-white/55">{inp.from}</p>
-          </motion.div>
-        ))}
-
-        <motion.div
-          className="absolute right-0 top-1/2 -translate-y-1/2 w-[46%] sm:w-[38%] rounded-3xl p-4 sm:p-6"
-          initial={false}
-          animate={{ scale: done ? 1 : 0.92, background: done ? "rgba(0,196,122,0.14)" : "rgba(255,255,255,0.04)" }}
-          style={{ border: "1px solid rgba(0,196,122,0.3)" }}
-        >
-          <p className="text-xs font-semibold" style={{ color: "#00C47A" }}>
-            Althea
-          </p>
-          <AnimatePresence mode="wait">
-            {done ? (
-              <motion.p
-                key="reply"
-                className="mt-1 font-semibold text-white"
-                style={{ fontSize: "clamp(1.05rem, 2.5vw, 2rem)", lineHeight: 1.2 }}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-              >
-                Skip the squats. Same walk, ten minutes. Bed by eleven.
-              </motion.p>
-            ) : (
-              <motion.p key="wait" className="mt-1 text-white/50 text-sm" exit={{ opacity: 0 }}>
-                Reading your day…
-              </motion.p>
-            )}
-          </AnimatePresence>
-        </motion.div>
-      </div>
-
-      <div className="mt-5 flex items-center justify-center gap-3 text-[11px] text-white/40">
-        <span>Example member, sample readings</span>
-        <button onClick={() => setStep(0)} className="font-semibold text-white/70 hover:text-white cursor-pointer">
-          Play again
-        </button>
-      </div>
-    </div>
   );
 }

@@ -26,6 +26,77 @@ export const EASE = [0.22, 1, 0.36, 1] as const;
 
 export const AURORA = "linear-gradient(120deg, #00C47A 0%, #0ABAB5 50%, #A855F7 100%)";
 
+/**
+ * The page's backgrounds. One theme, several rooms: a page moves between them
+ * as it scrolls rather than sitting on one night sky from top to bottom.
+ *
+ *   night   the star field behind everything (transparent band)
+ *   ink     flat near-black, for things that should glow
+ *   dusk    deep violet, Kairo's room
+ *   forest  deep green-teal, Althea's room
+ *   dawn    cool pale mint, daylight
+ *   sand    warm paper, for people and photographs
+ */
+export const TONES = {
+  night: { background: "transparent", light: false },
+  ink: { background: "#04050B", light: false },
+  dusk: { background: "linear-gradient(168deg, #1B0F3D 0%, #100B2C 48%, #070818 100%)", light: false },
+  forest: { background: "linear-gradient(168deg, #05291F 0%, #062629 50%, #06111C 100%)", light: false },
+  dawn: { background: "linear-gradient(175deg, #F5F8F4 0%, #E6F2EC 100%)", light: true },
+  sand: { background: "linear-gradient(175deg, #F8F3EA 0%, #F1E9DB 100%)", light: true },
+} as const;
+
+export type Tone = keyof typeof TONES;
+
+/** Text colours for a tone, so sections don't hand-pick greys. */
+export function inkFor(tone: Tone) {
+  return TONES[tone].light
+    ? { strong: "#0C1512", body: "rgba(12,21,18,0.72)", muted: "rgba(12,21,18,0.52)", faint: "rgba(12,21,18,0.4)", line: "rgba(12,21,18,0.12)" }
+    : { strong: "#FFFFFF", body: "rgba(255,255,255,0.75)", muted: "rgba(255,255,255,0.55)", faint: "rgba(255,255,255,0.4)", line: "rgba(255,255,255,0.1)" };
+}
+
+/** Aurora accents darkened enough to read as text on the light tones. */
+export const ON_LIGHT: Record<string, string> = {
+  "#00C47A": "#00875A",
+  "#0ABAB5": "#087F7B",
+  "#A855F7": "#7B2FBE",
+  "#3B82F6": "#2563EB",
+  "#F59E0B": "#B45309",
+  "#EC4899": "#BE185D",
+};
+
+export function accentFor(tone: Tone, color: string): string {
+  return TONES[tone].light ? (ON_LIGHT[color] ?? color) : color;
+}
+
+/**
+ * A full-width room. Rooms meet at a clean edge. `lift` rounds the top so the
+ * room slides over the one before it.
+ */
+export function Band({
+  tone,
+  lift = false,
+  className,
+  children,
+  id,
+}: {
+  readonly tone: Tone;
+  readonly lift?: boolean;
+  readonly className?: string;
+  readonly children: ReactNode;
+  readonly id?: string;
+}) {
+  return (
+    <div
+      id={id}
+      className={`relative ${lift ? "rounded-t-[2rem] sm:rounded-t-[3rem] -mt-8 sm:-mt-12 z-[1]" : ""} ${className ?? ""}`}
+      style={{ background: TONES[tone].background, color: inkFor(tone).strong }}
+    >
+      {children}
+    </div>
+  );
+}
+
 /** Fades and rises once when scrolled into view. */
 export function Reveal({
   children,
@@ -141,17 +212,19 @@ export function ScrollStage({
   length = 3,
   children,
   className,
+  tone = "night",
 }: {
   /** Track height in viewport heights. */
   readonly length?: number;
   readonly children: (progress: MotionValue<number>) => ReactNode;
   readonly className?: string;
+  readonly tone?: Tone;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end end"] });
 
   return (
-    <div ref={ref} className="relative" style={{ height: `${length * 100}vh` }}>
+    <div ref={ref} className="relative" style={{ height: `${length * 100}vh`, background: TONES[tone].background }}>
       <div
         className={`sticky overflow-hidden ${className ?? ""}`}
         style={{ top: "var(--nav-height, 56px)", height: "calc(100vh - var(--nav-height, 56px))" }}
@@ -169,29 +242,30 @@ export function Heading({
   title,
   muted,
   center = true,
+  tone = "night",
 }: {
   readonly label?: string;
   readonly color?: string;
   readonly title: string;
   readonly muted?: string;
   readonly center?: boolean;
+  readonly tone?: Tone;
 }) {
+  const ink = inkFor(tone);
+  const accent = accentFor(tone, color);
   return (
     <Reveal className={center ? "text-center" : undefined}>
       {label ? (
-        <p className="section-label" style={{ color, WebkitTextFillColor: color }}>
+        <p className="section-label" style={{ color: accent, WebkitTextFillColor: accent }}>
           {label}
         </p>
       ) : null}
-      <h2
-        className="font-semibold text-balance"
-        style={{ fontSize: "clamp(2.2rem, 5.2vw, 4.2rem)", color: "#FFFFFF" }}
-      >
+      <h2 className="font-semibold text-balance" style={{ fontSize: "clamp(2.2rem, 5.2vw, 4.2rem)", color: ink.strong }}>
         {title}
         {muted ? (
           <>
             {" "}
-            <span style={{ color: "rgba(255,255,255,0.38)" }}>{muted}</span>
+            <span style={{ color: ink.faint }}>{muted}</span>
           </>
         ) : null}
       </h2>

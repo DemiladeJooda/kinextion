@@ -1,7 +1,8 @@
 "use client";
 
 import { motion } from "motion/react";
-import { ScrollWords } from "@/components/motion/primitives";
+import { Play } from "lucide-react";
+import { Band } from "@/components/motion/primitives";
 
 // ─── Core values ─────────────────────────────────────────────────────────────
 const coreValues = [
@@ -37,7 +38,7 @@ const coreValues = [
 
 export function StorySection() {
   return (
-    <section className="tab-section">
+    <section className="relative pt-16 sm:pt-20">
       <div className="section-container relative z-10">
 
         {/* ── Title block — white heading on dark backdrop ── */}
@@ -60,17 +61,34 @@ export function StorySection() {
           </p>
         </motion.div>
 
-        {/* One line to sit with, until the founders' video exists to go here. */}
-        <div className="max-w-4xl mx-auto mb-28">
-          <ScrollWords
-            text="People know what to do. Staying with it is the hard part. So we built the thing we kept wishing existed."
-            className="font-semibold text-white"
-            style={{ fontSize: "clamp(2rem, 5vw, 4rem)", lineHeight: 1.12, letterSpacing: "-0.03em" }}
-          />
-        </div>
+        {/* The founders' video. A labelled placeholder until it's filmed. */}
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, delay: 0.15 }}
+          className="max-w-5xl mx-auto mb-24 sm:mb-32"
+        >
+          <div
+            className="relative aspect-video rounded-[2rem] overflow-hidden flex flex-col items-center justify-center text-center px-6"
+            style={{
+              background: "radial-gradient(ellipse 70% 80% at 50% 45%, rgba(168,85,247,0.22) 0%, rgba(10,186,181,0.1) 45%, rgba(255,255,255,0.03) 75%)",
+              border: "1px dashed rgba(255,255,255,0.22)",
+            }}
+          >
+            <span className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.25)" }}>
+              <Play size={26} color="#FFFFFF" fill="#FFFFFF" className="ml-1" />
+            </span>
+            <p className="mt-5 font-semibold text-white" style={{ fontSize: "clamp(1.2rem, 2.6vw, 1.9rem)", letterSpacing: "-0.02em" }}>
+              A message from the founders
+            </p>
+            <p className="mt-1 text-sm text-white/55">Placeholder. The video goes here once it&apos;s filmed.</p>
+          </div>
+        </motion.div>
+      </div>
 
-        {/* ── Core Values ── */}
-        <div className="border-t pt-16 mb-16" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
+      {/* ── Core Values ── */}
+      <Band tone="dusk">
+        <div className="section-container pt-24 pb-24">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -122,8 +140,7 @@ export function StorySection() {
             ))}
           </div>
         </div>
-
-      </div>
+      </Band>
     </section>
   );
 }

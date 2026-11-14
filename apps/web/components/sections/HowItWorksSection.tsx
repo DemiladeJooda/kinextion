@@ -1,68 +1,157 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { useOpenChat, type GuideId } from "@/components/chat/chat-context";
 import { EarlyAccess } from "@/components/marketing/EarlyAccess";
-import { EASE, Heading, Reveal } from "@/components/motion/primitives";
+import { Band, EASE, Heading, Reveal, inkFor, type Tone } from "@/components/motion/primitives";
 
+/**
+ * Your guides, introduced the way you'd introduce two people: a presence, a
+ * name, something they'd actually say, and when you'd go to them. No panels,
+ * tabs or chips; each guide gets a room of their own colour.
+ */
 export function HowItWorksSection() {
   return (
     <section className="relative dark">
-      <div className="section-container pt-16 sm:pt-24 pb-10">
+      <div className="section-container pt-16 sm:pt-24 pb-20 sm:pb-28">
         <Heading label="Your guides" color="#0ABAB5" title="Two guides." muted="Two different ways of knowing you." />
       </div>
 
-      <TwoLenses />
-
-      <EarlyAccess source="how-it-works" />
+      <GuideRoom id="altheo" />
+      <GuideRoom id="kairo" flip />
+      <Shared />
     </section>
   );
 }
 
-// ─── Two guides ───────────────────────────────────────────────────────────────
+// ─── The two guides ───────────────────────────────────────────────────────────
 
-type Focus = GuideId | "both";
+interface Guide {
+  readonly name: string;
+  readonly tone: Tone;
+  readonly color: string;
+  readonly second: string;
+  readonly role: string;
+  readonly says: string;
+  readonly manner: string;
+  readonly comeFor: readonly string[];
+  readonly attends: string;
+}
 
-const CONTEXT: readonly { readonly label: string; readonly focus: Focus }[] = [
-  { label: "Who you're becoming", focus: "both" },
-  { label: "Your why", focus: "both" },
-  { label: "Everything you've said", focus: "both" },
-  { label: "Your habits", focus: "both" },
-  { label: "Sleep & recovery", focus: "altheo" },
-  { label: "Workouts", focus: "altheo" },
-  { label: "Steps", focus: "altheo" },
-  { label: "Injuries & limits", focus: "altheo" },
-  { label: "Equipment you have", focus: "altheo" },
-  { label: "Days you can train", focus: "altheo" },
-  { label: "Mood check-ins", focus: "kairo" },
-  { label: "Stress", focus: "kairo" },
-  { label: "Journal entries", focus: "kairo" },
-  { label: "What keeps repeating", focus: "kairo" },
-  { label: "Gratitude & reflection", focus: "kairo" },
-  { label: "What matters to you", focus: "kairo" },
-];
-
-const LENS = {
+const GUIDES: Record<GuideId, Guide> = {
   altheo: {
     name: "Althea",
+    tone: "forest",
     color: "#00C47A",
+    second: "#0ABAB5",
     role: "Your body and your plan",
-    question: "What can today hold?",
-    style: "Direct. Gives you the next move.",
-    bestFor: ["Deciding what to do today", "Adjusting when you're tired or hurt", "Making a habit small enough to keep"],
-    sounds: "Skip the heavy session. Ten-minute walk after lunch still counts.",
+    says: "Skip the heavy session. A ten-minute walk after lunch still counts.",
+    manner: "Direct and warm. She gives you the next move.",
+    comeFor: ["Deciding what to do today", "Adjusting when you're tired or hurt", "Making a habit small enough to keep"],
+    attends: "Sleep and recovery, workouts, steps, injuries and limits, the equipment you have, and the days you can train.",
   },
   kairo: {
     name: "Kairo",
+    tone: "dusk",
     color: "#A855F7",
+    second: "#3B82F6",
     role: "Your head and your patterns",
-    question: "What's underneath this?",
-    style: "Patient. Asks more than it tells.",
-    bestFor: ["Working out why you keep stopping", "Talking through a hard week", "Noticing a pattern you can't see"],
-    sounds: "Three days isn't a verdict. What got loud this week?",
+    says: "Three days isn't a verdict. What got loud this week?",
+    manner: "Patient and curious. Asks more than it tells.",
+    comeFor: ["Working out why you keep stopping", "Talking through a hard week", "Noticing a pattern you can't see"],
+    attends: "Mood check-ins, stress, journal entries, what keeps repeating, gratitude and reflection, and what matters to you.",
   },
-} as const;
+};
+
+/** The guide's presence: a slow, breathing light rather than a face or an icon. */
+function Presence({ color, second }: { readonly color: string; readonly second: string }) {
+  const reduced = useReducedMotion();
+  const breathe = (scale: number[], duration: number, delay = 0) =>
+    reduced ? {} : { animate: { scale }, transition: { duration, delay, repeat: Infinity, ease: "easeInOut" as const } };
+
+  return (
+    <div className="relative mx-auto aspect-square w-[min(72vw,420px)]" aria-hidden>
+      <motion.span
+        className="absolute inset-0 rounded-full"
+        style={{ background: `radial-gradient(circle, ${color}55 0%, ${color}14 45%, transparent 70%)`, filter: "blur(18px)" }}
+        {...breathe([1, 1.12, 1], 7)}
+      />
+      {[0.14, 0.24, 0.33].map((inset, i) => (
+        <motion.span
+          key={inset}
+          className="absolute rounded-full"
+          style={{ inset: `${inset * 100}%`, border: `1px solid ${color}${["33", "55", "77"][i]}` }}
+          {...breathe([1, 1.05, 1], 5, i * 0.5)}
+        />
+      ))}
+      <motion.span
+        className="absolute rounded-full"
+        style={{
+          inset: "36%",
+          background: `radial-gradient(circle at 34% 28%, #FFFFFF 0%, ${color} 38%, ${second} 100%)`,
+          boxShadow: `0 0 90px ${color}AA, inset 0 -10px 30px rgba(0,0,0,0.25)`,
+        }}
+        {...breathe([1, 1.07, 1], 4)}
+      />
+    </div>
+  );
+}
+
+function GuideRoom({ id, flip = false }: { readonly id: GuideId; readonly flip?: boolean }) {
+  const openChat = useOpenChat();
+  const guide = GUIDES[id];
+  const ink = inkFor(guide.tone);
+
+  return (
+    <Band tone={guide.tone}>
+      <div className="section-container py-28 sm:py-44 grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+        <Reveal className={flip ? "lg:order-2" : undefined}>
+          <Presence color={guide.color} second={guide.second} />
+        </Reveal>
+
+        <Reveal delay={0.1} className={flip ? "lg:order-1" : undefined}>
+          <p className="text-sm font-medium" style={{ color: guide.color }}>
+            {guide.role}
+          </p>
+          <h3 className="mt-1 font-medium" style={{ fontSize: "clamp(3.6rem, 9vw, 7.5rem)", letterSpacing: "-0.05em", lineHeight: 0.95, color: ink.strong }}>
+            {guide.name}
+          </h3>
+
+          <p className="mt-8 font-medium text-balance" style={{ fontSize: "clamp(1.5rem, 2.8vw, 2.3rem)", letterSpacing: "-0.02em", lineHeight: 1.2, color: ink.strong }}>
+            &ldquo;{guide.says}&rdquo;
+          </p>
+          <p className="mt-3 text-[15px]" style={{ color: ink.muted }}>
+            {guide.manner}
+          </p>
+
+          <p className="mt-10 text-sm" style={{ color: ink.muted }}>
+            Come to {guide.name} for
+          </p>
+          <ul className="mt-1">
+            {guide.comeFor.map((line) => (
+              <li key={line} className="py-3 text-lg sm:text-xl" style={{ color: ink.strong, borderBottom: `1px solid ${ink.line}` }}>
+                {line}
+              </li>
+            ))}
+          </ul>
+
+          <button
+            onClick={() => openChat(id)}
+            className="group mt-8 inline-flex items-center gap-2 text-lg font-semibold cursor-pointer"
+            style={{ color: guide.color }}
+          >
+            <span className="underline underline-offset-[6px] decoration-1">Talk to {guide.name}</span>
+            <span className="transition-transform duration-300 group-hover:translate-x-1">→</span>
+          </button>
+        </Reveal>
+      </div>
+    </Band>
+  );
+}
+
+// ─── What they share, and who to ask ─────────────────────────────────────────
+
+const BOTH_KNOW = ["who you're becoming", "your why", "everything you've said", "your habits"];
 
 const SITUATIONS: readonly { readonly text: string; readonly guide: GuideId }[] = [
   { text: "I don't know what to do today", guide: "altheo" },
@@ -73,166 +162,77 @@ const SITUATIONS: readonly { readonly text: string; readonly guide: GuideId }[] 
   { text: "I'm not sure why this matters to me", guide: "kairo" },
 ];
 
-function TwoLenses() {
-  const openChat = useOpenChat();
-  const [active, setActive] = useState<GuideId>("altheo");
-  const [situation, setSituation] = useState<string | null>(null);
-  const lens = LENS[active];
+const DEEP: Record<GuideId, string> = { altheo: "#00875A", kairo: "#7B2FBE" };
+const WARM = inkFor("sand");
 
-  const ordered = useMemo(() => {
-    const rank = (f: Focus) => (f === active ? 0 : f === "both" ? 1 : 2);
-    return [...CONTEXT].sort((a, b) => rank(a.focus) - rank(b.focus));
-  }, [active]);
+function Shared() {
+  const openChat = useOpenChat();
 
   return (
-    <div className="section-container pb-24 max-w-6xl">
-      <Reveal>
-        <p className="text-center text-sm text-white/55 mb-3">Switch between your two guides</p>
-        <div
-          role="tablist"
-          aria-label="Choose a guide"
-          className="relative mx-auto grid grid-cols-2 w-full max-w-2xl rounded-full p-1.5"
-          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}
-        >
-          {(Object.keys(LENS) as GuideId[]).map((id) => {
-            const on = id === active;
-            return (
-              <button
-                key={id}
-                role="tab"
-                aria-selected={on}
-                onClick={() => {
-                  setActive(id);
-                  setSituation(null);
-                }}
-                className="relative h-20 sm:h-24 rounded-full cursor-pointer flex items-center justify-center gap-3 px-3"
-              >
-                {on ? (
-                  <motion.span
-                    layoutId="guide-switch"
-                    className="absolute inset-0 rounded-full"
-                    style={{ background: LENS[id].color, boxShadow: `0 10px 50px ${LENS[id].color}66` }}
-                    transition={{ type: "spring", bounce: 0.22, duration: 0.5 }}
-                  />
-                ) : null}
-                <span
-                  className="relative w-9 h-9 sm:w-11 sm:h-11 rounded-full shrink-0"
-                  style={{
-                    background: on
-                      ? "radial-gradient(circle at 35% 30%, #fff, rgba(255,255,255,0.55) 45%, rgba(255,255,255,0.15))"
-                      : `radial-gradient(circle at 35% 30%, #fff, ${LENS[id].color} 45%, ${LENS[id].color}55)`,
-                  }}
-                />
-                <span className="relative text-left min-w-0">
-                  <span
-                    className="block font-semibold leading-none"
-                    style={{ fontSize: "clamp(1.5rem, 3.6vw, 2.4rem)", letterSpacing: "-0.03em", color: on ? "#05070F" : "#FFFFFF" }}
-                  >
-                    {LENS[id].name}
-                  </span>
-                  <span className="hidden sm:block mt-1 text-[13px]" style={{ color: on ? "rgba(5,7,15,0.7)" : "rgba(255,255,255,0.5)" }}>
-                    {LENS[id].role}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </Reveal>
+    <Band tone="sand">
+      <div className="section-container pt-24 sm:pt-32 pb-10 max-w-5xl">
+        <Reveal>
+          <p className="text-sm font-medium" style={{ color: "#087F7B" }}>
+            One memory between them
+          </p>
+          <p className="mt-3 font-medium text-balance" style={{ fontSize: "clamp(1.8rem, 4vw, 3.4rem)", letterSpacing: "-0.03em", lineHeight: 1.12, color: WARM.strong }}>
+            Both guides know{" "}
+            {BOTH_KNOW.map((item, i) => (
+              <span key={item}>
+                <span style={{ color: "#087F7B" }}>{item}</span>
+                {i < BOTH_KNOW.length - 2 ? ", " : i === BOTH_KNOW.length - 2 ? " and " : "."}
+              </span>
+            ))}{" "}
+            <span style={{ color: WARM.faint }}>You never explain yourself twice.</span>
+          </p>
+        </Reveal>
 
-      <motion.div
-        className="mt-8 rounded-[2rem] p-6 sm:p-10 grid lg:grid-cols-[1.15fr_1fr] gap-10"
-        animate={{ background: `linear-gradient(150deg, ${lens.color}22 0%, rgba(255,255,255,0.025) 65%)`, borderColor: `${lens.color}44` }}
-        transition={{ duration: 0.5 }}
-        style={{ border: "1px solid" }}
-      >
-        <div>
-          <p className="text-sm text-white/60 mb-4">What {lens.name} pays most attention to</p>
-          <div className="flex flex-wrap gap-2">
-            {ordered.map((c) => {
-              const lit = c.focus === active;
-              const shared = c.focus === "both";
-              return (
-                <motion.span
-                  key={c.label}
-                  layout
-                  transition={{ type: "spring", bounce: 0.18, duration: 0.55 }}
-                  className="px-3.5 py-2 rounded-full text-[13px] font-medium"
-                  style={{
-                    background: lit ? lens.color : shared ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.04)",
-                    color: lit ? "#05070F" : shared ? "#FFFFFF" : "rgba(255,255,255,0.3)",
-                  }}
-                >
-                  {c.label}
-                </motion.span>
-              );
-            })}
-          </div>
-          <div className="mt-5 flex flex-wrap gap-4 text-[12px] text-white/55">
-            <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full" style={{ background: lens.color }} /> {lens.name}&apos;s focus
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-white/30" /> They share these
-            </span>
-          </div>
-        </div>
-
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={active}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.25, ease: EASE }}
-          >
-            <p className="text-sm" style={{ color: lens.color }}>
-              {lens.role}
-            </p>
-            <p className="mt-1 font-semibold text-white" style={{ fontSize: "clamp(1.8rem, 3.6vw, 2.8rem)", letterSpacing: "-0.03em", lineHeight: 1.1 }}>
-              &ldquo;{lens.question}&rdquo;
-            </p>
-            <p className="mt-2 text-white/70">{lens.style}</p>
-
-            <p className="mt-6 text-sm text-white/60">Go to {lens.name} for</p>
-            <ul className="mt-2 space-y-1.5">
-              {lens.bestFor.map((b) => (
-                <li key={b} className="text-white text-[15px] flex gap-2.5 items-start">
-                  <span className="mt-[9px] w-1.5 h-1.5 rounded-full shrink-0" style={{ background: lens.color }} />
-                  {b}
-                </li>
-              ))}
-            </ul>
-
-            <button onClick={() => openChat(active)} className="mt-6 px-6 h-11 rounded-full font-semibold text-sm cursor-pointer" style={{ background: lens.color, color: "#05070F" }}>
-              Talk to {lens.name}
-            </button>
-          </motion.div>
-        </AnimatePresence>
-      </motion.div>
-
-      <Reveal className="mt-10 text-center">
-        <p className="text-white font-medium text-lg">Not sure who to ask? Tap what&apos;s going on.</p>
-        <div className="mt-4 flex flex-wrap justify-center gap-2 max-w-3xl mx-auto">
-          {SITUATIONS.map((s) => (
-            <button
-              key={s.text}
-              onClick={() => {
-                setActive(s.guide);
-                setSituation(s.text);
-              }}
-              aria-pressed={situation === s.text}
-              className="px-4 py-2.5 rounded-full text-sm cursor-pointer transition-colors"
-              style={{ background: situation === s.text ? LENS[s.guide].color : "rgba(255,255,255,0.06)", color: situation === s.text ? "#05070F" : "rgba(255,255,255,0.75)" }}
-            >
-              {s.text}
-            </button>
+        <div className="mt-14 grid sm:grid-cols-2 gap-10">
+          {(Object.keys(GUIDES) as GuideId[]).map((id, i) => (
+            <Reveal key={id} delay={i * 0.08}>
+              <p className="text-sm font-semibold" style={{ color: DEEP[id] }}>
+                {GUIDES[id].name} listens closest to
+              </p>
+              <p className="mt-2 text-lg leading-relaxed" style={{ color: WARM.body }}>
+                {GUIDES[id].attends}
+              </p>
+            </Reveal>
           ))}
         </div>
-        <p className="mt-4 h-6 text-sm" style={{ color: lens.color }}>
-          {situation ? `Start with ${lens.name}. Both guides share what they know about you.` : " "}
-        </p>
-      </Reveal>
-    </div>
+
+        <Reveal className="mt-20 sm:mt-28">
+          <h3 className="font-semibold" style={{ fontSize: "clamp(1.6rem, 3.2vw, 2.6rem)", letterSpacing: "-0.03em", color: WARM.strong }}>
+            Not sure who to ask?
+          </h3>
+          <p className="mt-2" style={{ color: WARM.muted }}>
+            Start with whatever&apos;s on your mind.
+          </p>
+        </Reveal>
+
+        <ul className="mt-6">
+          {SITUATIONS.map((s, i) => (
+            <motion.li
+              key={s.text}
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-40px" }}
+              transition={{ delay: i * 0.05, duration: 0.5, ease: EASE }}
+              style={{ borderTop: `1px solid ${WARM.line}` }}
+            >
+              <button onClick={() => openChat(s.guide)} className="group w-full flex items-baseline justify-between gap-6 py-5 text-left cursor-pointer">
+                <span className="text-xl sm:text-2xl font-medium transition-transform duration-300 group-hover:translate-x-1.5" style={{ color: WARM.strong, letterSpacing: "-0.02em" }}>
+                  &ldquo;{s.text}&rdquo;
+                </span>
+                <span className="shrink-0 text-sm sm:text-base font-semibold whitespace-nowrap" style={{ color: DEEP[s.guide] }}>
+                  {GUIDES[s.guide].name} →
+                </span>
+              </button>
+            </motion.li>
+          ))}
+        </ul>
+      </div>
+
+      <EarlyAccess source="how-it-works" light />
+    </Band>
   );
 }

@@ -2,18 +2,18 @@
 /* eslint-disable @next/next/no-img-element */
 
 /**
- * Rows of voices that keep sliding, the same shape as Discover in the app.
+ * Shelves of voices, the same shape as Discover in the app.
  *
  * Shows real public responses when any exist. Until then it shows sample rows
  * with stock photos and made-up names, and says so underneath.
  */
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { motion } from "motion/react";
 import { Lock, Play } from "lucide-react";
 import type { DiscoverRow } from "@kinextion/shared";
-import { EASE, Reveal } from "@/components/motion/primitives";
+import { Band, EASE, ON_LIGHT, Reveal, inkFor } from "@/components/motion/primitives";
 import { SAMPLE_PEOPLE, samplePhoto, type SamplePerson } from "@/lib/sample-voices";
 
 const TONES = ["#00C47A", "#A855F7", "#0ABAB5", "#F59E0B", "#3B82F6", "#EC4899"] as const;
@@ -25,12 +25,17 @@ interface ExampleRow {
 }
 
 const EXAMPLES: readonly ExampleRow[] = [
-  { question: "What did you stop doing that made life better?", community: "A morning run club", minutes: [4, 7, 3, 6, 9, 5, 4, 8] },
-  { question: "Who keeps you honest?", community: "New parents", minutes: [6, 3, 8, 5, 4, 7, 2, 6] },
+  { question: "What are you proud of this week that nobody saw?", community: "New parents", minutes: [6, 3, 8, 5, 4, 7, 2, 6] },
+  { question: "What did you stop doing that made life better?", community: "Morning runners", minutes: [4, 7, 3, 6, 9, 5, 4, 8] },
   { question: "What are you pretending is fine?", community: "Night-shift nurses", minutes: [9, 5, 3, 7, 4, 6, 8, 3] },
   { question: "When did you last feel strong?", community: "Lifting after 40", minutes: [3, 6, 4, 8, 5, 7, 4, 9] },
-  { question: "What does rest actually look like for you?", community: "First-time founders", minutes: [5, 8, 4, 3, 6, 9, 7, 4] },
+  { question: "What would you do this week if nobody was keeping score?", community: "First-time founders", minutes: [5, 8, 4, 3, 6, 9, 7, 4] },
+  { question: "Who did you mean to call this week, and didn't?", community: "Working away from home", minutes: [7, 4, 6, 3, 8, 5, 9, 4] },
+  { question: "What small thing saved a bad day?", community: "Starting over", minutes: [3, 5, 7, 4, 6, 8, 5, 3] },
+  { question: "What did your body ask for that you ignored?", community: "Desk-job backs", minutes: [8, 6, 4, 9, 3, 5, 7, 6] },
 ];
+
+const WARM = inkFor("sand");
 
 function apiBase(): string {
   return (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
@@ -59,12 +64,19 @@ export function VoiceRows() {
   }, []);
 
   return (
-    <div className="pt-20 pb-20">
+    <Band tone="sand">
+    <div className="pt-24 sm:pt-32 pb-24">
       <div className="section-container">
         <Reveal>
-          <h2 className="font-semibold text-white text-balance" style={{ fontSize: "clamp(2rem, 4.6vw, 3.6rem)" }}>
-            One question a week. <span className="text-white/45">In their own voices.</span>
+          <p className="section-label" style={{ color: "#087F7B", WebkitTextFillColor: "#087F7B" }}>
+            Community pods
+          </p>
+          <h2 className="font-semibold text-balance" style={{ fontSize: "clamp(2.2rem, 5.2vw, 4.2rem)", color: WARM.strong }}>
+            One question a week. <span style={{ color: WARM.faint }}>In their own voices.</span>
           </h2>
+          <p className="mt-4 max-w-xl text-balance" style={{ fontSize: "clamp(1rem, 1.5vw, 1.2rem)", color: WARM.body }}>
+            A community pod is a small group on the same path. Every week it gets one question worth answering out loud.
+          </p>
         </Reveal>
       </div>
 
@@ -92,17 +104,18 @@ export function VoiceRows() {
           })}
 
       {rows.length === 0 ? (
-        <p className="section-container mt-8 text-[11px] text-white/40">
-          Sample rooms, with stock photos and made-up names. Real responses appear here once people choose to share them.
+        <p className="section-container mt-12 text-[11px]" style={{ color: WARM.faint }}>
+          Sample pods and questions, with stock photos and made-up names. Real responses appear here once people choose to share them.
         </p>
       ) : (
         <div className="section-container mt-8">
-          <Link href="/discover" className="text-sm font-semibold underline underline-offset-4" style={{ color: "#0ABAB5" }}>
+          <Link href="/discover" className="text-sm font-semibold underline underline-offset-4" style={{ color: "#087F7B" }}>
             See everything
           </Link>
         </div>
       )}
     </div>
+    </Band>
   );
 }
 
@@ -110,11 +123,11 @@ function LockedRow() {
   const people = peopleFor(7, 8);
   return (
     <section className="mt-10 section-container">
-      <div className="rounded-[2rem] p-6 sm:p-8 relative overflow-hidden" style={{ background: "linear-gradient(120deg, #0ABAB522, rgba(255,255,255,0.03))", border: "1px solid #0ABAB544" }}>
-        <p className="text-xs font-semibold" style={{ color: "#0ABAB5" }}>
-          This week in your room
+      <div className="rounded-[2rem] p-6 sm:p-10 relative overflow-hidden" style={{ background: "linear-gradient(140deg, #062629, #06111C)" }}>
+        <p className="text-sm font-semibold" style={{ color: "#3DCFCB" }}>
+          Your community pod · this week
         </p>
-        <h3 className="mt-1 text-white font-semibold" style={{ fontSize: "clamp(1.4rem, 3vw, 2.2rem)" }}>
+        <h3 className="mt-2 text-white font-semibold text-balance max-w-3xl" style={{ fontSize: "clamp(1.8rem, 4vw, 3.2rem)", letterSpacing: "-0.03em", lineHeight: 1.08 }}>
           What did you need to hear this year?
         </h3>
         <div className="mt-5 flex gap-3 overflow-hidden">
@@ -134,10 +147,13 @@ function LockedRow() {
   );
 }
 
+/** The page gutter, so a shelf's first card lines up under its title. */
+const GUTTER = "max(1.5rem, calc((100vw - 80rem) / 2 + 2rem))";
+
 /**
- * The cards are rendered twice and the strip slides by exactly one copy, so
- * the loop never shows a seam. Alternate rows run the other way at a slightly
- * different speed. Hovering a row pauses it.
+ * A shelf, the way a streaming app lays one out: the title, then a row of
+ * cards that starts at the page's left edge and runs off the right. It sits
+ * still until you scroll it, or use the arrows that appear on hover.
  */
 function Row({
   question,
@@ -150,35 +166,42 @@ function Row({
   readonly index: number;
   readonly children: ReactNode;
 }) {
+  const shelf = useRef<HTMLDivElement>(null);
+  const slide = (dir: -1 | 1) => shelf.current?.scrollBy({ left: dir * shelf.current.clientWidth * 0.8, behavior: "smooth" });
+
   return (
-    <section className="mt-16 sm:mt-20">
+    <section className="mt-12 sm:mt-14">
       <div className="section-container">
-        <p className="text-[13px] font-semibold" style={{ color: TONES[index % TONES.length] }}>
+        <p className="flex items-center gap-2.5 text-[15px] sm:text-base font-semibold" style={{ color: WARM.strong }}>
+          <span className="w-2.5 h-2.5 rounded-full" style={{ background: TONES[index % TONES.length] }} />
           {community}
+          <span className="font-normal text-sm" style={{ color: ON_LIGHT[TONES[index % TONES.length]] ?? WARM.muted }}>
+            Community pod
+          </span>
         </p>
-        <h3 className="mt-1 text-white font-semibold text-balance max-w-3xl" style={{ fontSize: "clamp(1.5rem, 3.2vw, 2.4rem)", letterSpacing: "-0.025em", lineHeight: 1.12 }}>
+        <h3 className="mt-1.5 font-semibold text-balance max-w-4xl" style={{ fontSize: "clamp(1.5rem, 2.8vw, 2.2rem)", letterSpacing: "-0.03em", lineHeight: 1.1, color: WARM.strong }}>
           {question}
         </h3>
       </div>
-      <div
-        className="kx-marquee mt-5 overflow-hidden py-3"
-        style={{
-          maskImage: "linear-gradient(to right, transparent, #000 4%, #000 96%, transparent)",
-          WebkitMaskImage: "linear-gradient(to right, transparent, #000 4%, #000 96%, transparent)",
-        }}
-      >
+      <div className="group/shelf relative mt-4">
         <div
-          className="kx-marquee-track flex w-max"
-          style={{
-            animationDuration: `${150 + (index % 3) * 20}s`,
-            animationDirection: index % 2 ? "reverse" : "normal",
-          }}
+          ref={shelf}
+          className="flex gap-2.5 overflow-x-auto scrollbar-hide py-3 snap-x"
+          style={{ paddingInline: GUTTER, scrollPaddingInline: GUTTER }}
         >
-          <div className="flex gap-3 pr-3">{children}</div>
-          <div className="flex gap-3 pr-3" aria-hidden>
-            {children}
-          </div>
+          {children}
         </div>
+        {([-1, 1] as const).map((dir) => (
+          <button
+            key={dir}
+            onClick={() => slide(dir)}
+            aria-label={dir < 0 ? "Earlier voices" : "More voices"}
+            className={`hidden md:flex absolute top-3 bottom-3 w-14 items-center justify-center text-white text-3xl cursor-pointer opacity-0 group-hover/shelf:opacity-100 transition-opacity duration-200 ${dir < 0 ? "left-0" : "right-0"}`}
+            style={{ background: `linear-gradient(to ${dir < 0 ? "right" : "left"}, rgba(12,21,18,0.55), transparent)` }}
+          >
+            {dir < 0 ? "‹" : "›"}
+          </button>
+        ))}
       </div>
     </section>
   );
@@ -203,7 +226,7 @@ function VoiceCard({
       onHoverEnd={() => setHover(false)}
       whileHover={{ scale: 1.03, y: -4 }}
       transition={{ duration: 0.25, ease: EASE }}
-      className="relative shrink-0 w-72 h-44 sm:w-96 sm:h-56 rounded-3xl overflow-hidden"
+      className="relative shrink-0 snap-start w-60 h-36 sm:w-[19rem] sm:h-44 rounded-xl overflow-hidden"
       style={{ background: `linear-gradient(160deg, ${tone}88, #0E1524 78%)` }}
     >
       {photo ? <img src={samplePhoto(photo, 768, 448)} alt="" className="absolute inset-0 w-full h-full object-cover opacity-85" loading="lazy" /> : null}

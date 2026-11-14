@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, useMotionValueEvent, useTransform, type MotionValue } from "motion/react";
 import { Activity, Apple, BookOpen, Brain, Footprints, HeartPulse, Moon, type LucideIcon } from "lucide-react";
 import { useNavigate } from "@/components/navigation/navigation-context";
-import { AURORA, EASE, Heading, ScrollStage } from "@/components/motion/primitives";
+import { Band, EASE, Heading, Reveal, ScrollStage, inkFor } from "@/components/motion/primitives";
 
 /**
  * Sperandei, Vieira & Reis (2016), J Sci Med Sport 19(11): 63% of new gym
@@ -16,8 +16,6 @@ const STAY_OF_100 = 37;
 const STAYING = new Set(Array.from({ length: STAY_OF_100 }, (_, i) => Math.floor((i * 100) / STAY_OF_100 + 1) % 100));
 
 export function ProblemSection() {
-  const navigate = useNavigate();
-
   return (
     <section className="relative">
       <div
@@ -32,24 +30,14 @@ export function ProblemSection() {
         />
       </div>
 
-      <ScrollStage length={3}>{(p) => <DropOff progress={p} />}</ScrollStage>
-      <ScrollStage length={4.2}>{(p) => <Overload progress={p} />}</ScrollStage>
-      <ScrollStage length={3.4}>{(p) => <Restarts progress={p} />}</ScrollStage>
-
-      <div className="flex justify-center px-6 py-28">
-        <button onClick={() => navigate("shift")} className="cursor-pointer group text-center">
-          <span className="block text-sm text-white/55 mb-3">The solution</span>
-          <span
-            className="block font-semibold transition-transform duration-300 group-hover:-translate-y-1"
-            style={{ fontSize: "clamp(1.8rem, 4vw, 3rem)", backgroundImage: AURORA, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}
-          >
-            See how it can work instead →
-          </span>
-        </button>
-      </div>
+      <ScrollStage length={3} tone="dawn">{(p) => <DropOff progress={p} />}</ScrollStage>
+      <ScrollStage length={4.2} tone="ink">{(p) => <Overload progress={p} />}</ScrollStage>
+      <FreshStarts />
     </section>
   );
 }
+
+const DAY = inkFor("dawn");
 
 function DropOff({ progress }: { readonly progress: MotionValue<number> }) {
   const [day, setDay] = useState(0);
@@ -60,21 +48,21 @@ function DropOff({ progress }: { readonly progress: MotionValue<number> }) {
   return (
     <div className="section-container h-full grid lg:grid-cols-2 gap-6 lg:gap-8 items-center content-center">
       <div className="text-center lg:text-left">
-        <h2 className="font-semibold text-white text-balance mb-1" style={{ fontSize: "clamp(1.7rem, 3.6vw, 2.9rem)", letterSpacing: "-0.03em", lineHeight: 1.1 }}>
+        <h2 className="font-semibold text-balance mb-1" style={{ fontSize: "clamp(1.7rem, 3.6vw, 2.9rem)", letterSpacing: "-0.03em", lineHeight: 1.1, color: DAY.strong }}>
           63% of new gym members quit by day 90.
         </h2>
-        <p className="text-white/60 text-balance mb-6" style={{ fontSize: "clamp(0.95rem, 1.5vw, 1.15rem)" }}>
+        <p className="text-balance mb-6" style={{ fontSize: "clamp(0.95rem, 1.5vw, 1.15rem)", color: DAY.body }}>
           Not for lack of wanting it. Life gets in the way, and nothing adapts.
         </p>
-        <p className="text-sm text-white/55 tabular-nums">Day {day} of a new gym membership</p>
+        <p className="text-sm tabular-nums" style={{ color: DAY.muted }}>Day {day} of a new gym membership</p>
         <p
           className="font-bold tabular-nums"
-          style={{ fontSize: "clamp(3.6rem, 11vw, 9rem)", lineHeight: 1, letterSpacing: "-0.05em", color: "#FFFFFF" }}
+          style={{ fontSize: "clamp(3.6rem, 11vw, 9rem)", lineHeight: 1, letterSpacing: "-0.05em", color: DAY.strong }}
         >
           {left}
         </p>
-        <p className="text-lg text-white/70">of 100 still going</p>
-        <p className="mt-5 text-xs text-white/40">Sperandei, Vieira &amp; Reis, 2016 · 5,240 gym members</p>
+        <p className="text-lg" style={{ color: DAY.body }}>of 100 still going</p>
+        <p className="mt-5 text-xs" style={{ color: DAY.faint }}>Sperandei, Vieira &amp; Reis, 2016 · 5,240 gym members</p>
       </div>
 
       <div className="grid grid-cols-10 gap-1.5 sm:gap-2.5 max-w-[280px] sm:max-w-md mx-auto w-full">
@@ -89,9 +77,9 @@ function DropOff({ progress }: { readonly progress: MotionValue<number> }) {
 function Person({ index, progress }: { readonly index: number; readonly progress: MotionValue<number> }) {
   const stays = STAYING.has(index);
   const leaveAt = (((index * 61) % 100) / 100) * 0.8;
-  const opacity = useTransform(progress, [leaveAt, leaveAt + 0.05], [1, stays ? 1 : 0.1]);
+  const opacity = useTransform(progress, [leaveAt, leaveAt + 0.05], [1, stays ? 1 : 0.12]);
   const y = useTransform(progress, [leaveAt, leaveAt + 0.05], [0, stays ? 0 : 7]);
-  const background = useTransform(progress, [0.7, 0.86], ["#CBD5E1", stays ? "#00C47A" : "#CBD5E1"]);
+  const background = useTransform(progress, [0.7, 0.86], ["#1F2E29", stays ? "#00A368" : "#1F2E29"]);
 
   return <motion.span className="aspect-square rounded-full" style={{ opacity, y, background }} />;
 }
@@ -124,6 +112,26 @@ const APPS: readonly AppIcon[] = [
   { name: "Heart", asks: "Stress is high. Breathe.", Icon: HeartPulse, color: "#EF4444", badge: 2, wide: [300, 105], narrow: [0, 170] },
 ];
 
+/** A line in pieces, so the words that name the problem can be picked out in red. */
+type Part = string | { readonly hot: string };
+const HOT = "#FF6B6B";
+
+function Lit({ parts }: { readonly parts: readonly Part[] }) {
+  return (
+    <>
+      {parts.map((part, i) =>
+        typeof part === "string" ? (
+          <span key={i}>{part}</span>
+        ) : (
+          <span key={i} className="font-semibold" style={{ color: HOT }}>
+            {part.hot}
+          </span>
+        ),
+      )}
+    </>
+  );
+}
+
 function useIsNarrow(): boolean {
   const [narrow, setNarrow] = useState(false);
   useEffect(() => {
@@ -143,21 +151,29 @@ function Overload({ progress }: { readonly progress: MotionValue<number> }) {
   const coreScale = useTransform(progress, [0.66, 0.86], [0, 1]);
   const sourceOpacity = useTransform(progress, [0, 0.05, 0.6, 0.66], [0, 1, 1, 0]);
 
-  const lines = [
-    { title: "Too many apps.", sub: "The average person uses six for their health. One in five has ten or more.", opacity: first },
-    { title: "Each one wants something from you.", sub: "45% feel burnt out every week just keeping up with them.", opacity: second },
-    { title: "You were never the problem.", sub: "Juggling all of it was.", opacity: third },
+  const lines: readonly { readonly title: readonly Part[]; readonly sub: readonly Part[]; readonly opacity: MotionValue<number> }[] = [
+    {
+      title: [{ hot: "Too many" }, " apps."],
+      sub: ["The average person uses ", { hot: "six" }, " for their health. One in five has ", { hot: "ten or more" }, "."],
+      opacity: first,
+    },
+    {
+      title: ["Each one ", { hot: "wants something" }, " from you."],
+      sub: [{ hot: "45% feel burnt out" }, " every week just ", { hot: "keeping up" }, " with them."],
+      opacity: second,
+    },
+    { title: ["You were never the problem."], sub: [{ hot: "Juggling all of it" }, " was."], opacity: third },
   ];
 
   return (
     <div className="relative h-full flex items-center justify-center overflow-hidden">
-      {lines.map((l) => (
-        <motion.div key={l.title} className="absolute top-[5%] inset-x-0 px-6 text-center" style={{ opacity: l.opacity }}>
+      {lines.map((l, i) => (
+        <motion.div key={i} className="absolute top-[5%] inset-x-0 px-6 text-center" style={{ opacity: l.opacity }}>
           <p className="font-semibold text-white text-balance" style={{ fontSize: "clamp(1.8rem, 4.4vw, 3.6rem)", letterSpacing: "-0.03em", lineHeight: 1.08 }}>
-            {l.title}
+            <Lit parts={l.title} />
           </p>
-          <p className="mt-2 text-white/65 text-balance mx-auto max-w-xl" style={{ fontSize: "clamp(0.95rem, 1.6vw, 1.2rem)" }}>
-            {l.sub}
+          <p className="mt-2 text-white/70 text-balance mx-auto max-w-xl" style={{ fontSize: "clamp(0.95rem, 1.6vw, 1.2rem)" }}>
+            <Lit parts={l.sub} />
           </p>
         </motion.div>
       ))}
@@ -224,7 +240,7 @@ function OverloadApp({
         </span>
         <motion.span
           className="absolute -top-2 -right-2 min-w-6 h-6 px-1.5 rounded-full flex items-center justify-center text-[12px] font-bold text-white"
-          style={{ background: "#EF4444", scale: badgeScale, boxShadow: "0 0 0 2px #05081A" }}
+          style={{ background: "#EF4444", scale: badgeScale, boxShadow: "0 0 0 2px #04050B" }}
         >
           {app.badge}
         </motion.span>
@@ -240,104 +256,113 @@ function OverloadApp({
   );
 }
 
-// ─── Every restart begins at week one ─────────────────────────────────────────
+// ─── Three fresh starts a year ───────────────────────────────────────────────
 
 /**
  * Laughing Cow poll of 2,000 UK adults (January 2018): the average person
  * starts three diets a year, and 55% say they "always" fail. A commercial poll,
  * so it's labelled as one. See docs/claims-and-sources.md.
+ *
+ * The three bars are an illustration of that number, not data: each try starts
+ * from the same line, runs a few weeks and stops.
  */
-type Point = readonly [x: number, y: number, state: string];
+const TRIES = [
+  { label: "First try", weeks: 5 },
+  { label: "Second try", weeks: 7 },
+  { label: "Third try", weeks: 4 },
+];
+const SPAN = 12;
+const WARM = inkFor("sand");
 
-const FLOOR = 300;
-
-function attempt(x0: number, peak: number): Point[] {
-  return [
-    [x0, FLOOR, "Fresh start"],
-    [x0 + 70, FLOOR - peak * 0.42, "Going well"],
-    [x0 + 165, FLOOR - peak, "Going well"],
-    [x0 + 210, FLOOR - peak * 0.9, "Life happens"],
-    [x0 + 232, FLOOR, "Dropped off"],
-    [x0 + 268, FLOOR, "Back to week one"],
-  ];
-}
-
-const STARTS = [30, 330, 630];
-const POINTS: readonly Point[] = [...attempt(STARTS[0], 170), ...attempt(STARTS[1], 215), ...attempt(STARTS[2], 150)];
-const TRACE = POINTS.map(([x, y], i) => `${i === 0 ? "M" : "L"} ${x} ${y}`).join(" ");
-
-function Restarts({ progress }: { readonly progress: MotionValue<number> }) {
-  const inputs = useMemo(() => POINTS.map((_, i) => (i / (POINTS.length - 1)) * 0.94), []);
-  const x = useTransform(progress, inputs, POINTS.map((p) => p[0]));
-  const y = useTransform(progress, inputs, POINTS.map((p) => p[1]));
-  const pathLength = useTransform(progress, [0, 0.94], [0, 1]);
-
-  const [state, setState] = useState(POINTS[0][2]);
-  const [round, setRound] = useState(1);
-
-  useMotionValueEvent(progress, "change", (v) => {
-    const index = Math.min(POINTS.length - 1, Math.round((v / 0.94) * (POINTS.length - 1)));
-    setState(POINTS[index][2]);
-    setRound(Math.min(3, Math.floor(index / 6) + 1));
-  });
-
-  const down = state === "Dropped off" || state === "Back to week one";
+function FreshStarts() {
+  const navigate = useNavigate();
 
   return (
-    <div className="section-container h-full flex flex-col justify-center">
-      <h2 className="text-center font-semibold text-white text-balance" style={{ fontSize: "clamp(1.8rem, 4.4vw, 3.6rem)", letterSpacing: "-0.03em" }}>
-        Every restart begins at week one. <span className="text-white/40">Nothing remembers what worked last time.</span>
-      </h2>
+    <Band tone="sand">
+      <div className="section-container py-24 sm:py-32 grid lg:grid-cols-[1fr_1.15fr] gap-12 lg:gap-20 items-center">
+        <Reveal>
+          <h2 className="font-semibold text-balance" style={{ fontSize: "clamp(2rem, 4.6vw, 3.8rem)", color: WARM.strong }}>
+            Starting isn&apos;t the hard part. <span style={{ color: WARM.faint }}>Starting over is.</span>
+          </h2>
+          <div className="mt-8 flex items-center gap-5">
+            <p className="font-bold tabular-nums" style={{ fontSize: "clamp(3.4rem, 7vw, 5.5rem)", lineHeight: 1, letterSpacing: "-0.04em", color: "#C2410C" }}>
+              3×
+            </p>
+            <div>
+              <p className="text-[15px] sm:text-lg max-w-sm text-balance" style={{ color: WARM.body }}>
+                a year, the average person starts a new diet. 55% say they always fail.
+              </p>
+              <p className="mt-1 text-[11px]" style={{ color: WARM.faint }}>
+                Laughing Cow poll, 2018 · 2,000 UK adults
+              </p>
+            </div>
+          </div>
+        </Reveal>
 
-      <div className="mt-3 h-14 text-center">
-        <p className="text-xs text-white/45 tabular-nums">Attempt {round}</p>
-        <motion.p
-          key={state}
-          className="font-semibold"
-          style={{ fontSize: "clamp(1.2rem, 2.6vw, 1.8rem)", color: down ? "#EF4444" : "#00C47A" }}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25, ease: EASE }}
-        >
-          {state}
-        </motion.p>
-      </div>
-
-      <svg viewBox="0 0 920 340" className="w-full max-w-5xl mx-auto" role="img" aria-label="Progress climbs, drops back to week one, and starts again, three times">
-        <line x1="0" y1={FLOOR} x2="920" y2={FLOOR} stroke="rgba(255,255,255,0.14)" />
-        {STARTS.map((sx, i) => (
-          <WeekOne key={sx} x={sx} progress={progress} at={(i * 6) / (POINTS.length - 1) * 0.94} />
-        ))}
-        <motion.path d={TRACE} fill="none" stroke="#EF4444" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" style={{ pathLength }} />
-        <motion.g style={{ x, y }}>
-          <circle r="18" fill={down ? "#EF444433" : "#00C47A33"} />
-          <circle r="8" fill="#FFFFFF" />
-        </motion.g>
-      </svg>
-
-      <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-5 text-center sm:text-left">
-        <p className="font-bold text-white tabular-nums" style={{ fontSize: "clamp(3rem, 7vw, 5rem)", lineHeight: 1, letterSpacing: "-0.04em" }}>
-          3×
-        </p>
-        <div>
-          <p className="text-white/85 text-[15px] sm:text-lg max-w-md text-balance">
-            a year, the average person starts a new diet. 55% say they always fail.
+        <Reveal delay={0.1}>
+          <div className="relative pl-[5.5rem] sm:pl-28">
+            <span className="absolute top-0 bottom-7 w-px left-[5.5rem] sm:left-28" style={{ background: WARM.strong }} />
+            <p className="mb-3 -ml-3 text-xs font-semibold" style={{ color: WARM.strong }}>
+              Week 1
+            </p>
+            <div className="space-y-6">
+              {TRIES.map((t, i) => (
+                <div key={t.label} className="relative">
+                  <span className="absolute right-full mr-4 top-1/2 -translate-y-1/2 whitespace-nowrap text-sm font-semibold" style={{ color: WARM.body }}>
+                    {t.label}
+                  </span>
+                  <div className="relative h-10 rounded-r-full" style={{ background: "rgba(12,21,18,0.06)" }}>
+                    <motion.div
+                      className="absolute inset-y-0 left-0 rounded-r-full origin-left flex items-center justify-end pr-3"
+                      style={{ width: `${(t.weeks / SPAN) * 100}%`, background: "linear-gradient(90deg, #E9B08D, #C2410C)" }}
+                      initial={{ scaleX: 0 }}
+                      whileInView={{ scaleX: 1 }}
+                      viewport={{ once: true, margin: "-80px" }}
+                      transition={{ delay: 0.2 + i * 0.7, duration: 0.9, ease: EASE }}
+                    />
+                    <motion.span
+                      className="absolute top-1/2 -translate-y-1/2 ml-3 whitespace-nowrap text-[13px]"
+                      style={{ left: `${(t.weeks / SPAN) * 100}%`, color: WARM.muted }}
+                      initial={{ opacity: 0 }}
+                      whileInView={{ opacity: 1 }}
+                      viewport={{ once: true, margin: "-80px" }}
+                      transition={{ delay: 1 + i * 0.7 }}
+                    >
+                      stopped in week {t.weeks}
+                    </motion.span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 text-[11px]" style={{ color: WARM.faint }}>
+              Illustration
+            </p>
+          </div>
+          <p className="mt-6 text-lg sm:text-xl font-medium text-balance" style={{ color: WARM.strong }}>
+            Every try begins on the same line. <span style={{ color: WARM.muted }}>Nothing carries over what worked last time.</span>
           </p>
-          <p className="mt-1 text-[11px] text-white/40">Laughing Cow poll, 2018 · 2,000 UK adults</p>
-        </div>
+        </Reveal>
       </div>
-    </div>
-  );
-}
 
-function WeekOne({ x, at, progress }: { readonly x: number; readonly at: number; readonly progress: MotionValue<number> }) {
-  const opacity = useTransform(progress, [Math.max(0, at - 0.01), at + 0.03], [0, 1]);
-  return (
-    <motion.g style={{ opacity }}>
-      <line x1={x} y1={FLOOR} x2={x} y2={FLOOR + 10} stroke="rgba(255,255,255,0.4)" />
-      <text x={x} y={FLOOR + 34} textAnchor="start" fill="rgba(255,255,255,0.65)" fontSize="22" fontWeight="600">
-        Week 1
-      </text>
-    </motion.g>
+      <div className="flex justify-center px-6 pt-10 pb-16 sm:pb-24">
+        <button onClick={() => navigate("shift")} className="cursor-pointer group text-center">
+          <span className="block text-sm mb-3" style={{ color: WARM.muted }}>
+            The solution
+          </span>
+          <span
+            className="block font-semibold transition-transform duration-300 group-hover:-translate-y-1"
+            style={{
+              fontSize: "clamp(1.8rem, 4vw, 3rem)",
+              backgroundImage: "linear-gradient(120deg, #00875A 0%, #087F7B 50%, #7B2FBE 100%)",
+              WebkitBackgroundClip: "text",
+              backgroundClip: "text",
+              color: "transparent",
+            }}
+          >
+            See how it can work instead →
+          </span>
+        </button>
+      </div>
+    </Band>
   );
 }

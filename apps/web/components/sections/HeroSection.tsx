@@ -12,7 +12,8 @@ import {
 } from "motion/react";
 import { useOpenChat } from "@/components/chat/chat-context";
 import { useNavigate } from "@/components/navigation/navigation-context";
-import { AURORA, EASE, ScrollStage } from "@/components/motion/primitives";
+import { AURORA, EASE, ScrollStage, TONES, inkFor, type Tone } from "@/components/motion/primitives";
+import { SCENARIOS, pickScenario, type JourneyScenario } from "@/lib/journey-scenarios";
 import { AuroraRibbons } from "@/components/aurora/AuroraRibbons";
 import {
   CommunityScreen,
@@ -47,14 +48,67 @@ const BECOMING = [
   "the healthiest you've been",
 ];
 
-const BEATS = [
-  { title: "Start by talking. Your guide gets to know you.", color: "#A855F7", Screen: TalkScreen },
-  { title: "It asks for your why, then goes deeper.", color: "#A855F7", Screen: KnowYouScreen },
-  { title: "Then you shape a habit that challenges you and helps you grow.", color: "#00C47A", Screen: ShapeHabitScreen },
-  { title: "Keep talking. It adjusts with your journey.", color: "#00C47A", Screen: GuideScreen },
-  { title: "See yourself grow.", color: "#0ABAB5", Screen: GrowthScreen },
-  { title: "Then do it with people.", color: "#0ABAB5", Screen: CommunityScreen },
-] as const;
+/** A headline in pieces, so the words that matter can be lit. */
+type Part = string | { readonly mark: string };
+
+interface Beat {
+  readonly title: readonly Part[];
+  readonly sub?: string;
+  /** The app's colour for this step, used for the phone's glow. */
+  readonly color: string;
+  /** The room this step happens in, and the colour its lit words take there. */
+  readonly tone: Tone;
+  readonly lit: string;
+  readonly Screen: (props: { readonly story: JourneyScenario }) => React.JSX.Element;
+}
+
+const BEATS: readonly Beat[] = [
+  {
+    title: ["First, you and your guide ", { mark: "get to know each other" }, "."],
+    color: "#A855F7",
+    tone: "dusk",
+    lit: "#C9A6FF",
+    Screen: TalkScreen,
+  },
+  {
+    title: ["Together, you discover what ", { mark: "truly motivates you" }, "."],
+    color: "#A855F7",
+    tone: "dusk",
+    lit: "#C9A6FF",
+    Screen: KnowYouScreen,
+  },
+  {
+    title: ["Then you shape a ", { mark: "habit" }, " that challenges you and helps you ", { mark: "grow" }, "."],
+    color: "#00C47A",
+    tone: "dawn",
+    lit: "#00875A",
+    Screen: ShapeHabitScreen,
+  },
+  {
+    title: ["Keep the ", { mark: "relationship" }, " going. Your guide ", { mark: "adjusts" }, " and ", { mark: "coaches you" }, " as you grow."],
+    color: "#00C47A",
+    tone: "dawn",
+    lit: "#00875A",
+    Screen: GuideScreen,
+  },
+  {
+    title: ["See yourself ", { mark: "grow" }, "."],
+    color: "#0ABAB5",
+    tone: "sand",
+    lit: "#087F7B",
+    Screen: GrowthScreen,
+  },
+  {
+    title: ["Then do it ", { mark: "with others" }, ", in your ", { mark: "community pod" }, "."],
+    sub: "A community pod is a small group on the same path as you. One honest question a week, answered in your own voices.",
+    color: "#0ABAB5",
+    tone: "sand",
+    lit: "#087F7B",
+    Screen: CommunityScreen,
+  },
+];
+
+const ROOMS = [...new Set(BEATS.map((b) => b.tone))];
 
 /** One line at a time: it slides up and out, the next slides in, forever. */
 function BecomingReel() {
@@ -92,7 +146,7 @@ export function HeroSection() {
       <Opening />
 
       <div id="journey">
-        <ScrollStage length={BEATS.length + 1}>{(progress) => <Journey progress={progress} />}</ScrollStage>
+        <ScrollStage length={BEATS.length + 1} tone={BEATS[0].tone}>{(progress) => <Journey progress={progress} />}</ScrollStage>
       </div>
 
       <div className="flex justify-center px-6 pt-24 pb-28">
@@ -188,50 +242,91 @@ function Opening() {
 
 function Journey({ progress }: { readonly progress: MotionValue<number> }) {
   const [beat, setBeat] = useState(0);
+  const [story, setStory] = useState<JourneyScenario>(SCENARIOS[0]);
+
+  // A different person's story each visit, the same one across all six screens.
+  useEffect(() => setStory(SCENARIOS[pickScenario()]), []);
 
   useMotionValueEvent(progress, "change", (v) => {
     const next = Math.min(BEATS.length - 1, Math.floor(v * BEATS.length));
     setBeat((b) => (b === next ? b : next));
   });
 
-  const { Screen, color } = BEATS[beat];
+  const { Screen, color, tone, lit, title, sub } = BEATS[beat];
+  const ink = inkFor(tone);
 
   return (
-    <div className="section-container h-full grid lg:grid-cols-2 items-center gap-4 py-4">
-      <div className="relative order-1 h-[22vh] lg:h-auto flex items-center">
-        <AnimatePresence mode="popLayout" initial={false}>
-          <motion.h2
-            key={beat}
-            className="font-semibold text-balance"
-            style={{ fontSize: "clamp(1.9rem, 5vw, 4.4rem)", color: "#FFFFFF" }}
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -40 }}
-            transition={{ duration: 0.55, ease: EASE }}
-          >
-            {BEATS[beat].title}
-          </motion.h2>
-        </AnimatePresence>
+    <div className="relative h-full">
+      {ROOMS.map((room) => (
+        <motion.div
+          key={room}
+          aria-hidden
+          className="absolute inset-0"
+          style={{ background: TONES[room].background }}
+          initial={false}
+          animate={{ opacity: room === tone ? 1 : 0 }}
+          transition={{ duration: 0.8, ease: "easeInOut" }}
+        />
+      ))}
+      <motion.div
+        aria-hidden
+        className="absolute inset-0"
+        initial={false}
+        animate={{ background: `radial-gradient(ellipse 45% 55% at 74% 50%, ${color}${TONES[tone].light ? "2E" : "38"} 0%, transparent 70%)` }}
+        transition={{ duration: 0.8 }}
+      />
 
-        <div className="hidden lg:flex absolute -bottom-20 left-0 gap-2" aria-hidden>
-          {BEATS.map((b, i) => (
-            <motion.span
-              key={b.title}
-              className="h-1 rounded-full"
-              animate={{ width: i === beat ? 40 : 12, background: i === beat ? color : "rgba(255,255,255,0.2)" }}
-              transition={{ duration: 0.4 }}
-            />
-          ))}
-        </div>
-      </div>
-
-      <div className="order-2 flex flex-col items-center">
-        <PhoneFrame glow={color}>
-          <AnimatePresence>
-            <Screen key={beat} />
+      <div className="relative section-container h-full grid lg:grid-cols-2 items-center gap-4 py-4">
+        <div className="relative order-1 h-[24vh] lg:h-auto flex items-center">
+          <AnimatePresence mode="popLayout" initial={false}>
+            <motion.div
+              key={beat}
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -40 }}
+              transition={{ duration: 0.55, ease: EASE }}
+            >
+              <h2 className="font-medium text-balance" style={{ fontSize: "clamp(1.8rem, 4.6vw, 4.2rem)", color: ink.strong }}>
+                {title.map((part, i) =>
+                  typeof part === "string" ? (
+                    <span key={i}>{part}</span>
+                  ) : (
+                    <span key={i} className="font-bold" style={{ color: lit }}>
+                      {part.mark}
+                    </span>
+                  ),
+                )}
+              </h2>
+              {sub ? (
+                <p className="mt-4 max-w-md text-balance" style={{ fontSize: "clamp(0.9rem, 1.4vw, 1.1rem)", color: ink.body }}>
+                  {sub}
+                </p>
+              ) : null}
+            </motion.div>
           </AnimatePresence>
-        </PhoneFrame>
-        <p className="mt-2 text-[11px] text-white/40">Illustration of the app. Sample content, stock photos.</p>
+
+          <div className="hidden lg:flex absolute -bottom-20 left-0 gap-2" aria-hidden>
+            {BEATS.map((b, i) => (
+              <motion.span
+                key={i}
+                className="h-1 rounded-full"
+                animate={{ width: i === beat ? 40 : 12, background: i === beat ? lit : ink.line }}
+                transition={{ duration: 0.4 }}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="order-2 flex flex-col items-center">
+          <PhoneFrame glow={color}>
+            <AnimatePresence>
+              <Screen key={`${beat}-${story.id}`} story={story} />
+            </AnimatePresence>
+          </PhoneFrame>
+          <p className="mt-2 text-[11px]" style={{ color: ink.faint }}>
+            Illustration of the app. Sample content, stock photos.
+          </p>
+        </div>
       </div>
     </div>
   );

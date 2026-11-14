@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { GrowthTree } from "@/components/research-tree";
-import { CountUp, EASE, Heading, Reveal } from "@/components/motion/primitives";
+import { Band, CountUp, EASE, Heading, Reveal } from "@/components/motion/primitives";
 
 const SURVEY_URL = "https://docs.google.com/forms/d/1HGHbA5ClONIySoOE-lcQ5EQ-ovgHkQNVi7E4nF-StAs/preview";
 
@@ -220,10 +220,19 @@ export function ResearchSection() {
         <Heading label="How it works" color="#3B82F6" title="We didn't guess." muted="We studied." />
       </div>
 
-      <WhenAndWhere />
-      <SixtySixDays />
-      <Together />
-      <Regularity />
+      {/* Two rooms, back and forth, one finding each. */}
+      <Band tone="forest">
+        <WhenAndWhere />
+      </Band>
+      <Band tone="ink">
+        <SixtySixDays />
+      </Band>
+      <Band tone="forest">
+        <Together />
+      </Band>
+      <Band tone="ink">
+        <Regularity />
+      </Band>
 
       <div className="section-container pt-24">
         <Heading title="Every feature is part of one living system." />
@@ -232,8 +241,10 @@ export function ResearchSection() {
         </div>
       </div>
 
-      <Library />
-      <Survey />
+      <Band tone="ink" className="mt-24">
+        <Library />
+        <Survey />
+      </Band>
     </section>
   );
 }

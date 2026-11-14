@@ -13,6 +13,7 @@ import { Lock, MapPin, Mic, Sparkles } from "lucide-react";
 import { EASE } from "@/components/motion/primitives";
 import { MAP_PLACES, KIND_COLOR } from "@/lib/community-places";
 import { SAMPLE_PEOPLE, samplePhoto } from "@/lib/sample-voices";
+import type { JourneyScenario } from "@/lib/journey-scenarios";
 
 const C = {
   bg: "#070B14",
@@ -126,27 +127,50 @@ function Bubble({ from, delay, children }: { readonly from: "you" | "guide"; rea
   );
 }
 
-// ─── 1. Start by talking ──────────────────────────────────────────────────────
+// ─── 1. Getting to know each other ───────────────────────────────────────────
 
-export function TalkScreen() {
+interface StoryProps {
+  readonly story: JourneyScenario;
+}
+
+function Listening({ color }: { readonly color: string }) {
+  return (
+    <div className="flex items-center justify-center gap-[3px] h-6" aria-hidden>
+      {Array.from({ length: 21 }, (_, i) => (
+        <motion.span
+          key={i}
+          className="w-[3px] rounded-full"
+          style={{ height: "100%", background: color, transformOrigin: "center" }}
+          animate={{ scaleY: [0.18, 0.3 + ((i * 37) % 70) / 100, 0.18] }}
+          transition={{ duration: 0.7 + (i % 5) * 0.13, repeat: Infinity, ease: "easeInOut" }}
+        />
+      ))}
+    </div>
+  );
+}
+
+export function TalkScreen({ story }: StoryProps) {
   return (
     <Screen>
       <p className="text-center font-bold text-[15px] mb-1" style={{ color: C.text }}>
         Kairo
       </p>
       <p className="text-center text-[11px] mb-4" style={{ color: C.purple }}>
-        Listening
+        Listening to you
       </p>
       <GuideOrb color={C.purple} second="#3B82F6" />
-      <div className="mt-5 space-y-2.5">
+      <div className="mt-3">
+        <Listening color={C.purple} />
+      </div>
+      <div className="mt-4 space-y-2.5">
         <Bubble from="guide" delay={0.3}>
-          Before anything else: who do you want to become?
+          Hi, I&apos;m Kairo. No forms. Just tell me a bit about you.
         </Bubble>
         <Bubble from="you" delay={1.2}>
-          Someone who gets back in the gym. I keep stopping.
+          {story.opener}
         </Bubble>
         <Bubble from="guide" delay={2.2}>
-          Then let&apos;s work out what keeps stopping you.
+          {story.kairoReply}
         </Bubble>
       </div>
       <div className="mt-auto mb-5 flex justify-center">
@@ -158,33 +182,28 @@ export function TalkScreen() {
   );
 }
 
-// ─── 2. It gets to know you ───────────────────────────────────────────────────
+// ─── 2. What truly motivates you ─────────────────────────────────────────────
 
-const WHY = [
-  { text: "Get back in the gym", note: "What you said" },
-  { text: "Feel strong in my body again", note: "Why that matters" },
-  { text: "Have energy for my kids after work", note: "And why that matters" },
-  { text: "Be the parent who joins in, not the one watching", note: "Your motivation" },
-];
+const WHY_NOTES = ["What you said", "Why that matters", "And why that matters", "What truly drives you"];
 
-export function KnowYouScreen() {
+export function KnowYouScreen({ story }: StoryProps) {
   return (
     <Screen>
       <p className="text-[11px] font-bold tracking-[0.14em] uppercase mb-2" style={{ color: C.purple }}>
         Kairo · Getting to know you
       </p>
       <p className="font-extrabold text-[22px] leading-[1.15] tracking-[-0.03em] mb-1" style={{ color: C.text }}>
-        Finding your why.
+        What truly drives you.
       </p>
       <p className="text-[12px] mb-4" style={{ color: C.muted }}>
-        It keeps asking until it understands what really drives you.
+        A few gentle questions, until you both see it.
       </p>
       <div className="relative">
-        {WHY.map((w, i) => {
-          const last = i === WHY.length - 1;
+        {story.why.map((text, i) => {
+          const last = i === story.why.length - 1;
           return (
             <motion.div
-              key={w.text}
+              key={text}
               className="relative pl-6 pb-3.5"
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
@@ -196,10 +215,10 @@ export function KnowYouScreen() {
                 style={{ background: last ? C.purple : C.surface, border: `2px solid ${C.purple}` }}
               />
               <p className="text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: last ? C.purple : C.faint }}>
-                {w.note}
+                {WHY_NOTES[i]}
               </p>
               <p className={last ? "font-bold text-[16px] leading-snug" : "text-[13.5px]"} style={{ color: last ? C.text : C.muted }}>
-                {w.text}
+                {text}
               </p>
             </motion.div>
           );
@@ -223,18 +242,28 @@ export function KnowYouScreen() {
 
 // ─── 3. A habit that stretches you, and fits ─────────────────────────────────
 
-export function ShapeHabitScreen() {
+export function ShapeHabitScreen({ story }: StoryProps) {
   return (
     <Screen>
       <p className="text-[11px] font-bold tracking-[0.14em] uppercase mb-2" style={{ color: C.green }}>
         Althea · Your first habit
       </p>
+      <motion.p
+        className="mb-3 rounded-xl px-3 py-2 text-[11px] leading-snug"
+        style={{ background: `${C.purple}14`, color: C.muted }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.1 }}
+      >
+        <span style={{ color: C.purple }}>Your why · </span>
+        {story.why[3]}
+      </motion.p>
       <div className="space-y-2.5">
-        <Bubble from="you" delay={0.2}>
-          Five mornings a week. Let&apos;s go.
+        <Bubble from="you" delay={0.5}>
+          {story.ask}
         </Bubble>
-        <Bubble from="guide" delay={1}>
-          Five is the trap. You&apos;ve stopped at five before. Three you&apos;ll keep, then we grow it.
+        <Bubble from="guide" delay={1.3}>
+          {story.counter}
         </Bubble>
       </div>
 
@@ -243,16 +272,16 @@ export function ShapeHabitScreen() {
         style={{ background: C.surface, border: `1px solid ${C.green}44` }}
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 1.8, ease: EASE }}
+        transition={{ delay: 2.1, ease: EASE }}
       >
         <p className="font-bold text-[15px]" style={{ color: C.text }}>
-          Gym, 3 mornings a week
+          {story.habit.title}
         </p>
         <p className="text-[11.5px]" style={{ color: C.muted }}>
-          After school drop-off · 30 min
+          {story.habit.anchor}
         </p>
         <p className="mt-1 text-[11.5px]" style={{ color: C.amber }}>
-          Bad day: 10 minutes still counts
+          Bad day: {story.habit.badDay}
         </p>
         <div className="mt-3 flex gap-2">
           {["Ease it", "Just right", "Push me"].map((o) => (
@@ -267,8 +296,8 @@ export function ShapeHabitScreen() {
         </div>
       </motion.div>
 
-      <div className="mt-auto mb-6 flex flex-col items-center">
-        <div className="relative w-16 h-16">
+      <div className="mt-auto mb-5 flex flex-col items-center">
+        <div className="relative w-14 h-14">
           <svg viewBox="0 0 64 64" className="absolute inset-0 -rotate-90">
             <circle cx="32" cy="32" r="28" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="4" />
             <motion.circle
@@ -281,7 +310,7 @@ export function ShapeHabitScreen() {
               strokeLinecap="round"
               initial={{ pathLength: 0 }}
               animate={{ pathLength: 1 }}
-              transition={{ delay: 2.6, duration: 1.4, ease: "easeInOut" }}
+              transition={{ delay: 2.9, duration: 1.4, ease: "easeInOut" }}
             />
           </svg>
           <span className="absolute inset-2.5 rounded-full" style={{ background: `${C.green}30` }} />
@@ -294,26 +323,26 @@ export function ShapeHabitScreen() {
   );
 }
 
-// ─── 4. Keep talking ──────────────────────────────────────────────────────────
+// ─── 4. The relationship: it adjusts and coaches as you grow ─────────────────
 
-export function GuideScreen() {
+export function GuideScreen({ story }: StoryProps) {
   return (
     <Screen>
       <p className="text-center font-bold text-[15px] mb-1" style={{ color: C.text }}>
         Althea
       </p>
       <p className="text-center text-[11px] mb-4" style={{ color: C.green }}>
-        Listening
+        Week 3 · Listening to you
       </p>
       <div className="mb-5">
         <GuideOrb color={C.green} second={C.teal} />
       </div>
       <div className="space-y-2.5">
         <Bubble from="you" delay={0.5}>
-          Only slept five hours. I can&apos;t do the gym today.
+          {story.hardDay}
         </Bubble>
         <Bubble from="guide" delay={1.5}>
-          Then we don&apos;t do the gym. Ten-minute walk after lunch. It counts, and nothing resets.
+          {story.adjust}
         </Bubble>
         <motion.div
           className="rounded-2xl p-3 flex items-center gap-2.5"
@@ -324,7 +353,7 @@ export function GuideScreen() {
         >
           <Sparkles size={15} color={C.green} />
           <p className="text-[12px] font-semibold" style={{ color: C.text }}>
-            Swapped today to a 10-minute walk
+            {story.swapped}
           </p>
         </motion.div>
       </div>
@@ -339,31 +368,30 @@ export function GuideScreen() {
 
 // ─── 5. See your growth ───────────────────────────────────────────────────────
 
-const WEEKS_SHOWN = [2, 3, 2, 3, 3, 3, 4, 3, 4];
-
-export function GrowthScreen() {
+export function GrowthScreen({ story }: StoryProps) {
+  const top = Math.max(...story.weeks);
   return (
     <Screen>
       <p className="text-[11px] font-bold tracking-[0.14em] uppercase mb-2" style={{ color: C.teal }}>
         Week 9
       </p>
       <p className="font-extrabold text-[22px] leading-[1.15] tracking-[-0.03em]" style={{ color: C.text }}>
-        You&apos;re someone who trains.
+        {story.identity}
       </p>
       <p className="mt-1 text-[12px]" style={{ color: C.muted }}>
-        27 sessions. Grew from 3 mornings to 4.
+        {story.summary}
       </p>
 
       <div className="mt-4 rounded-2xl p-3.5" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
         <p className="text-[11px] mb-2" style={{ color: C.muted }}>
-          Mornings each week
+          {story.unit}
         </p>
         <div className="flex items-end gap-1.5 h-20">
-          {WEEKS_SHOWN.map((n, i) => (
+          {story.weeks.map((n, i) => (
             <motion.span
               key={i}
               className="flex-1 rounded-md origin-bottom"
-              style={{ height: `${(n / 4) * 100}%`, background: n >= 4 ? C.green : `${C.teal}AA` }}
+              style={{ height: `${(n / top) * 100}%`, background: n >= top ? C.green : `${C.teal}AA` }}
               initial={{ scaleY: 0 }}
               animate={{ scaleY: 1 }}
               transition={{ delay: 0.2 + i * 0.09, duration: 0.45, ease: EASE }}
@@ -397,7 +425,7 @@ export function GrowthScreen() {
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 2.4, type: "spring", bounce: 0.4 }}
       >
-        Missed week 3 twice. Nothing reset.
+        {story.forgiven}
       </motion.div>
     </Screen>
   );
@@ -405,9 +433,9 @@ export function GrowthScreen() {
 
 // ─── 6. With people: rooms, topics, places near you ──────────────────────────
 
-const VIEWS = ["Room", "Topics", "Near you"] as const;
+const VIEWS = ["Your pod", "More pods", "Near you"] as const;
 
-export function CommunityScreen() {
+export function CommunityScreen({ story }: StoryProps) {
   const [view, setView] = useState(0);
 
   useEffect(() => {
@@ -438,7 +466,7 @@ export function CommunityScreen() {
             exit={{ opacity: 0, x: -24 }}
             transition={{ duration: 0.35, ease: EASE }}
           >
-            {view === 0 ? <RoomView /> : view === 1 ? <TopicsView /> : <NearbyView />}
+            {view === 0 ? <RoomView story={story} /> : view === 1 ? <TopicsView /> : <NearbyView />}
           </motion.div>
         </AnimatePresence>
       </div>
@@ -446,20 +474,26 @@ export function CommunityScreen() {
   );
 }
 
-function RoomView() {
+function RoomView({ story }: StoryProps) {
   return (
     <div>
-      <p className="text-[10.5px] font-bold tracking-[0.14em] uppercase mb-1" style={{ color: C.teal }}>
-        This week&apos;s room
+      <p className="text-[10.5px] font-bold tracking-[0.14em] uppercase" style={{ color: C.teal }}>
+        Community pod
       </p>
-      <p className="font-extrabold text-[17px] leading-[1.2] tracking-[-0.02em] mb-3" style={{ color: C.text }}>
-        What did you stop doing that made life better?
+      <p className="font-extrabold text-[19px] leading-[1.15] tracking-[-0.02em]" style={{ color: C.text }}>
+        {story.pod}
+      </p>
+      <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: C.faint }}>
+        This week&apos;s question
+      </p>
+      <p className="font-semibold text-[14px] leading-[1.25] mb-3" style={{ color: C.text }}>
+        {story.question}
       </p>
       <div className="grid grid-cols-2 gap-2">
         {SAMPLE_PEOPLE.slice(0, 4).map((p, i) => (
           <motion.div
             key={p.name}
-            className="relative rounded-2xl h-[118px] overflow-hidden"
+            className="relative rounded-2xl h-[98px] overflow-hidden"
             initial={{ filter: "blur(8px)" }}
             animate={{ filter: "blur(0px)" }}
             transition={{ delay: 0.5 + i * 0.15, duration: 0.6 }}
@@ -513,7 +547,7 @@ function TopicsView() {
               {t.name}
             </p>
             <p className="text-[10.5px]" style={{ color: C.faint }}>
-              New question every week
+              Community pod · new question weekly
             </p>
           </div>
         </motion.div>

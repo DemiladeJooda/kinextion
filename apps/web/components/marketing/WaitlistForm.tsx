@@ -34,11 +34,17 @@ function sessionId(): string | undefined {
 export function WaitlistForm({
   source,
   compact = false,
+  light = false,
 }: {
   /** Which tab this instance sits on — the conversion attribution. */
   source: string;
   compact?: boolean;
+  /** Set when the form sits on one of the light backgrounds. */
+  light?: boolean;
 }) {
+  const strong = light ? "#0C1512" : "#FFFFFF";
+  const soft = light ? "rgba(12,21,18,0.65)" : "rgba(255,255,255,0.65)";
+  const faint = light ? "rgba(12,21,18,0.5)" : "rgba(255,255,255,0.45)";
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [message, setMessage] = useState("");
@@ -110,10 +116,10 @@ export function WaitlistForm({
             }}
           >
             <p className="text-2xl mb-1">✓</p>
-            <p className="font-bold text-base mb-1" style={{ color: "#FFFFFF" }}>
+            <p className="font-bold text-base mb-1" style={{ color: strong }}>
               You&apos;re on the list.
             </p>
-            <p className="text-sm" style={{ color: "rgba(255,255,255,0.65)" }}>
+            <p className="text-sm" style={{ color: soft }}>
               We&apos;ll email {email.trim()} before we open the doors. Nothing else — no
               newsletter, no sharing your address.
             </p>
@@ -141,11 +147,11 @@ export function WaitlistForm({
                 if (status === "error") setStatus("idle");
               }}
               placeholder="your@email.com"
-              className="flex-1 px-5 py-3.5 rounded-full text-sm outline-none transition-all duration-200 disabled:opacity-60 placeholder:text-white/40"
+              className={`flex-1 px-5 py-3.5 rounded-full text-sm outline-none transition-all duration-200 disabled:opacity-60 ${light ? "placeholder:text-black/40" : "placeholder:text-white/40"}`}
               style={{
-                background: "rgba(255,255,255,0.07)",
-                border: "1.5px solid rgba(255,255,255,0.14)",
-                color: "#FFFFFF",
+                background: light ? "#FFFFFF" : "rgba(255,255,255,0.07)",
+                border: `1.5px solid ${light ? "rgba(12,21,18,0.16)" : "rgba(255,255,255,0.14)"}`,
+                color: strong,
               }}
             />
             <button
@@ -164,11 +170,11 @@ export function WaitlistForm({
       </AnimatePresence>
 
       {status === "error" ? (
-        <p className="mt-3 text-sm" role="alert" style={{ color: "#FCA5A5" }}>
+        <p className="mt-3 text-sm" role="alert" style={{ color: light ? "#B91C1C" : "#FCA5A5" }}>
           {message}
         </p>
       ) : status !== "done" ? (
-        <p className="mt-3 text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>
+        <p className="mt-3 text-xs" style={{ color: faint }}>
           One email when we launch. We don&apos;t sell or share your address —{" "}
           <a href="/privacy" className="underline hover:opacity-80">
             privacy policy

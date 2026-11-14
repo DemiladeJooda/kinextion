@@ -15,6 +15,7 @@ export function CommunityMap() {
   const container = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<MapPlace | null>(null);
   const [failed, setFailed] = useState(false);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     if (!container.current) return;
@@ -48,6 +49,7 @@ export function CommunityMap() {
         });
 
         active.on("load", () => {
+          setReady(true);
           active.flyTo({ center: CENTER, zoom: 11.6, pitch: 38, duration: 2600, essential: true });
 
           MAP_PLACES.forEach((place, i) => {
@@ -80,6 +82,37 @@ export function CommunityMap() {
       <div className="absolute inset-0" style={{ background: "#0B1120" }}>
         <div ref={container} style={{ width: "100%", height: "100%" }} />
       </div>
+
+      {/* Until the map's first paint, say that something is on its way. */}
+      <AnimatePresence>
+        {!ready && !failed ? (
+          <motion.div
+            key="loading"
+            role="status"
+            className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-4"
+            style={{ background: "#0B1120" }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.6 }}
+          >
+            <span className="relative w-14 h-14">
+              <span className="absolute inset-0 rounded-full" style={{ border: "3px solid rgba(255,255,255,0.1)" }} />
+              <motion.span
+                className="absolute inset-0 rounded-full"
+                style={{ border: "3px solid transparent", borderTopColor: "#0ABAB5", borderRightColor: "#00C47A" }}
+                animate={{ rotate: 360 }}
+                transition={{ duration: 0.9, repeat: Infinity, ease: "linear" }}
+              />
+              <motion.span
+                className="absolute rounded-full"
+                style={{ inset: 21, background: "#0ABAB5", boxShadow: "0 0 16px #0ABAB5" }}
+                animate={{ scale: [1, 1.35, 1] }}
+                transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+              />
+            </span>
+            <p className="text-sm text-white/70">Finding groups near Dallas…</p>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       <div
         className="pointer-events-none absolute inset-x-0 top-0 h-56"

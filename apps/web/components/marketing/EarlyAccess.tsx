@@ -11,7 +11,7 @@ import { motion } from "motion/react";
 import { WaitlistForm } from "./WaitlistForm";
 import { EASE } from "@/components/motion/primitives";
 
-export function EarlyAccess({ source }: { readonly source: string }) {
+export function EarlyAccess({ source, light = false }: { readonly source: string; readonly light?: boolean }) {
   return (
     <div id="early-access" className="relative scroll-mt-24 flex flex-col items-center px-6 py-24 sm:py-32">
       <motion.div
@@ -21,7 +21,7 @@ export function EarlyAccess({ source }: { readonly source: string }) {
         viewport={{ once: true }}
         transition={{ duration: 0.7, ease: EASE }}
       >
-        <WaitlistForm source={source} />
+        <WaitlistForm source={source} light={light} />
       </motion.div>
     </div>
   );
