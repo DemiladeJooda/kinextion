@@ -147,13 +147,12 @@ function LockedRow() {
   );
 }
 
-/** The page gutter, so a shelf's first card lines up under its title. */
-const GUTTER = "max(1.5rem, calc((100vw - 80rem) / 2 + 2rem))";
-
 /**
  * A shelf, the way a streaming app lays one out: the title, then a row of
  * cards that starts at the page's left edge and runs off the right. It sits
- * still until you scroll it, or use the arrows that appear on hover.
+ * still until you scroll it, or use the arrows that appear on hover. The
+ * `kx-shelf` class (globals.css) gives it the page's own gutter, so the first
+ * card lines up under the title at every width.
  */
 function Row({
   question,
@@ -186,8 +185,7 @@ function Row({
       <div className="group/shelf relative mt-4">
         <div
           ref={shelf}
-          className="flex gap-2.5 overflow-x-auto scrollbar-hide py-3 snap-x"
-          style={{ paddingInline: GUTTER, scrollPaddingInline: GUTTER }}
+          className="kx-shelf flex gap-2.5 overflow-x-auto scrollbar-hide py-3 snap-x"
         >
           {children}
         </div>

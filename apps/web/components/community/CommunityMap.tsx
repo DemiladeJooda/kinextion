@@ -139,7 +139,7 @@ export function CommunityMap() {
         </p>
       </div>
 
-      <div className="pointer-events-none absolute left-4 bottom-8 flex flex-wrap gap-x-3 gap-y-1 max-w-[48%] sm:max-w-[60%]">
+      <div className="pointer-events-none absolute left-4 bottom-11 sm:bottom-8 flex flex-wrap gap-x-3 gap-y-1 max-w-[48%] sm:max-w-[60%]">
         {(Object.keys(KIND_COLOR) as (keyof typeof KIND_COLOR)[]).map((k) => (
           <span key={k} className="flex items-center gap-1.5 text-[11px] text-white/80">
             <span className="w-2 h-2 rounded-full" style={{ background: KIND_COLOR[k] }} />

@@ -523,6 +523,22 @@
   from { transform: scale(0); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
 }
+/* Community shelves: the same side gutter as .section-container, so a row's
+   first card sits directly under its title. */
+.kx-shelf {
+  --shelf-gutter: 1rem;
+  /* 100%, not 100vw: vw includes the scrollbar and would sit the cards a few
+     pixels right of the title. */
+  padding-inline: max(var(--shelf-gutter), calc((100% - 80rem) / 2 + var(--shelf-gutter)));
+  scroll-padding-inline: max(var(--shelf-gutter), calc((100% - 80rem) / 2 + var(--shelf-gutter)));
+}
+@media (min-width: 640px) {
+  .kx-shelf { --shelf-gutter: 1.5rem; }
+}
+@media (min-width: 1024px) {
+  .kx-shelf { --shelf-gutter: 2rem; }
+}
+
 @keyframes kx-pin-pulse {
   from { transform: scale(0.7); opacity: 0.9; }
   to { transform: scale(1.7); opacity: 0; }

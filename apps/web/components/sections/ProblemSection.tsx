@@ -302,7 +302,7 @@ function FreshStarts() {
         <Reveal delay={0.1}>
           <div className="relative pl-[5.5rem] sm:pl-28">
             <span className="absolute top-0 bottom-7 w-px left-[5.5rem] sm:left-28" style={{ background: WARM.strong }} />
-            <p className="mb-3 -ml-3 text-xs font-semibold" style={{ color: WARM.strong }}>
+            <p className="mb-3 ml-2.5 text-xs font-semibold" style={{ color: WARM.strong }}>
               Week 1
             </p>
             <div className="space-y-6">
@@ -328,7 +328,7 @@ function FreshStarts() {
                       viewport={{ once: true, margin: "-80px" }}
                       transition={{ delay: 1 + i * 0.7 }}
                     >
-                      stopped in week {t.weeks}
+                      <span className="hidden sm:inline">stopped in </span>week {t.weeks}
                     </motion.span>
                   </div>
                 </div>

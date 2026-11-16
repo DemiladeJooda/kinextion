@@ -85,7 +85,7 @@ const BEATS: readonly Beat[] = [
     Screen: ShapeHabitScreen,
   },
   {
-    title: ["Keep the ", { mark: "relationship" }, " going. Your guide ", { mark: "adjusts" }, " and ", { mark: "coaches you" }, " as you grow."],
+    title: ["Keep the ", { mark: "relationship" }, " going. Your guide ", { mark: "adjusts" }, " and ", { mark: "coaches you" }, " as you grow."],
     color: "#00C47A",
     tone: "dawn",
     lit: "#00875A",
